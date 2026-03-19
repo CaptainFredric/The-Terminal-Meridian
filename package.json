@@ -1,0 +1,10 @@
+{
+  "name": "the-terminal",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Market workspace with a Flask backend, SQLite persistence, and a browser terminal client",
+  "scripts": {
+    "start": "sh -c 'if [ -x ./.venv/bin/python ]; then ./.venv/bin/python backend/app.py; else python3 backend/app.py; fi'",
+    "check": "sh -c 'if [ -x ./.venv/bin/python ]; then ./.venv/bin/python scripts/smoke_test.py; else python3 scripts/smoke_test.py; fi'"
+  }
+}

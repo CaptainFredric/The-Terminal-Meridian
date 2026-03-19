@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Meridian</title>
+  <meta
+    name="description"
+    content="Meridian is a practical market workspace for quotes, charts, news, options, and portfolio tracking."
+  />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="./src/styles.css" />
+</head>
+<body>
+  <main class="terminal-app" id="terminalApp">
+    <header class="topbar">
+      <div class="brand-block">
+        <div class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="Meridian">
+            <rect x="2" y="2" width="36" height="36" rx="11" fill="url(#bgGlow)"/>
+            <path d="M9.8 14.4L20 20.6" stroke="#2fcf84" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M20 20.6L30.2 14.4" stroke="#ff5f7f" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M30.2 14.4L33 12.2" stroke="#2fcf84" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+            <rect x="8.1" y="14.2" width="3.4" height="12.4" rx="1" fill="#2fcf84"/>
+            <line x1="9.8" y1="11.6" x2="9.8" y2="14.2" stroke="#2fcf84" stroke-width="1.5" stroke-linecap="round"/>
+            <line x1="9.8" y1="26.6" x2="9.8" y2="29.2" stroke="#2fcf84" stroke-width="1.5" stroke-linecap="round"/>
+            <rect x="18.3" y="19.8" width="3.4" height="9.6" rx="1" fill="#ff5f7f"/>
+            <line x1="20" y1="17.1" x2="20" y2="19.8" stroke="#ff5f7f" stroke-width="1.5" stroke-linecap="round"/>
+            <line x1="20" y1="29.4" x2="20" y2="32" stroke="#ff5f7f" stroke-width="1.5" stroke-linecap="round"/>
+            <rect x="28.5" y="14.2" width="3.4" height="12.4" rx="1" fill="#2fcf84"/>
+            <line x1="30.2" y1="11.6" x2="30.2" y2="14.2" stroke="#2fcf84" stroke-width="1.5" stroke-linecap="round"/>
+            <line x1="30.2" y1="26.6" x2="30.2" y2="29.2" stroke="#2fcf84" stroke-width="1.5" stroke-linecap="round"/>
+            <circle cx="33" cy="12.2" r="1.8" fill="#9cb9ff"/>
+            <defs>
+              <linearGradient id="bgGlow" x1="4" y1="4" x2="36" y2="36" gradientUnits="userSpaceOnUse">
+                <stop stop-color="#172953"/>
+                <stop offset="1" stop-color="#101a3b"/>
+              </linearGradient>
+            </defs>
+          </svg>
+        </div>
+        <div>
+          <strong id="appTitle">Meridian</strong>
+          <p>Live market workspace</p>
+        </div>
+      </div>
+      <div class="topbar-right">
+        <p class="status-chip chip-phase" id="marketPhase">Market</p>
+        <p class="status-chip chip-server" id="serverStatus">Server</p>
+        <p class="status-chip chip-net" id="networkStatus">Connecting</p>
+        <div class="topbar-divider"></div>
+        <button class="btn btn-icon" id="refreshAllButton" type="button" title="Refresh live data">
+          <svg viewBox="0 0 20 20" fill="none"><path d="M3 10a7 7 0 0 1 12-4.9L17 7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M17 10a7 7 0 0 1-12 4.9L3 13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><polyline points="14,4 17,7 14,10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><polyline points="6,16 3,13 6,10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <button class="btn btn-ghost" id="autoJumpButton" type="button" title="Auto-scroll to active panel">Auto-jump: On</button>
+        <button class="btn btn-ghost" id="resetFocusButton" type="button">Grid</button>
+        <button class="btn btn-ghost hidden" id="openSettingsBtn" type="button">Account</button>
+        <button class="btn btn-ghost hidden" id="logoutButton" type="button">Sign out</button>
+        <button class="btn btn-primary" id="openAuthBtn" type="button">Sync</button>
+      </div>
+    </header>
+
+    <nav class="function-row" id="functionRow"></nav>
+
+    <section class="overview-strip" id="overviewStrip" aria-label="Live market overview"></section>
+
+    <section class="workspace-shell">
+      <aside class="left-rail">
+        <section class="rail-card">
+          <header class="rail-head">
+            <h2>Watchlist</h2>
+            <small id="watchCount">0</small>
+          </header>
+          <div class="rail-body" id="watchlistRail"></div>
+        </section>
+
+        <section class="rail-card">
+          <header class="rail-head">
+            <h2>Alerts</h2>
+            <small id="alertCount">0</small>
+          </header>
+          <div class="rail-body" id="alertRail"></div>
+        </section>
+      </aside>
+
+      <div class="workspace-main">
+        <section class="workspace-grid" id="workspaceGrid">
+          <article class="panel is-active" data-panel="1">
+            <header class="panel-head">
+              <h3 id="panelTitle1">Home</h3>
+              <div class="panel-controls">
+                <button class="panel-btn" data-panel-focus="1" type="button" title="Focus panel">⤢</button>
+                <button class="panel-btn" data-panel-cycle="1:-1" type="button">◀</button>
+                <button class="panel-btn" data-panel-cycle="1:1" type="button">▶</button>
+              </div>
+            </header>
+            <div class="panel-content" id="panelContent1"></div>
+          </article>
+
+          <article class="panel" data-panel="2">
+            <header class="panel-head">
+              <h3 id="panelTitle2">Quote</h3>
+              <div class="panel-controls">
+                <button class="panel-btn" data-panel-focus="2" type="button" title="Focus panel">⤢</button>
+                <button class="panel-btn" data-panel-cycle="2:-1" type="button">◀</button>
+                <button class="panel-btn" data-panel-cycle="2:1" type="button">▶</button>
+              </div>
+            </header>
+            <div class="panel-content" id="panelContent2"></div>
+          </article>
+
+          <article class="panel" data-panel="3">
+            <header class="panel-head">
+              <h3 id="panelTitle3">Chart</h3>
+              <div class="panel-controls">
+                <button class="panel-btn" data-panel-focus="3" type="button" title="Focus panel">⤢</button>
+                <button class="panel-btn" data-panel-cycle="3:-1" type="button">◀</button>
+                <button class="panel-btn" data-panel-cycle="3:1" type="button">▶</button>
+              </div>
+            </header>
+            <div class="panel-content" id="panelContent3"></div>
+          </article>
+
+          <article class="panel" data-panel="4">
+            <header class="panel-head">
+              <h3 id="panelTitle4">News</h3>
+              <div class="panel-controls">
+                <button class="panel-btn" data-panel-focus="4" type="button" title="Focus panel">⤢</button>
+                <button class="panel-btn" data-panel-cycle="4:-1" type="button">◀</button>
+                <button class="panel-btn" data-panel-cycle="4:1" type="button">▶</button>
+              </div>
+            </header>
+            <div class="panel-content" id="panelContent4"></div>
+          </article>
+        </section>
+
+        <section class="command-shell">
+          <span class="cmd-prefix">CMD</span>
+          <input
+            id="commandInput"
+            class="command-input"
+            type="text"
+            autocomplete="off"
+            spellcheck="false"
+            placeholder="Try: AAPL Q, NEWS, WATCH TSLA, OPTIONS NVDA, HELP"
+          />
+          <button id="runCommandButton" class="btn btn-primary" type="button">Run</button>
+          <div class="autocomplete hidden" id="autocomplete"></div>
+        </section>
+      </div>
+    </section>
+
+    <footer class="statusbar">
+      <span>Updated: <strong id="lastUpdated">—</strong></span>
+      <span>Refresh: <strong id="refreshCountdown">30s</strong></span>
+      <span>Session: <strong id="sessionClock">00:00:00</strong></span>
+    </footer>
+  </main>
+
+  <div class="modal-backdrop hidden" id="authModalBackdrop">
+    <section class="auth-modal" id="authModal">
+      <header class="auth-head">
+        <h2>Sync workspace</h2>
+        <button class="icon-btn" id="closeAuthModal" type="button">×</button>
+      </header>
+
+      <p class="auth-status" id="authStatus">Sign in only if you want backend sync.</p>
+
+      <div class="auth-tabs" id="authTabs">
+        <button class="auth-tab is-active" data-auth-tab="login" type="button">Sign in</button>
+        <button class="auth-tab" data-auth-tab="signup" type="button">Create account</button>
+      </div>
+
+      <form id="loginForm" data-auth-panel="login" class="auth-form">
+        <label>
+          Email or username
+          <input name="identifier" type="text" required />
+        </label>
+        <label>
+          Password
+          <input name="password" type="password" required />
+        </label>
+        <button class="btn btn-primary" id="loginBtn" type="submit">Sign in and sync</button>
+        <button class="btn btn-ghost" id="continueLocalBtn" type="button">Continue local only</button>
+      </form>
+
+      <form id="signupForm" data-auth-panel="signup" class="auth-form hidden">
+        <div class="auth-grid">
+          <label>
+            First name
+            <input name="firstName" type="text" required />
+          </label>
+          <label>
+            Last name
+            <input name="lastName" type="text" required />
+          </label>
+        </div>
+        <label>
+          Email
+          <input id="signupEmail" name="email" type="email" required />
+        </label>
+        <label>
+          Username
+          <input id="signupUsername" name="username" type="text" required />
+        </label>
+        <p class="auth-hint" id="signupAvailability">Use a unique email and username.</p>
+        <label>
+          Role
+          <select id="signupRole" name="role"></select>
+        </label>
+        <label>
+          Password
+          <input name="password" type="password" minlength="8" required />
+        </label>
+        <label>
+          Confirm password
+          <input name="confirmPassword" type="password" minlength="8" required />
+        </label>
+        <button class="btn btn-primary" id="signupBtn" type="submit">Create and sync</button>
+        <button class="btn btn-ghost" id="continueLocalSignupBtn" type="button">Continue local only</button>
+      </form>
+    </section>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <div class="modal-backdrop hidden" id="settingsModalBackdrop">
+    <section class="auth-modal settings-modal" id="settingsModal">
+      <header class="auth-head">
+        <h2>Account settings</h2>
+        <button class="icon-btn" id="closeSettingsModal" type="button">×</button>
+      </header>
+
+      <p class="auth-status" id="settingsStatus">Update your account details securely.</p>
+
+      <form id="updateProfileForm" class="auth-form">
+        <div class="auth-grid">
+          <label>
+            First name
+            <input name="firstName" type="text" required />
+          </label>
+          <label>
+            Last name
+            <input name="lastName" type="text" required />
+          </label>
+        </div>
+        <label>
+          Username
+          <input name="username" type="text" required />
+        </label>
+        <label>
+          Role
+          <select id="settingsRole" name="role"></select>
+        </label>
+        <button class="btn btn-primary" id="updateProfileBtn" type="submit">Update profile</button>
+      </form>
+
+      <form id="changePasswordForm" class="auth-form">
+        <label>
+          Current password
+          <input name="currentPassword" type="password" required />
+        </label>
+        <label>
+          New password
+          <input name="newPassword" type="password" minlength="8" required />
+        </label>
+        <button class="btn btn-primary" id="changePasswordBtn" type="submit">Change password</button>
+      </form>
+
+      <form id="deleteAccountForm" class="auth-form">
+        <label>
+          Confirm password to delete account
+          <input name="password" type="password" required />
+        </label>
+        <button class="btn btn-danger" id="deleteAccountBtn" type="submit">Delete account</button>
+      </form>
+    </section>
+  </div>
+
+  <script type="module" src="./src/clientApp.js"></script>
+</body>
+</html>

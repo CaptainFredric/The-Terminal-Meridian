@@ -53,6 +53,8 @@ export const commandCatalog = [
   { cmd: "SUGGEST", desc: "Show suggested next steps" },
   { cmd: "NEWS", desc: "Open the news view" },
   { cmd: "NEWS NVDA", desc: "Filter news for NVDA" },
+  { cmd: "ANALYZE NVDA", desc: "Load deep insight for NVDA" },
+  { cmd: "SYNC NVDA", desc: "Save NVDA into your workspace" },
   { cmd: "PORT", desc: "Open the portfolio view" },
   { cmd: "MACRO", desc: "Open the macro view" },
   { cmd: "AAPL Q", desc: "Open quote for AAPL" },

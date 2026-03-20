@@ -8,7 +8,7 @@
 - lets signed-in users manage profile, password, and account deletion from the new Account modal
 - stores user profiles, session tokens, and workspace state in SQLite
 - saves watchlists, alerts, positions, command history, and panel layout per account
-- proxies live public market data for quotes, charts, options, news, and FX through the backend
+- proxies live public market data for quotes, charts, options, news, FX, and secured deep-dive research through the backend
 - renders a four-panel terminal workspace with keyboard routing and command-style navigation
 - includes portfolio math, options snapshots, macro monitors, and pricing calculators
 
@@ -27,9 +27,9 @@
 ## Modules
 
 - `HOME` — market pulse, alerts, watchlist tone, and account summary
-- `QUOTE` — live quote snapshot with price, volume, range, and change data
-- `CHART` — API-fed line chart for the active symbol and timeframe
-- `NEWS` — aggregated headlines from public financial feeds
+- `QUOTE` — live quote snapshot with price, volume, range, action buttons, and deep insight blocks
+- `CHART` — API-fed candlestick chart for the active symbol and timeframe
+- `NEWS` — high-density headlines with source, time, and sentiment
 - `EQS` — screener-style market list for tracked names
 - `HEAT` — market map view for relative movers
 - `PORT` — saved portfolio positions and P/L math
@@ -54,7 +54,22 @@
 - `GET /api/market/chart/<symbol>` — chart series for a symbol
 - `GET /api/market/options/<symbol>` — option chain snapshot
 - `GET /api/market/news` — normalized financial headlines
+- `GET /api/market/deep-dive/<symbol>` — backend-proxied company profile, financial data, and ticker-specific news
 - `GET /api/market/fx` — FX rates feed
+
+## Environment
+
+Copy `.env.example` to `.env` to enable backend-proxied RapidAPI research locally:
+
+```bash
+cp .env.example .env
+```
+
+Supported variables:
+
+- `RAPIDAPI_KEY` — RapidAPI key for Yahoo Finance deep-dive modules
+- `RAPIDAPI_HOST` — defaults to `yahoo-finance15.p.rapidapi.com`
+- `TERMINAL_SECRET` — Flask session secret
 
 ## Local Run
 
@@ -85,6 +100,8 @@ npm run start
 - `NEXT` / `PREV`
 - `AAPL Q`
 - `MSFT CHART`
+- `ANALYZE NVDA`
+- `SYNC NVDA`
 - `LOGIN` / `SIGNUP`
 - `WATCH PLTR`
 - `ALERT NVDA 950`
@@ -96,4 +113,5 @@ npm run start
 
 - Passwords are hashed on the server and sessions are stored with an HTTP-only cookie.
 - Market data comes from public upstream sources, so availability depends on those feeds.
+- RapidAPI credentials stay on the backend and are read from `.env`, not from frontend code.
 - SQLite lives under `data/terminal.db` by default and can be overridden in tests via app config.

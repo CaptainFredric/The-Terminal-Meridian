@@ -6,6 +6,7 @@ import re
 import secrets
 import sqlite3
 import time
+from concurrent.futures import ThreadPoolExecutor
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -19,6 +20,21 @@ from flask import Flask, g, jsonify, make_response, request, send_from_directory
 from werkzeug.security import check_password_hash, generate_password_hash
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def load_env_file(path: Path) -> None:
+    if not path.exists():
+        return
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
+
+
+load_env_file(ROOT / ".env")
+
 DATABASE_DIR = ROOT / "data"
 DATABASE_PATH = DATABASE_DIR / "terminal.db"
 SESSION_COOKIE = "terminal_session"
@@ -53,6 +69,9 @@ PASSWORD_HASH_METHOD = "pbkdf2:sha256"
 OVERVIEW_SYMBOLS = ["SPY", "QQQ", "IWM", "TLT", "BTC-USD", "NVDA"]
 EMAIL_PATTERN = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
 USERNAME_PATTERN = re.compile(r"^[A-Za-z0-9._-]{3,24}$")
+RAPIDAPI_KEY = os.environ.get("RAPIDAPI_KEY", "").strip()
+RAPIDAPI_HOST = os.environ.get("RAPIDAPI_HOST", "yahoo-finance15.p.rapidapi.com").strip() or "yahoo-finance15.p.rapidapi.com"
+RAPIDAPI_BASE = f"https://{RAPIDAPI_HOST}"
 
 
 def utc_now_iso() -> str:
@@ -355,6 +374,10 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
     def market_news() -> Any:
         return jsonify({"items": fetch_news_items()})
 
+    @app.get("/api/market/deep-dive/<symbol>")
+    def market_deep_dive(symbol: str) -> Any:
+        return jsonify(fetch_deep_dive(symbol))
+
     @app.get("/api/market/fx")
     def market_fx() -> Any:
         return jsonify({"rates": fetch_fx_rates()})
@@ -548,6 +571,12 @@ def fetch_json(url: str) -> Any:
         return json.loads(response.read().decode("utf-8"))
 
 
+def fetch_json_with_headers(url: str, headers: dict[str, str]) -> Any:
+    request_obj = urllib.request.Request(url, headers={**HTTP_HEADERS, **headers})
+    with urllib.request.urlopen(request_obj, timeout=12) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
 def fetch_text(url: str) -> str:
     request_obj = urllib.request.Request(url, headers=HTTP_HEADERS)
     with urllib.request.urlopen(request_obj, timeout=12) as response:
@@ -640,6 +669,121 @@ def fetch_news_items() -> list[dict[str, Any]]:
         except Exception:
             continue
     return items[:18]
+
+
+def score_sentiment(text: str) -> str:
+    content = text.lower()
+    positive_terms = ["beat", "upgrade", "growth", "record", "surge", "gain", "bull", "strong"]
+    negative_terms = ["miss", "downgrade", "fall", "drop", "cut", "bear", "weak", "risk"]
+    positive_hits = sum(1 for term in positive_terms if term in content)
+    negative_hits = sum(1 for term in negative_terms if term in content)
+    if positive_hits > negative_hits:
+        return "Positive"
+    if negative_hits > positive_hits:
+        return "Negative"
+    return "Neutral"
+
+
+def format_news_time(value: Any) -> str:
+    if value is None:
+        return "Live"
+    if isinstance(value, (int, float)):
+        try:
+            return datetime.fromtimestamp(value, timezone.utc).strftime("%b %d %H:%M")
+        except Exception:
+            return "Live"
+    text = str(value).strip()
+    if not text:
+        return "Live"
+    return text[:25]
+
+
+def normalize_deep_dive_news(raw_items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    normalized: list[dict[str, Any]] = []
+    for item in raw_items[:12]:
+        title = str(item.get("title") or item.get("headline") or "Untitled").strip()
+        if not title:
+            continue
+        normalized.append(
+            {
+                "source": str(item.get("source") or item.get("publisher") or "Feed").strip() or "Feed",
+                "headline": title,
+                "link": str(item.get("link") or item.get("url") or "#").strip() or "#",
+                "time": format_news_time(item.get("pubDate") or item.get("providerPublishTime") or item.get("published_at")),
+                "sentiment": score_sentiment(title),
+            }
+        )
+    return normalized
+
+
+def fallback_deep_dive(symbol: str, reason: str | None = None) -> dict[str, Any]:
+    upper_symbol = symbol.upper()
+    quote = (fetch_quotes([upper_symbol]) or [{}])[0]
+    filtered_news = [item for item in fetch_news_items() if upper_symbol in str(item.get("headline", "")).upper()][:10]
+    normalized_news = [
+        {
+            **item,
+            "sentiment": score_sentiment(str(item.get("headline") or "")),
+        }
+        for item in filtered_news
+    ]
+    return {
+        "ticker": upper_symbol,
+        "provider": "fallback",
+        "available": False,
+        "reason": reason or "RapidAPI deep-dive is not configured.",
+        "news": normalized_news,
+        "profile": {
+            "sector": quote.get("exchange") or "Market",
+            "industry": "Live quote fallback",
+            "country": "N/A",
+            "website": "",
+            "longBusinessSummary": "Add RapidAPI credentials in a local .env file to unlock profile and financial metrics.",
+        },
+        "financials": {
+            "currentPrice": {"raw": quote.get("price"), "fmt": f"{quote.get('price', 0):.2f}" if quote.get("price") else "--"},
+            "marketCap": {"raw": quote.get("marketCap"), "fmt": str(quote.get("marketCap") or "--")},
+            "volume": {"raw": quote.get("volume"), "fmt": str(quote.get("volume") or "--")},
+        },
+    }
+
+
+def fetch_deep_dive(symbol: str) -> dict[str, Any]:
+    upper_symbol = symbol.upper().strip()
+    if not upper_symbol:
+      return fallback_deep_dive(symbol, "Ticker is required.")
+
+    if not RAPIDAPI_KEY:
+        return fallback_deep_dive(upper_symbol)
+
+    headers = {
+        "x-rapidapi-key": RAPIDAPI_KEY,
+        "x-rapidapi-host": RAPIDAPI_HOST,
+    }
+    news_url = f"{RAPIDAPI_BASE}/api/v1/markets/news?ticker={urllib.parse.quote(upper_symbol)}"
+    modules_url = (
+        f"{RAPIDAPI_BASE}/api/v1/markets/stock/modules?"
+        f"ticker={urllib.parse.quote(upper_symbol)}&module=asset-profile,financial-data"
+    )
+
+    try:
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            news_future = executor.submit(fetch_json_with_headers, news_url, headers)
+            modules_future = executor.submit(fetch_json_with_headers, modules_url, headers)
+            news_payload = news_future.result()
+            modules_payload = modules_future.result()
+
+        module_body = modules_payload.get("body") or {}
+        return {
+            "ticker": upper_symbol,
+            "provider": "rapidapi",
+            "available": True,
+            "news": normalize_deep_dive_news(news_payload.get("body") or []),
+            "profile": module_body.get("assetProfile") or {},
+            "financials": module_body.get("financialData") or {},
+        }
+    except Exception as error:
+        return fallback_deep_dive(upper_symbol, f"Deep dive fallback: {error}")
 
 
 def fetch_fx_rates() -> dict[str, Any]:

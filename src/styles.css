@@ -1126,6 +1126,123 @@ html {
   background: #555;
 }
 
+.auth-form input[type="file"] {
+  border: 1px dashed var(--border-divider) !important;
+  padding: 20px !important;
+  background: var(--bg-app) !important;
+  cursor: pointer;
+  text-align: center;
+  height: auto !important;
+}
+
+.auth-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px !important;
+}
+
+.auth-form label {
+  font-family: var(--mono) !important;
+  font-size: 11px !important;
+  text-transform: uppercase;
+  color: var(--text-muted) !important;
+  margin-bottom: 4px;
+}
+
+.quote-action-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.deep-dive-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.insight-block {
+  border: 1px solid var(--border-divider);
+  background: var(--bg-panel);
+  padding: 6px;
+  display: grid;
+  gap: 2px;
+}
+
+.insight-block span {
+  color: var(--text-muted);
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+.insight-summary {
+  margin: 6px 0 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.news-item {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border-divider);
+}
+
+.news-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 10px;
+  color: var(--data-up);
+  text-transform: uppercase;
+  margin-bottom: 2px;
+  font-family: var(--mono);
+}
+
+.news-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.news-title {
+  color: var(--text-primary);
+  text-decoration: none;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.news-title:hover {
+  text-decoration: underline;
+  color: #fff;
+}
+
+.news-sentiment.neutral {
+  color: var(--text-muted);
+}
+
+.news-sentiment.negative {
+  color: var(--data-down);
+}
+
+.news-sentiment.positive {
+  color: var(--data-up);
+}
+
+@media (max-width: 900px) {
+  .deep-dive-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .news-row,
+  .quote-action-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   * {
     animation: none !important;

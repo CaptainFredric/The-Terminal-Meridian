@@ -150,15 +150,15 @@
   <div class="modal-backdrop hidden" id="authModalBackdrop">
     <section class="auth-modal" id="authModal">
       <header class="auth-head">
-        <h2>Sync workspace</h2>
+        <h2>Provision workspace</h2>
         <button class="icon-btn" id="closeAuthModal" type="button">×</button>
       </header>
 
-      <p class="auth-status error-message-container active" id="authStatus">Sign in only if you want backend sync.</p>
+      <p class="auth-status error-message-container active" id="authStatus">Provision only if you want backend sync.</p>
 
       <div class="auth-tabs" id="authTabs">
-        <button class="auth-tab is-active" data-auth-tab="login" type="button">Sign in</button>
-        <button class="auth-tab" data-auth-tab="signup" type="button">Create account</button>
+        <button class="auth-tab is-active" data-auth-tab="login" type="button">Access</button>
+        <button class="auth-tab" data-auth-tab="signup" type="button">Provision</button>
       </div>
 
       <form id="loginForm" data-auth-panel="login" class="auth-form">
@@ -170,8 +170,8 @@
           Password
           <input name="password" type="password" required />
         </label>
-        <button class="btn btn-primary" id="loginBtn" type="submit">Sign in and sync</button>
-        <button class="btn btn-ghost" id="continueLocalBtn" type="button">Continue local only</button>
+        <button class="btn btn-primary" id="loginBtn" type="submit">Access workspace</button>
+        <button class="btn btn-ghost" id="continueLocalBtn" type="button">Continue local mode</button>
       </form>
 
       <form id="signupForm" data-auth-panel="signup" class="auth-form hidden">
@@ -206,8 +206,8 @@
           Confirm password
           <input name="confirmPassword" type="password" minlength="8" required />
         </label>
-        <button class="btn btn-primary" id="signupBtn" type="submit">Create and sync</button>
-        <button class="btn btn-ghost" id="continueLocalSignupBtn" type="button">Continue local only</button>
+        <button class="btn btn-primary" id="signupBtn" type="submit">Provision user</button>
+        <button class="btn btn-ghost" id="continueLocalSignupBtn" type="button">Continue local mode</button>
       </form>
     </section>
   </div>

@@ -14,6 +14,7 @@ import {
   moduleTitles,
 } from "./data.js";
 import { authApi, marketApi, uiCache, workspaceApi } from "./api.js";
+import { getStockDeepDive } from "./marketService.js";
 import { fetchQuotes, fetchChart, fetchOptions, fetchNews, fetchFxRates } from "./services.js";
 
 const DEFAULT_OVERVIEW_SYMBOLS = ["SPY", "QQQ", "NVDA", "TLT", "BTC-USD", "AAPL"];
@@ -30,6 +31,7 @@ const AUTH_ENABLED = false;
 const universe = buildUniverse();
 const universeMap = new Map(universe.map((item) => [item.symbol, item]));
 const uiSnapshot = uiCache.read();
+const guestWorkspace = uiSnapshot.guestWorkspace || {};
 const chartViews = new Map();
 let lightweightChartsModulePromise = null;
 
@@ -37,13 +39,13 @@ const state = {
   user: null,
   activePanel: Number(uiSnapshot.activePanel || 1),
   focusedPanel: Number(uiSnapshot.focusedPanel || 0) || null,
-  panelModules: { 1: "briefing", 2: "quote", 3: "chart", 4: "news" },
-  panelSymbols: { 1: "NVDA", 2: "AAPL", 3: "MSFT", 4: "QQQ" },
+  panelModules: normalizePanelMap(guestWorkspace.panelModules, { 1: "briefing", 2: "quote", 3: "chart", 4: "news" }),
+  panelSymbols: normalizePanelMap(guestWorkspace.panelSymbols, { 1: "NVDA", 2: "AAPL", 3: "MSFT", 4: "QQQ" }),
   chartRanges: normalizePanelMap(uiSnapshot.chartRanges, DEFAULT_CHART_RANGES),
-  watchlist: [...defaultWatchlist],
-  alerts: structuredClone(defaultAlerts),
-  positions: structuredClone(defaultPositions),
-  commandHistory: [],
+  watchlist: [...(guestWorkspace.watchlist || defaultWatchlist)],
+  alerts: structuredClone(guestWorkspace.alerts || defaultAlerts),
+  positions: structuredClone(guestWorkspace.positions || defaultPositions),
+  commandHistory: [...(guestWorkspace.commandHistory || [])],
   commandHistoryIndex: -1,
   screenerFilters: {
     1: { universe: "", sector: "", search: "" },
@@ -55,6 +57,8 @@ const state = {
   quotes: new Map(),
   chartCache: new Map(),
   optionsCache: new Map(),
+  deepDiveCache: new Map(),
+  deepDiveLoading: new Set(),
   newsItems: [],
   newsFilter: String(uiSnapshot.newsFilter || "ALL"),
   fxRates: {},
@@ -1069,9 +1073,19 @@ function renderQuote(panel) {
 
   const alertThreshold = Math.max(1, quote.price * 1.03);
   const peers = findRelatedSymbols(symbol).slice(0, 4);
+  const deepDive = state.deepDiveCache.get(symbol);
+  const profile = deepDive?.profile || {};
+  const financials = deepDive?.financials || {};
+  const isAnalyzing = state.deepDiveLoading.has(symbol);
 
   return `
     <section class="stack stack-lg">
+      <div class="quote-action-row">
+        <button class="btn btn-primary" type="button" data-analyze-symbol="${symbol}">[ ANALYZE ]</button>
+        <button class="btn btn-ghost" type="button" data-open-news-symbol="${symbol}">[ NEWS ]</button>
+        <button class="btn btn-ghost" type="button" data-sync-symbol="${symbol}">[ SYNC ]</button>
+      </div>
+
       <div class="toolbar">
         <button class="btn btn-ghost" type="button" data-load-module="chart" data-target-symbol="${symbol}" data-target-panel="${panel}">Open chart</button>
         <button class="btn btn-ghost" type="button" data-load-module="options" data-target-symbol="${symbol}" data-target-panel="${panel}">Open options</button>
@@ -1107,6 +1121,43 @@ function renderQuote(panel) {
           <tr><td>Market cap</td><td>${formatMarketCap(quote.marketCap)}</td><td>Change</td><td class="${quote.change >= 0 ? "positive" : "negative"}">${quote.change >= 0 ? "+" : ""}${Number(quote.change).toFixed(2)}</td></tr>
         </tbody>
       </table>
+
+      <article class="card">
+        <header class="card-head card-head-split"><h4>Deep insight</h4><small>${deepDive?.provider === "rapidapi" ? "live modules" : "provisioned research"}</small></header>
+        ${isAnalyzing
+          ? loadingSkeleton(4)
+          : deepDive
+            ? `
+              <div class="deep-dive-grid">
+                <div class="insight-block">
+                  <span>Sector</span>
+                  <strong>${profile.sector || quote.sector}</strong>
+                </div>
+                <div class="insight-block">
+                  <span>Industry</span>
+                  <strong>${profile.industry || "N/A"}</strong>
+                </div>
+                <div class="insight-block">
+                  <span>Target mean</span>
+                  <strong>${formatInsightValue(financials.targetMeanPrice)}</strong>
+                </div>
+                <div class="insight-block">
+                  <span>Recommendation</span>
+                  <strong>${formatInsightValue(financials.recommendationKey)}</strong>
+                </div>
+                <div class="insight-block">
+                  <span>Total revenue</span>
+                  <strong>${formatInsightValue(financials.totalRevenue)}</strong>
+                </div>
+                <div class="insight-block">
+                  <span>Free cash flow</span>
+                  <strong>${formatInsightValue(financials.freeCashflow)}</strong>
+                </div>
+              </div>
+              <p class="insight-summary">${profile.longBusinessSummary || profile.longBusinessDescription || deepDive.reason || "Run analyze to load deeper company context."}</p>
+            `
+            : `<div class="empty-inline">Run ANALYZE to pull profile, financials, and ticker-specific news.</div>`}
+      </article>
 
       <article class="card">
         <header class="card-head card-head-split"><h4>Similar names</h4><small>${quote.sector}</small></header>
@@ -1153,7 +1204,7 @@ function renderChart(panel) {
 
 function renderNews(panel) {
   const quickFilters = ["ALL", ...new Set([state.panelSymbols[panel], ...Object.values(state.panelSymbols), ...state.watchlist.slice(0, 3)].filter(Boolean))].slice(0, 6);
-  const items = filterNewsItems(state.newsFilter);
+  const items = getRenderableNewsItems(state.newsFilter);
 
   return `
     <section class="stack stack-lg">
@@ -1167,12 +1218,15 @@ function renderNews(panel) {
             .map((item) => {
               const relatedSymbol = extractHeadlineSymbol(item.headline);
               return `
-                <article class="card news-card news-card-feature">
-                  <div class="news-meta-row"><small>${item.source} · ${item.time}</small>${relatedSymbol ? `<button class="mini-link" type="button" data-load-module="quote" data-target-symbol="${relatedSymbol}" data-target-panel="${panel}">${relatedSymbol}</button>` : ""}</div>
-                  <p>${item.headline}</p>
-                  <div class="news-actions">
-                    <a href="${item.link}" target="_blank" rel="noopener">Read article</a>
-                    ${relatedSymbol ? `<button class="btn btn-ghost btn-inline" type="button" data-load-module="chart" data-target-symbol="${relatedSymbol}" data-target-panel="${panel}">Open chart</button>` : ""}
+                <article class="news-item">
+                  <div class="news-meta">
+                    <span class="news-source">${item.source}</span>
+                    <span class="news-time">${item.time}</span>
+                    <span class="news-sentiment ${String(item.sentiment || "Neutral").toLowerCase()}">${item.sentiment || "Neutral"}</span>
+                  </div>
+                  <div class="news-row">
+                    <a href="${item.link}" target="_blank" rel="noopener" class="news-title">${item.headline}</a>
+                    ${relatedSymbol ? `<button class="mini-link" type="button" data-load-module="quote" data-target-symbol="${relatedSymbol}" data-target-panel="${panel}">${relatedSymbol}</button>` : ""}
                   </div>
                 </article>
               `;
@@ -1489,7 +1543,7 @@ function processCommand() {
   } else if (first === "SUGGEST" || first === "SUGGESTIONS") {
     loadModule("home", state.activePanel, { reveal: true });
     showToast("Showing suggested next steps.", "neutral");
-  } else if (first === "LOGIN" || first === "SIGNUP" || first === "REGISTER" || first === "SYNC") {
+  } else if ((first === "LOGIN" || first === "SIGNUP" || first === "REGISTER") || (first === "SYNC" && !second)) {
     if (AUTH_ENABLED) {
       openAuthModal(first === "SIGNUP" || first === "REGISTER" ? "signup" : "login");
     } else {
@@ -1498,6 +1552,10 @@ function processCommand() {
   } else if (first === "NEWS" && second) {
     state.newsFilter = second;
     loadModule("news", state.activePanel, { reveal: true });
+  } else if (first === "ANALYZE") {
+    loadDeepDive(second || state.panelSymbols[state.activePanel] || "AAPL", { panel: state.activePanel });
+  } else if (first === "SYNC" && second) {
+    syncTicker(second);
   } else if (first === "NEWS") {
     state.newsFilter = "ALL";
     loadModule("news", state.activePanel, { reveal: true });
@@ -1668,6 +1726,24 @@ function handleDocumentClick(event) {
   if (createAlertButton) {
     const [symbol, operator, threshold] = createAlertButton.dataset.createAlert.split(":");
     createAlert(symbol, Number(threshold), operator || ">=");
+    return;
+  }
+
+  const analyzeButton = event.target.closest("[data-analyze-symbol]");
+  if (analyzeButton) {
+    loadDeepDive(analyzeButton.dataset.analyzeSymbol, { panel: state.activePanel });
+    return;
+  }
+
+  const openNewsButton = event.target.closest("[data-open-news-symbol]");
+  if (openNewsButton) {
+    openTickerNewsPanel(openNewsButton.dataset.openNewsSymbol);
+    return;
+  }
+
+  const syncTickerButton = event.target.closest("[data-sync-symbol]");
+  if (syncTickerButton) {
+    syncTicker(syncTickerButton.dataset.syncSymbol);
     return;
   }
 
@@ -1952,7 +2028,13 @@ function removePositionBySymbol(symbol) {
 }
 
 function queueWorkspaceSave() {
-  if (!state.user) return;
+  if (!state.user) {
+    uiCache.write({
+      ...uiCache.read(),
+      guestWorkspace: serializeWorkspace(),
+    });
+    return;
+  }
   setNetworkStatus("Live · Saving");
   window.clearTimeout(state.persistTimer);
   state.persistTimer = window.setTimeout(async () => {
@@ -2010,6 +2092,91 @@ async function refreshAllData() {
   renderAllPanels();
   updateStatusBar();
   setNetworkStatus(state.user ? "Live · Saved" : state.health.ok ? "Guest · Live" : "Guest · Local");
+}
+
+async function loadDeepDive(symbol, { panel = state.activePanel } = {}) {
+  const ticker = String(symbol || "").trim().toUpperCase();
+  if (!ticker) return;
+  state.deepDiveLoading.add(ticker);
+  renderPanel(panel);
+
+  const payload = await getStockDeepDive(ticker);
+  if (payload) {
+    state.deepDiveCache.set(ticker, payload);
+    showToast(payload.available ? `${ticker} analysis loaded.` : `${ticker} loaded with fallback research.`, payload.available ? "success" : "neutral");
+  } else {
+    showToast(`Unable to load deep insight for ${ticker}.`, "error");
+  }
+
+  state.deepDiveLoading.delete(ticker);
+  renderPanel(panel);
+  if (state.newsFilter === ticker) renderPanel(4);
+}
+
+function openTickerNewsPanel(symbol) {
+  const ticker = String(symbol || "").trim().toUpperCase();
+  if (!ticker) return;
+  state.newsFilter = ticker;
+  state.panelModules[4] = "news";
+  renderPanel(4);
+  revealPanelIfNeeded(4);
+}
+
+function syncTicker(symbol) {
+  const ticker = String(symbol || "").trim().toUpperCase();
+  if (!ticker) return;
+  if (!state.watchlist.includes(ticker)) {
+    state.watchlist.unshift(ticker);
+    state.watchlist = [...new Set(state.watchlist)].slice(0, 16);
+    renderRails();
+  }
+  queueWorkspaceSave();
+  showToast(state.user ? `${ticker} synced to your workspace.` : `${ticker} saved to local workspace.`, "success");
+}
+
+function formatInsightValue(value) {
+  if (value == null) return "--";
+  if (typeof value === "object") {
+    if ("fmt" in value && value.fmt) return String(value.fmt);
+    if ("longFmt" in value && value.longFmt) return String(value.longFmt);
+    if ("raw" in value && value.raw != null) return String(value.raw);
+  }
+  return String(value);
+}
+
+function getRenderableNewsItems(filterSymbol) {
+  const ticker = String(filterSymbol || "ALL").toUpperCase();
+  if (ticker !== "ALL") {
+    const deepDiveNews = state.deepDiveCache.get(ticker)?.news || [];
+    if (deepDiveNews.length) {
+      return deepDiveNews.map((item) => ({
+        source: item.source || "Feed",
+        headline: item.headline || item.title || "Untitled",
+        time: item.time || item.pubDate || "Live",
+        link: item.link || "#",
+        sentiment: item.sentiment || scoreHeadlineSentiment(item.headline || item.title || ""),
+      }));
+    }
+  }
+
+  return filterNewsItems(filterSymbol).map((item) => ({
+    source: item.source || "Feed",
+    headline: item.headline || item.title || "Untitled",
+    time: item.time || item.pubDate || "Live",
+    link: item.link || "#",
+    sentiment: item.sentiment || scoreHeadlineSentiment(item.headline || item.title || ""),
+  }));
+}
+
+function scoreHeadlineSentiment(text) {
+  const content = String(text || "").toLowerCase();
+  const positiveTerms = ["beat", "upgrade", "growth", "record", "surge", "gain", "strong"];
+  const negativeTerms = ["miss", "downgrade", "drop", "cut", "fall", "weak", "risk"];
+  const positiveHits = positiveTerms.filter((term) => content.includes(term)).length;
+  const negativeHits = negativeTerms.filter((term) => content.includes(term)).length;
+  if (positiveHits > negativeHits) return "Positive";
+  if (negativeHits > positiveHits) return "Negative";
+  return "Neutral";
 }
 
 async function refreshOverview() {

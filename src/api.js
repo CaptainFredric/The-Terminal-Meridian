@@ -128,6 +128,9 @@ export const marketApi = {
   news() {
     return apiRequest("/api/market/news");
   },
+  deepDive(symbol) {
+    return apiRequest(`/api/market/deep-dive/${encodeURIComponent(symbol)}`);
+  },
   fx() {
     return apiRequest("/api/market/fx");
   },

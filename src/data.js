@@ -23,7 +23,7 @@ export const functionKeys = [
   { key: "F11", module: "calculator", label: "Calculator" },
 ];
 
-export const moduleOrder = ["briefing", "home", "quote", "chart", "news", "screener", "heatmap", "portfolio", "macro", "options", "calculator"];
+export const moduleOrder = ["briefing", "home", "quote", "chart", "news", "screener", "heatmap", "portfolio", "macro", "options", "calculator", "rules"];
 
 export const moduleTitles = {
   briefing: "Briefing",
@@ -37,6 +37,7 @@ export const moduleTitles = {
   macro: "Macro",
   options: "Options",
   calculator: "Calculator",
+  rules: "Rules",
 };
 
 export const commandCatalog = [
@@ -63,6 +64,8 @@ export const commandCatalog = [
   { cmd: "ALERT NVDA 950", desc: "Create an alert level" },
   { cmd: "ADDPOS MSFT 5 410", desc: "Add a portfolio position" },
   { cmd: "OPTIONS NVDA", desc: "Open options for NVDA" },
+  { cmd: "RULES", desc: "Open the rules manager" },
+  { cmd: "IF AAPL > 220 THEN Breakout", desc: "Create an active rule" },
 ];
 
 export const calculatorDefaults = {

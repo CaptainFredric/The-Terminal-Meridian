@@ -16,7 +16,7 @@
 <body>
   <main class="terminal-app" id="terminalApp">
     <header class="topbar">
-      <div class="brand-block">
+      <div class="brand-block" style="flex-direction: row; align-items: center; gap: 14px;">
         <div class="brand-mark" aria-hidden="true">
           <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="Meridian">
             <rect x="2" y="2" width="36" height="36" rx="11" fill="url(#bgGlow)"/>
@@ -41,15 +41,16 @@
             </defs>
           </svg>
         </div>
-        <div>
+        <div style="display: flex; flex-direction: row; align-items: center; gap: 12px;">
           <strong id="appTitle">Meridian</strong>
-          <p class="brand-slogan">The Center of the world.</p>
+          <div class="chip-row" style="display: flex; flex-direction: row; gap: 8px; align-items: center; margin-left: 10px;">
+            <p class="status-chip chip-phase" id="marketPhase">Market</p>
+            <p class="status-chip chip-server" id="serverStatus">Server</p>
+            <p class="status-chip chip-net" id="networkStatus">Connecting</p>
+          </div>
         </div>
       </div>
       <div class="topbar-right">
-        <p class="status-chip chip-phase" id="marketPhase">Market</p>
-        <p class="status-chip chip-server" id="serverStatus">Server</p>
-        <p class="status-chip chip-net" id="networkStatus">Connecting</p>
         <div class="topbar-divider"></div>
         <button class="btn btn-icon" id="refreshAllButton" type="button" title="Refresh live data">
           <svg viewBox="0 0 20 20" fill="none"><path d="M3 10a7 7 0 0 1 12-4.9L17 7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M17 10a7 7 0 0 1-12 4.9L3 13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><polyline points="14,4 17,7 14,10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><polyline points="6,16 3,13 6,10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>

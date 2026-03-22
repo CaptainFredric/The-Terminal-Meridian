@@ -1061,6 +1061,10 @@ html {
   z-index: 200 !important;
 }
 
+.palette-backdrop.hidden {
+  display: none !important;
+}
+
 .command-palette {
   width: 600px !important;
   max-width: calc(100vw - 24px);
@@ -1114,6 +1118,15 @@ html {
   position: absolute;
   inset: 8px;
   pointer-events: none;
+  border-radius: 10px;
+  background: rgba(15, 22, 43, 0.82);
+  border: 1px solid var(--border-divider);
+  padding: 10px;
+}
+
+.chart-loading .empty-state,
+.chart-loading .empty-inline {
+  padding: 8px;
 }
 
 .line-chart {
@@ -1225,6 +1238,14 @@ html {
   text-decoration: none;
   font-size: 13px;
   line-height: 1.4;
+}
+
+.news-title.news-title-positive {
+  color: var(--data-up) !important;
+}
+
+.news-title.news-title-negative {
+  color: var(--data-down) !important;
 }
 
 .news-title:hover {
@@ -1990,8 +2011,60 @@ input {
   width: 100%;
   border: 1px solid var(--border-divider) !important;
   font-family: "Inter", sans-serif;
+.data-table td,
+.financial-data-table td,
+.price-value,
+.quote-price,
+.quote-change,
+.overview-price,
+.overview-change,
+.watch-price,
+.watch-change,
+.position-price,
+.position-change,
+.metric-value,
+[data-price-current] {
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.02em;
+}
+
+.flash-up,
+.flash-down {
+  will-change: background-color, color, box-shadow;
+}
+
+.flash-up {
+  animation: flash-green 720ms ease-out;
+}
+
+.flash-down {
+  animation: flash-red 720ms ease-out;
+}
+
+@keyframes flash-green {
+  0% {
+    color: #d9fbe9;
+    background-color: rgba(47, 207, 132, 0.34);
+    box-shadow: inset 0 0 0 1px rgba(47, 207, 132, 0.45);
+  }
+  100% {
+    color: inherit;
+    background-color: transparent;
+    box-shadow: inset 0 0 0 1px transparent;
+  }
+}
+
+@keyframes flash-red {
+  0% {
+    color: #ffe0e6;
+    background-color: rgba(255, 95, 127, 0.3);
+    box-shadow: inset 0 0 0 1px rgba(255, 95, 127, 0.4);
+  }
+  100% {
+    color: inherit;
+    background-color: transparent;
+    box-shadow: inset 0 0 0 1px transparent;
+  }
 }
 
 .data-table th,
@@ -2066,6 +2139,30 @@ input {
   height: 10px;
 }
 
+.tabular-nums,
+[data-price-current],
+.price-value,
+.quote-price,
+.quote-change,
+.overview-price,
+.overview-change,
+.watch-price,
+.watch-change,
+.position-price,
+.position-change,
+.metric-value,
+.data-table th,
+.data-table td,
+.financial-data-table th,
+.financial-data-table td,
+.statusbar strong,
+.status-bar strong,
+#lastUpdated,
+#refreshCountdown {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+}
+
 .skeleton-box.lg {
   height: 16px;
 }
@@ -2110,6 +2207,36 @@ input {
   right: 6px;
   top: calc(100% + 4px);
   bottom: auto;
+}
+
+.system-log {
+  display: grid;
+  gap: 2px;
+  max-height: 320px;
+  overflow-y: auto;
+  border: 1px solid var(--border-divider);
+  background: var(--bg-panel);
+  padding: 6px;
+}
+
+.system-log-entry {
+  border-bottom: 1px dotted var(--border-divider);
+  padding: 2px 0;
+}
+
+.system-log-entry:last-child {
+  border-bottom: none;
+}
+
+.system-log-line {
+  display: block;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.25;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 @media (max-width: 1200px) {

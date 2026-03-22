@@ -1,0 +1,63 @@
+import { formatPrice, formatSignedPct, loadingSkeleton, tabularValue } from "./Common.js";
+
+export function observeChartResize(container, chart) {
+  if (!container || !chart) return () => {};
+
+  const resize = () => {
+    const width = Math.max(320, Math.floor(container.clientWidth || 0));
+    const height = Math.max(220, Math.floor(container.clientHeight || 0));
+    chart.resize(width, height);
+    chart.timeScale?.().fitContent?.();
+  };
+
+  resize();
+
+  if (typeof ResizeObserver === "function") {
+    const observer = new ResizeObserver(() => resize());
+    observer.observe(container);
+    return () => observer.disconnect();
+  }
+
+  window.addEventListener("resize", resize);
+  return () => window.removeEventListener("resize", resize);
+}
+
+export function createChartRenderer(context) {
+  const { state, chartIntervalForRange, chartKey, calculateChartStats, chartRangeOptions } = context;
+
+  return function renderChart(panel) {
+    const symbol = state.panelSymbols[panel] || "AAPL";
+    const range = state.chartRanges[panel] || "1mo";
+    const interval = chartIntervalForRange(range);
+    const points = state.chartCache.get(chartKey(symbol, range, interval)) || [];
+    const stats = calculateChartStats(points);
+    const chartUnavailable = !points.length && !state.health?.ok;
+    const waitingForData = !points.length && state.health?.ok;
+
+    return `
+      <section class="stack stack-lg">
+        <div class="toolbar toolbar-wrap">
+          ${chartRangeOptions.map((option) => `<button class="range-pill ${option.value === range ? "is-active" : ""}" type="button" data-chart-range="${panel}:${option.value}">${option.label}</button>`).join("")}
+          <button class="btn btn-ghost" type="button" data-load-module="quote" data-target-symbol="${symbol}" data-target-panel="${panel}">Quote</button>
+          <button class="btn btn-ghost" type="button" data-load-module="options" data-target-symbol="${symbol}" data-target-panel="${panel}">Options</button>
+          <button class="btn btn-ghost" type="button" data-news-filter="${symbol}">News</button>
+          <button class="btn btn-primary" type="button" data-refresh-chart="${panel}:${symbol}:${range}">Refresh chart</button>
+        </div>
+
+        <article class="card chart-card chart-card-feature">
+          <div class="chart-canvas-wrap">
+            <div class="chart-canvas" id="chartCanvas${panel}" data-chart-panel="${panel}"></div>
+            ${chartUnavailable ? `<div class="chart-loading chart-fallback">${loadingSkeleton(4)}<p class="empty-inline">Offline: ${symbol} chart feed unavailable. Last requested window ${range.toUpperCase()}.</p></div>` : ""}
+            ${waitingForData ? `<div class="chart-loading">${loadingSkeleton(4)}</div>` : ""}
+          </div>
+        </article>
+
+        <div class="card-grid chart-summary-grid">
+          <article class="card stat-card"><span>Range</span><strong>${range.toUpperCase()}</strong><small>${symbol}</small></article>
+          <article class="card stat-card"><span>High</span><strong>${points.length ? tabularValue(formatPrice(stats.high, symbol)) : "--"}</strong><small>${points.length ? "Visible range" : "Waiting"}</small></article>
+          <article class="card stat-card"><span>Return</span><strong class="${stats.returnPct >= 0 ? "positive" : "negative"}">${points.length ? tabularValue(formatSignedPct(stats.returnPct)) : "--"}</strong><small>${points.length ? "Start to end" : "Waiting"}</small></article>
+        </div>
+      </section>
+    `;
+  };
+}

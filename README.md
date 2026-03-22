@@ -24,6 +24,19 @@
 - `scripts/smoke_test.py` — structural and behavioral smoke test for the current stack
 - `requirements.txt` — Python dependency manifest
 
+## System Architecture (Study Guide)
+
+Meridian 1.0 uses a modular frontend where `AppBootstrap` acts as an orchestration layer and delegates behavior to dedicated controllers and renderers.
+
+- **Unidirectional Data Flow**: user actions dispatch commands, commands mutate state through core/controller paths, and renderers project state to the DOM.
+- **Proxy-based State Store**: `StateStore` captures mutations and emits subscription events so UI updates and side effects can react consistently.
+- **Component-based Rendering Registry**: each module renderer (Quote, Chart, News, Rules, etc.) is registered once and resolved by module key for panel rendering.
+- **Debounced Backend Persistence**: `WorkspaceController` batches workspace writes (`queueSave`) and syncs guest/auth states without blocking interactions.
+
+### The Moat: Logic Engine Parser
+
+The `LogicEngine` is Meridian’s core moat: it parses explicit rule syntax (`IF ... THEN ...`) into structured conditions, evaluates them against live quote state, and emits trigger notifications only on state transitions. This provides custom-scripted financial alerts with deterministic behavior and low runtime overhead, avoiding the bulk and complexity of traditional platform scripting stacks.
+
 ## Modules
 
 - `HOME` — market pulse, alerts, watchlist tone, and account summary

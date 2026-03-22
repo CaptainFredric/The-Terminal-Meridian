@@ -23,14 +23,31 @@ from backend.app import create_app  # noqa: E402
 
 INDEX = ROOT / "index.html"
 CLIENT = ROOT / "src" / "clientApp.js"
+APP_BOOTSTRAP = ROOT / "src" / "AppBootstrap.js"
+REGISTRY = ROOT / "src" / "Registry.js"
 API = ROOT / "src" / "api.js"
 BACKEND = ROOT / "backend" / "app.py"
 DATA = ROOT / "src" / "data.js"
 STYLES = ROOT / "src" / "styles.css"
 PACKAGE = ROOT / "package.json"
 REQUIREMENTS = ROOT / "requirements.txt"
+RENDERERS = [
+    ROOT / "src" / "Renderers" / "BriefingRenderer.js",
+    ROOT / "src" / "Renderers" / "CalculatorRenderer.js",
+    ROOT / "src" / "Renderers" / "ChartRenderer.js",
+    ROOT / "src" / "Renderers" / "Common.js",
+    ROOT / "src" / "Renderers" / "HeatmapRenderer.js",
+    ROOT / "src" / "Renderers" / "HomeRenderer.js",
+    ROOT / "src" / "Renderers" / "MacroRenderer.js",
+    ROOT / "src" / "Renderers" / "NewsRenderer.js",
+    ROOT / "src" / "Renderers" / "OptionsRenderer.js",
+    ROOT / "src" / "Renderers" / "PortfolioRenderer.js",
+    ROOT / "src" / "Renderers" / "QuoteRenderer.js",
+    ROOT / "src" / "Renderers" / "RulesRenderer.js",
+    ROOT / "src" / "Renderers" / "ScreenerRenderer.js",
+]
 
-required_files = [INDEX, CLIENT, API, BACKEND, DATA, STYLES, PACKAGE, REQUIREMENTS]
+required_files = [INDEX, CLIENT, APP_BOOTSTRAP, REGISTRY, API, BACKEND, DATA, STYLES, PACKAGE, REQUIREMENTS, *RENDERERS]
 for file_path in required_files:
     assert file_path.exists(), f"Missing required file: {file_path}"
 
@@ -39,8 +56,38 @@ for token in ["authModal", "loginForm", "signupForm", "terminalApp", "functionRo
     assert token in html, f"Expected token missing from index.html: {token}"
 
 client_code = CLIENT.read_text(encoding="utf-8")
-for token in ["restoreSession", "refreshAllData", "renderOptions", "renderCalculator", "processCommand", "calculateBlackScholes", "calculateBond"]:
+for token in ["initializeApp", "DOMContentLoaded", "./AppBootstrap.js"]:
     assert token in client_code, f"Expected token missing from clientApp.js: {token}"
+
+bootstrap_code = APP_BOOTSTRAP.read_text(encoding="utf-8")
+for token in [
+    "new WorkspaceController",
+    "workspaceController?.initializeSession",
+    "new DockingController",
+    "dockingController?.initialize",
+    "refreshAllData",
+    "capturePriceChanges",
+    "processCommand",
+    "calculateBlackScholes",
+    "calculateBond",
+]:
+    assert token in bootstrap_code, f"Expected token missing from AppBootstrap.js: {token}"
+
+registry_code = REGISTRY.read_text(encoding="utf-8")
+for token in [
+    '"briefing"',
+    '"home"',
+    '"quote"',
+    '"chart"',
+    '"news"',
+    '"screener"',
+    '"heatmap"',
+    '"portfolio"',
+    '"macro"',
+    '"options"',
+    '"calculator"',
+]:
+    assert token in registry_code, f"Expected token missing from Registry.js: {token}"
 
 api_code = API.read_text(encoding="utf-8")
 for token in ["authApi", "workspaceApi", "marketApi", "apiRequest"]:

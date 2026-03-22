@@ -1,27 +1,3 @@
-# Frontend main controller
-
-Copy-paste packet generated from the current workspace state.
-
-## Included Files
-
-- `src/clientApp.js`
-- `src/AppBootstrap.js`
-
----
-
-## `src/clientApp.js`
-
-````javascript
-import { initializeApp } from "./AppBootstrap.js";
-
-document.addEventListener("DOMContentLoaded", () => {
-  initializeApp();
-});
-````
-
-## `src/AppBootstrap.js`
-
-````javascript
 import {
   appName,
   authRoles,
@@ -1023,10 +999,10 @@ function syncPanelData(panel) {
 }
 
 function renderAllPanels() {
-  [1, 2, 3, 4].forEach((panel) => renderPanel(panel));
+  [1, 2, 3, 4].forEach((panel) => void renderPanel(panel));
 }
 
-function renderPanel(panel) {
+async function renderPanel(panel) {
   const panelNode = document.querySelector(`[data-panel="${panel}"]`);
   const title = document.querySelector(`#panelTitle${panel}`);
   const content = document.querySelector(`#panelContent${panel}`);
@@ -1040,7 +1016,8 @@ function renderPanel(panel) {
 
   const renderer = moduleRegistry.get(moduleName) || moduleRegistry.get("home");
   panelNode.dataset.moduleKey = String(moduleName || "").toUpperCase();
-  content.innerHTML = renderer(panel);
+  const html = await Promise.resolve(renderer(panel));
+  content.innerHTML = html;
   applyTerminalInputClass(content);
   applyPriceTones(content);
 
@@ -1869,8 +1846,8 @@ async function mountCandlestickChart(panel, points) {
     },
     crosshair: {
       mode: chartLib.CrosshairMode?.Normal ?? 0,
-      vertLine: { visible: true, labelVisible: false, color: "#4A90E2" },
-      horzLine: { visible: true, labelVisible: false, color: "#4A90E2" },
+      vertLine: { visible: true, labelVisible: true, color: "#4A90E2" },
+      horzLine: { visible: true, labelVisible: true, color: "#4A90E2" },
     },
     handleScroll: {
       mouseWheel: true,
@@ -2090,4 +2067,3 @@ function showToast(message, tone = "neutral") {
 export function initializeApp() {
   init();
 }
-````

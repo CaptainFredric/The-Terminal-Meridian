@@ -32,17 +32,17 @@ export function createQuoteRenderer(context) {
     return `
       <section class="stack stack-lg">
         <div class="quote-action-row">
-          <button class="btn btn-primary" type="button" data-analyze-symbol="${symbol}">[ ANALYZE ]</button>
-          <button class="btn btn-ghost" type="button" data-open-news-symbol="${symbol}">[ NEWS ]</button>
-          <button class="btn btn-ghost" type="button" data-sync-symbol="${symbol}">[ SYNC ]</button>
+          <button class="btn btn-primary" type="button" data-analyze-symbol="${symbol}">🔬 Analyze</button>
+          <button class="btn btn-ghost" type="button" data-open-news-symbol="${symbol}">📰 News</button>
+          <button class="btn btn-ghost" type="button" data-sync-symbol="${symbol}">🔄 Sync</button>
         </div>
 
-        <div class="toolbar">
-          <button class="btn btn-ghost" type="button" data-load-module="chart" data-target-symbol="${symbol}" data-target-panel="${panel}">Open chart</button>
-          <button class="btn btn-ghost" type="button" data-load-module="options" data-target-symbol="${symbol}" data-target-panel="${panel}">Open options</button>
-          <button class="btn btn-ghost" type="button" data-news-filter="${symbol}">Related news</button>
-          <button class="btn btn-ghost" type="button" data-watch-symbol="${symbol}">Add to watchlist</button>
-          <button class="btn btn-primary" type="button" data-create-alert="${symbol}:>=:${alertThreshold.toFixed(2)}">Set 3% alert</button>
+        <div class="toolbar toolbar-wrap">
+          <button class="btn btn-ghost" type="button" data-load-module="chart" data-target-symbol="${symbol}" data-target-panel="${panel}">📈 Chart</button>
+          <button class="btn btn-ghost" type="button" data-load-module="options" data-target-symbol="${symbol}" data-target-panel="${panel}">⛓ Options</button>
+          <button class="btn btn-ghost" type="button" data-news-filter="${symbol}">📋 Related news</button>
+          <button class="btn btn-ghost" type="button" data-watch-symbol="${symbol}">👁 Watchlist</button>
+          <button class="btn btn-primary" type="button" data-create-alert="${symbol}:>=:${alertThreshold.toFixed(2)}">🔔 Set 3% alert</button>
         </div>
 
         <article class="card quote-card quote-card-feature">
@@ -70,11 +70,13 @@ export function createQuoteRenderer(context) {
             <tr><td>Previous close</td><td>${tabularValue(formatPrice(quote.previousClose, symbol))}</td><td>Day high</td><td>${tabularValue(formatPrice(quote.dayHigh, symbol))}</td></tr>
             <tr><td>Day low</td><td>${tabularValue(formatPrice(quote.dayLow, symbol))}</td><td>Volume</td><td>${tabularValue(formatVolume(quote.volume))}</td></tr>
             <tr><td>Market cap</td><td>${tabularValue(formatMarketCap(quote.marketCap))}</td><td>Change</td><td class="${quote.change >= 0 ? "positive" : "negative"}">${tabularValue(`${quote.change >= 0 ? "+" : ""}${Number(quote.change).toFixed(2)}`)}</td></tr>
+            <tr><td>52-wk high</td><td>${tabularValue(formatPrice(quote.fiftyTwoWeekHigh || quote.dayHigh, symbol))}</td><td>52-wk low</td><td>${tabularValue(formatPrice(quote.fiftyTwoWeekLow || quote.dayLow, symbol))}</td></tr>
+            <tr><td>P/E ratio</td><td>${tabularValue(quote.trailingPE ? Number(quote.trailingPE).toFixed(2) : "--")}</td><td>EPS</td><td>${tabularValue(quote.epsTrailingTwelveMonths ? formatPrice(quote.epsTrailingTwelveMonths, symbol) : "--")}</td></tr>
           </tbody>
         </table>
 
         <article class="card">
-          <header class="card-head card-head-split"><h4>Deep insight</h4><small>${deepDive?.provider === "rapidapi" ? "live modules" : "provisioned research"}</small></header>
+          <header class="card-head card-head-split"><h4>🔎 Deep Insight</h4><small>${deepDive?.provider === "rapidapi" ? "🟢 Live modules" : "📦 Provisioned research"}</small></header>
           ${isAnalyzing
             ? loadingSkeleton(4)
             : deepDive
@@ -93,7 +95,7 @@ export function createQuoteRenderer(context) {
         </article>
 
         <article class="card">
-          <header class="card-head card-head-split"><h4>Similar names</h4><small>${quote.sector}</small></header>
+          <header class="card-head card-head-split"><h4>🔗 Similar Names</h4><small>${quote.sector} · ${peers.length} peers</small></header>
           <div class="chip-grid compact-chip-grid">
             ${peers.map((peer) => `<button class="chip chip-peer" type="button" data-load-module="quote" data-target-symbol="${peer.symbol}" data-target-panel="${panel}"><strong>${peer.symbol}</strong><span>${tabularValue(formatPrice(peer.price, peer.symbol), { flashKey: `quote:${peer.symbol}:price`, currentPrice: peer.price })}</span><small class="${peer.changePct >= 0 ? "positive" : "negative"}">${tabularValue(formatSignedPct(peer.changePct))}</small></button>`).join("") || `<div class="empty-inline">No comparable names found yet.</div>`}
           </div>

@@ -38,10 +38,10 @@ export function createChartRenderer(context) {
       <section class="stack stack-lg">
         <div class="toolbar toolbar-wrap">
           ${chartRangeOptions.map((option) => `<button class="range-pill ${option.value === range ? "is-active" : ""}" type="button" data-chart-range="${panel}:${option.value}">${option.label}</button>`).join("")}
-          <button class="btn btn-ghost" type="button" data-load-module="quote" data-target-symbol="${symbol}" data-target-panel="${panel}">Quote</button>
-          <button class="btn btn-ghost" type="button" data-load-module="options" data-target-symbol="${symbol}" data-target-panel="${panel}">Options</button>
-          <button class="btn btn-ghost" type="button" data-news-filter="${symbol}">News</button>
-          <button class="btn btn-primary" type="button" data-refresh-chart="${panel}:${symbol}:${range}">Refresh chart</button>
+          <button class="btn btn-ghost" type="button" data-load-module="quote" data-target-symbol="${symbol}" data-target-panel="${panel}">📋 Quote</button>
+          <button class="btn btn-ghost" type="button" data-load-module="options" data-target-symbol="${symbol}" data-target-panel="${panel}">⛓ Options</button>
+          <button class="btn btn-ghost" type="button" data-news-filter="${symbol}">📰 News</button>
+          <button class="btn btn-primary" type="button" data-refresh-chart="${panel}:${symbol}:${range}">🔄 Refresh</button>
         </div>
 
         <article class="card chart-card chart-card-feature">
@@ -53,9 +53,10 @@ export function createChartRenderer(context) {
         </article>
 
         <div class="card-grid chart-summary-grid">
-          <article class="card stat-card"><span>Range</span><strong>${range.toUpperCase()}</strong><small>${symbol}</small></article>
-          <article class="card stat-card"><span>High</span><strong>${points.length ? tabularValue(formatPrice(stats.high, symbol)) : "--"}</strong><small>${points.length ? "Visible range" : "Waiting"}</small></article>
-          <article class="card stat-card"><span>Return</span><strong class="${stats.returnPct >= 0 ? "positive" : "negative"}">${points.length ? tabularValue(formatSignedPct(stats.returnPct)) : "--"}</strong><small>${points.length ? "Start to end" : "Waiting"}</small></article>
+          <article class="card stat-card"><span>📅 Range</span><strong>${range.toUpperCase()}</strong><small>${symbol} · ${points.length} data pts</small></article>
+          <article class="card stat-card"><span>📈 High</span><strong class="positive">${points.length ? tabularValue(formatPrice(stats.high, symbol)) : "--"}</strong><small>${points.length ? "Visible range" : "Waiting"}</small></article>
+          <article class="card stat-card"><span>📉 Low</span><strong class="negative">${points.length ? tabularValue(formatPrice(stats.low, symbol)) : "--"}</strong><small>${points.length ? "Visible range" : "Waiting"}</small></article>
+          <article class="card stat-card"><span>📊 Return</span><strong class="${stats.returnPct >= 0 ? "positive" : "negative"}">${points.length ? tabularValue(formatSignedPct(stats.returnPct)) : "--"}</strong><small>${points.length ? "Start to end" : "Waiting"}</small></article>
         </div>
       </section>
     `;

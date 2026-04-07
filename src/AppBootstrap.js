@@ -904,12 +904,13 @@ function renderOverviewStrip() {
         .join("");
 
   const pulse = calculatePulse();
+  const breadthIcon = pulse.gainers > pulse.losers ? "🟢" : pulse.losers > pulse.gainers ? "🔴" : "⚪";
   el.overviewStrip.innerHTML = `
     ${cards}
     <article class="overview-card overview-card-summary">
-      <span>Market pulse</span>
+      <span>${breadthIcon} Market Pulse</span>
       <strong>${state.marketPhase}</strong>
-      <small>${pulse.gainers} up · ${pulse.losers} down · ${state.health.ok ? "live server" : "local fallback"}</small>
+      <small>${pulse.gainers} ↑ · ${pulse.losers} ↓ · ${state.health.ok ? "🟢 Live" : "🟡 Local"}</small>
     </article>
   `;
   applyPriceTones(el.overviewStrip);

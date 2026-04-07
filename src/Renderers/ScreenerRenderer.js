@@ -19,10 +19,17 @@ export function createScreenerRenderer(context) {
     const filters = state.screenerFilters[panel];
     const sectors = [...new Set(universe.map((item) => item.sector))].sort();
     const universes = [...new Set(universe.map((item) => item.universe))].sort();
-    const results = filterUniverse(universe, filters).slice(0, 80);
+    const allResults = filterUniverse(universe, filters);
+    const results = allResults.slice(0, 80);
+    const hasFilter = filters.universe || filters.sector || filters.search;
 
     return `
       <section class="stack stack-lg">
+        <div class="card-grid card-grid-home">
+          <article class="card stat-card"><span>🔎 Total Universe</span><strong>${universe.length}</strong><small>${universes.length} universes</small></article>
+          <article class="card stat-card"><span>📊 Matches</span><strong>${allResults.length}</strong><small>${hasFilter ? "Filtered results" : "Showing all"}</small></article>
+          <article class="card stat-card"><span>🏢 Sectors</span><strong>${sectors.length}</strong><small>Available sectors</small></article>
+        </div>
         <div class="screener-filters">
           <select data-screener-universe="${panel}">
             <option value="">All universes</option>
@@ -32,10 +39,10 @@ export function createScreenerRenderer(context) {
             <option value="">All sectors</option>
             ${sectors.map((value) => `<option value="${value}" ${value === filters.sector ? "selected" : ""}>${value}</option>`).join("")}
           </select>
-          <input data-screener-search="${panel}" value="${filters.search}" placeholder="Search by symbol or name" />
+          <input data-screener-search="${panel}" value="${filters.search}" placeholder="🔍 Search by symbol or name…" />
         </div>
         <table class="data-table data-table-dense financial-data-table">
-          <thead><tr><th>Ticker</th><th>Name</th><th>Sector</th><th>Universe</th><th>Price</th><th>Change</th><th></th></tr></thead>
+          <thead><tr><th>Ticker</th><th>Name</th><th>Sector</th><th>Universe</th><th>Price</th><th>Change</th><th></th><th></th></tr></thead>
           <tbody>
             ${results
               .map((item) => {
@@ -43,19 +50,21 @@ export function createScreenerRenderer(context) {
                 const price = quote?.price || item.seedPrice || 0;
                 return `
                   <tr>
-                    <td><button class="table-link" type="button" data-load-module="quote" data-target-symbol="${item.symbol}" data-target-panel="${panel}">${item.symbol}</button></td>
+                    <td><button class="table-link" type="button" data-load-module="quote" data-target-symbol="${item.symbol}" data-target-panel="${panel}"><strong>${item.symbol}</strong></button></td>
                     <td>${item.name}</td>
                     <td>${item.sector}</td>
                     <td>${item.universe}</td>
                     <td>${tabularValue(formatPrice(price, item.symbol), { flashKey: `quote:${item.symbol}:price`, currentPrice: price })}</td>
                     <td class="${(quote?.changePct || 0) >= 0 ? "positive" : "negative"}">${quote ? tabularValue(formatSignedPct(quote.changePct)) : "--"}</td>
-                    <td><button class="btn btn-ghost btn-inline" type="button" data-load-module="chart" data-target-symbol="${item.symbol}" data-target-panel="${panel}">Chart</button></td>
+                    <td><button class="btn btn-ghost btn-inline" type="button" data-load-module="chart" data-target-symbol="${item.symbol}" data-target-panel="${panel}">📈</button></td>
+                    <td><button class="btn btn-ghost btn-inline" type="button" data-load-module="options" data-target-symbol="${item.symbol}" data-target-panel="${panel}">⛓</button></td>
                   </tr>
                 `;
               })
               .join("")}
           </tbody>
         </table>
+        ${allResults.length > 80 ? `<p class="empty-inline">Showing 80 of ${allResults.length} results. Use filters to narrow down.</p>` : ""}
       </section>
     `;
   };

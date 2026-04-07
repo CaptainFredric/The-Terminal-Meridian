@@ -68,7 +68,7 @@ export function createPortfolioRenderer(context) {
                   .join("")}
               </tbody>
             </table>
-          </article>` : `<article class="card"><div class="empty-inline">No positions yet. Add one above or use: ADDPOS AAPL 10 150</div></article>`}
+          </article>` : `<article class="card"><div class="empty-state empty-state-lg">Your portfolio is empty. Use the form above to track your first position.</div></article>`}
       </section>
     `;
   };

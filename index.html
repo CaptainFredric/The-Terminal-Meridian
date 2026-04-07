@@ -59,6 +59,10 @@
           <svg viewBox="0 0 20 20" fill="none"><path d="M3 10a7 7 0 0 1 12-4.9L17 7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M17 10a7 7 0 0 1-12 4.9L3 13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><polyline points="14,4 17,7 14,10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><polyline points="6,16 3,13 6,10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </button>
         <button class="btn btn-ghost" id="openCommandPalette" type="button">Cmd+K</button>
+        <button class="btn btn-icon notif-bell-btn" id="notifBellBtn" type="button" title="Notification history">
+          <svg viewBox="0 0 20 20" fill="none" width="18" height="18"><path d="M10 2a6 6 0 0 1 6 6v3l1.5 2.5H2.5L4 11V8a6 6 0 0 1 6-6z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 16a2 2 0 0 0 4 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          <span class="notif-badge hidden" id="notifBadge"></span>
+        </button>
         <button class="btn btn-ghost" id="autoJumpButton" type="button" title="Auto-scroll to active panel">Auto-jump: On</button>
         <button class="btn btn-ghost" id="resetFocusButton" type="button">Grid</button>
         <button class="btn btn-ghost hidden" id="openSettingsBtn" type="button">Account</button>
@@ -234,6 +238,18 @@
   </div>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <aside class="notif-drawer" id="notifDrawer" aria-label="Notification history">
+    <header class="notif-drawer-head">
+      <h3>Notifications</h3>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <button class="btn btn-ghost btn-sm" id="notifClearBtn" type="button">Clear all</button>
+        <button class="btn btn-icon" id="notifDrawerClose" type="button" title="Close">✕</button>
+      </div>
+    </header>
+    <ul class="notif-history" id="notifHistory" aria-live="polite"></ul>
+  </aside>
+  <div class="notif-backdrop hidden" id="notifBackdrop"></div>
 
   <div class="modal-backdrop hidden" id="settingsModalBackdrop">
     <section class="auth-modal settings-modal" id="settingsModal">

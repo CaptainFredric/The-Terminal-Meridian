@@ -27,11 +27,12 @@ import {
 import { observeChartResize } from "./Renderers/ChartRenderer.js";
 import { LogicEngine } from "./LogicEngine.js";
 import { createDefaultModuleRegistry } from "./Registry.js";
-import { applyPriceTone, tabularValue } from "./Renderers/Common.js";
+import { applyPriceTone, emptyState, formatPrice, formatSignedPct, tabularValue } from "./Renderers/Common.js";
 import { createStateStore } from "./StateStore.js";
 import { authApi, marketApi, uiCache, workspaceApi } from "./api.js";
 import { getStockDeepDive } from "./marketService.js";
 import { fetchQuotes, fetchChart, fetchOptions, fetchNews, fetchFxRates } from "./services.js";
+import { NotificationManager } from "./NotificationManager.js";
 
 const DEFAULT_OVERVIEW_SYMBOLS = ["SPY", "QQQ", "NVDA", "TLT", "BTC-USD", "AAPL"];
 const DEFAULT_CHART_RANGES = { 1: "1mo", 2: "1mo", 3: "1mo", 4: "1mo" };
@@ -62,6 +63,8 @@ let uiRefreshQueued = false;
 let unsubscribeStateUpdates = null;
 let hasInitialized = false;
 let lastStateUpdatedAt = Date.now();
+let lastNotifCount = 0;
+let notifManager = null;
 const pendingPriceChanges = new Map();
 
 const initialState = {
@@ -104,6 +107,7 @@ const initialState = {
   marketPhase: "Loading",
   health: { ok: false, server: "Checking server", time: null },
   commandPaletteOpen: false,
+  rulesActiveTab: "history",
 };
 
 const stateStore = createStateStore(initialState);
@@ -161,11 +165,20 @@ const el = {
   signupUsername: document.querySelector("#signupUsername"),
   signupAvailability: document.querySelector("#signupAvailability"),
   toast: document.querySelector("#toast"),
+  notifBellBtn: document.querySelector("#notifBellBtn"),
+  notifBadge: document.querySelector("#notifBadge"),
+  notifDrawer: document.querySelector("#notifDrawer"),
+  notifBackdrop: document.querySelector("#notifBackdrop"),
+  notifHistory: document.querySelector("#notifHistory"),
+  notifClearBtn: document.querySelector("#notifClearBtn"),
+  notifDrawerClose: document.querySelector("#notifDrawerClose"),
 };
 
 function init() {
   if (hasInitialized) return;
   hasInitialized = true;
+  notifManager = new NotificationManager();
+  lastNotifCount = state.notifications.length;
   document.title = appName;
   if (el.appTitle) el.appTitle.textContent = appName;
   if (el.signupRole) {
@@ -181,6 +194,19 @@ function init() {
     unsubscribeStateUpdates = stateStore.subscribe((event) => {
       lastStateUpdatedAt = Date.now();
       capturePriceChanges(event.detail);
+      // Detect new rule triggers from LogicEngine and push to NotificationManager
+      if (state.notifications.length > lastNotifCount) {
+        const newCount = state.notifications.length - lastNotifCount;
+        state.notifications.slice(0, newCount).forEach((notif) => {
+          notifManager?.push({
+            type: "rule-trigger",
+            title: `⚡ ${String(notif.symbol || "").toUpperCase()}`,
+            body: notif.msg || "Condition met",
+            symbol: notif.symbol || null,
+          });
+        });
+        lastNotifCount = state.notifications.length;
+      }
       scheduleUiRefresh();
     });
   }
@@ -398,6 +424,19 @@ function bindEvents() {
   el.openCommandPalette?.addEventListener("click", () => openCommandPalette());
   el.paletteBackdrop?.addEventListener("click", (event) => {
     if (event.target === el.paletteBackdrop) closeCommandPalette();
+  });
+
+  // Notification drawer
+  el.notifBellBtn?.addEventListener("click", () => toggleNotifDrawer());
+  el.notifDrawerClose?.addEventListener("click", () => closeNotifDrawer());
+  el.notifBackdrop?.addEventListener("click", () => closeNotifDrawer());
+  el.notifClearBtn?.addEventListener("click", () => {
+    notifManager?.clearHistory();
+    renderNotifDrawer();
+  });
+  window.addEventListener("meridian:notification", () => {
+    updateNotifBadge();
+    if (el.notifDrawer?.classList.contains("is-open")) renderNotifDrawer();
   });
 
   el.refreshAllButton?.addEventListener("click", () => {
@@ -923,7 +962,7 @@ function renderRails() {
         const quote = buildQuote(symbol);
         return `
           <div class="rail-row">
-            <button class="rail-item" type="button" data-load-module="quote" data-target-symbol="${symbol}" data-target-panel="${state.activePanel}">
+            <button class="rail-item" type="button" data-broadcast-symbol="${symbol}">
               <div>
                 <strong>${symbol}</strong>
                 <small>${quote?.name || "Waiting for quote"}</small>
@@ -1145,6 +1184,26 @@ function handleDocumentClick(event) {
   const syncTickerButton = event.target.closest("[data-sync-symbol]");
   if (syncTickerButton) {
     syncTicker(syncTickerButton.dataset.syncSymbol);
+    return;
+  }
+
+  const broadcastTrigger = event.target.closest("[data-broadcast-symbol]");
+  if (broadcastTrigger) {
+    broadcastSymbol(broadcastTrigger.dataset.broadcastSymbol);
+    return;
+  }
+
+  const rulesTabBtn = event.target.closest("[data-rules-tab]");
+  if (rulesTabBtn) {
+    state.rulesActiveTab = rulesTabBtn.dataset.rulesTab;
+    [1, 2, 3, 4].filter((p) => state.panelModules[p] === "rules").forEach((p) => renderPanel(p));
+    return;
+  }
+
+  const notifSymbolLink = event.target.closest("[data-notif-symbol]");
+  if (notifSymbolLink) {
+    broadcastSymbol(notifSymbolLink.dataset.notifSymbol);
+    closeNotifDrawer();
     return;
   }
 
@@ -1465,14 +1524,78 @@ function syncTicker(symbol) {
   showToast(state.user ? `${ticker} synced to your workspace.` : `${ticker} saved to local workspace.`, "success");
 }
 
-function formatInsightValue(value) {
-  if (value == null) return "--";
-  if (typeof value === "object") {
-    if ("fmt" in value && value.fmt) return String(value.fmt);
-    if ("longFmt" in value && value.longFmt) return String(value.longFmt);
-    if ("raw" in value && value.raw != null) return String(value.raw);
+function broadcastSymbol(symbol) {
+  const ticker = String(symbol || "").trim().toUpperCase();
+  if (!ticker) return;
+  [1, 2, 3, 4].forEach((panel) => {
+    state.panelSymbols[panel] = ticker;
+  });
+  renderAllPanels();
+  refreshAllData();
+  showToast(`${ticker} broadcast to all panels.`, "success");
+}
+
+function toggleNotifDrawer() {
+  if (el.notifDrawer?.classList.contains("is-open")) {
+    closeNotifDrawer();
+  } else {
+    openNotifDrawer();
   }
-  return String(value);
+}
+
+function openNotifDrawer() {
+  el.notifDrawer?.classList.add("is-open");
+  el.notifBackdrop?.classList.remove("hidden");
+  renderNotifDrawer();
+  notifManager?.markAllSeen();
+  updateNotifBadge();
+}
+
+function closeNotifDrawer() {
+  el.notifDrawer?.classList.remove("is-open");
+  el.notifBackdrop?.classList.add("hidden");
+}
+
+function renderNotifDrawer() {
+  if (!el.notifHistory) return;
+  const history = notifManager?.getHistory() || [];
+  if (!history.length) {
+    el.notifHistory.innerHTML = `<li class="notif-empty">No notifications yet. Rule triggers appear here in real-time.</li>`;
+    return;
+  }
+  el.notifHistory.innerHTML = history
+    .map((item) => {
+      const time = new Date(item.timestamp).toLocaleTimeString("en-US", {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+      });
+      const symbolChip = item.symbol
+        ? `<button class="notif-symbol-chip" type="button" data-notif-symbol="${item.symbol}">${item.symbol}</button>`
+        : "";
+      return `
+        <li class="notif-item">
+          <div class="notif-item-head">
+            <span class="notif-item-title">${item.title}</span>
+            ${symbolChip}
+            <span class="notif-item-time">${time}</span>
+          </div>
+          <p class="notif-item-body">${item.body}</p>
+        </li>
+      `;
+    })
+    .join("");
+}
+
+function updateNotifBadge() {
+  if (!el.notifBadge) return;
+  const count = notifManager?.getUnseenCount() || 0;
+  if (count > 0) {
+    el.notifBadge.textContent = count > 9 ? "9+" : String(count);
+    el.notifBadge.classList.remove("hidden");
+  } else {
+    el.notifBadge.classList.add("hidden");
+  }
 }
 
 function getRenderableNewsItems(filterSymbol) {
@@ -1954,10 +2077,6 @@ function erf(value) {
   return sign * y;
 }
 
-function emptyState(message) {
-  return `<div class="empty-state">${message}</div>`;
-}
-
 function findRelatedSymbols(symbol) {
   const base = universeMap.get(symbol);
   if (!base) return [];
@@ -1975,7 +2094,8 @@ function filterNewsItems(filterSymbol) {
 }
 
 function extractHeadlineSymbol(headline) {
-  const upper = headline.toUpperCase();
+  const upper = String(headline || "").toUpperCase();
+  if (!upper) return null;
   const match = universe.find((item) => upper.includes(item.symbol) || upper.includes(item.name.toUpperCase()));
   return match?.symbol || null;
 }
@@ -2017,36 +2137,6 @@ function calculatePulse() {
 
 function syncUiCache() {
   workspaceController?.syncUiCache();
-}
-
-function formatPrice(value, symbol) {
-  const digits = symbol === "BTC-USD" || symbol === "USD" ? 0 : 2;
-  return Number(value || 0).toLocaleString("en-US", {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: digits,
-    maximumFractionDigits: digits,
-  });
-}
-
-function formatSignedPct(value) {
-  return `${Number(value) >= 0 ? "+" : ""}${Number(value).toFixed(2)}%`;
-}
-
-function formatMarketCap(value) {
-  if (!value) return "N/A";
-  if (value >= 1e12) return `$${(value / 1e12).toFixed(2)}T`;
-  if (value >= 1e9) return `$${(value / 1e9).toFixed(2)}B`;
-  if (value >= 1e6) return `$${(value / 1e6).toFixed(2)}M`;
-  return `$${Number(value).toFixed(0)}`;
-}
-
-function formatVolume(value) {
-  if (!value) return "N/A";
-  if (value >= 1e9) return `${(value / 1e9).toFixed(2)}B`;
-  if (value >= 1e6) return `${(value / 1e6).toFixed(2)}M`;
-  if (value >= 1e3) return `${(value / 1e3).toFixed(1)}K`;
-  return `${value}`;
 }
 
 function currentTimeShort(value = Date.now()) {

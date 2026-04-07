@@ -119,13 +119,19 @@ export async function fetchNews() {
   const requests = feeds.map(async (feedUrl) => {
     try {
       const payload = await fetchJson(`${RSS_TO_JSON}${encodeURIComponent(feedUrl)}`);
-      const items = payload.items ?? [];
-      return items.slice(0, 6).map((item) => ({
-        source: payload.feed?.title ?? "Feed",
-        headline: item.title ?? "Untitled",
-        time: item.pubDate ? new Date(item.pubDate).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false }) : "--:--",
-        link: item.link ?? "#",
-      }));
+      const items = Array.isArray(payload.items) ? payload.items : [];
+      return items.slice(0, 6).map((item) => {
+        const rawLink = String(item.link || "");
+        const safeHref = rawLink.startsWith("http://") || rawLink.startsWith("https://") ? rawLink : "#";
+        return {
+          source: String(payload.feed?.title || "Feed"),
+          headline: String(item.title || "Untitled"),
+          time: item.pubDate
+            ? new Date(item.pubDate).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false })
+            : "--:--",
+          link: safeHref,
+        };
+      });
     } catch {
       return [];
     }

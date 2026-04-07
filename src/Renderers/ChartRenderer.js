@@ -23,16 +23,21 @@ export function observeChartResize(container, chart) {
 }
 
 export function createChartRenderer(context) {
-  const { state, chartIntervalForRange, chartKey, calculateChartStats, chartRangeOptions } = context;
+  const { state, chartIntervalForRange, chartKey, calculateChartStats, chartRangeOptions, currentTimeShort } = context;
 
   return function renderChart(panel) {
     const symbol = state.panelSymbols[panel] || "AAPL";
     const range = state.chartRanges[panel] || "1mo";
     const interval = chartIntervalForRange(range);
-    const points = state.chartCache.get(chartKey(symbol, range, interval)) || [];
+    const cacheKey = chartKey(symbol, range, interval);
+    const points = state.chartCache.get(cacheKey) || [];
     const stats = calculateChartStats(points);
+    const chartIsLoading = state.chartLoading?.has(cacheKey);
     const chartUnavailable = !points.length && !state.health?.ok;
-    const waitingForData = !points.length && state.health?.ok;
+    const waitingForData = chartIsLoading || (!points.length && state.health?.ok);
+    const freshnessLabel = state.health?.ok
+      ? `Live feed · ${currentTimeShort(state.lastDataFetchedAt || Date.now())}`
+      : `Stale snapshot · ${currentTimeShort(state.lastDataFetchedAt || Date.now())}`;
 
     return `
       <section class="stack stack-lg">
@@ -45,10 +50,11 @@ export function createChartRenderer(context) {
         </div>
 
         <article class="card chart-card chart-card-feature">
+          <div class="chart-state-badge ${state.health?.ok ? "" : "is-stale"}">${freshnessLabel}</div>
           <div class="chart-canvas-wrap">
             <div class="chart-canvas" id="chartCanvas${panel}" data-chart-panel="${panel}"></div>
             ${chartUnavailable ? `<div class="chart-loading chart-fallback">${loadingSkeleton(4)}<p class="empty-inline">Offline: ${symbol} chart feed unavailable. Last requested window ${range.toUpperCase()}.</p></div>` : ""}
-            ${waitingForData ? `<div class="chart-loading">${loadingSkeleton(4)}</div>` : ""}
+            ${waitingForData ? `<div class="chart-loading"><div class="chart-skeleton"><span class="chart-skeleton-line a"></span><span class="chart-skeleton-line b"></span><span class="chart-skeleton-line c"></span><span class="chart-skeleton-line d"></span><span class="chart-skeleton-grid"></span></div></div>` : ""}
           </div>
         </article>
 

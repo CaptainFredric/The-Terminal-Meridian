@@ -12,6 +12,46 @@ import {
 export function createQuoteRenderer(context) {
   const { state, buildQuote, findRelatedSymbols } = context;
 
+  const formatOptionalNumber = (value, digits = 2) => {
+    if (value == null || Number.isNaN(Number(value))) return "N/A";
+    return Number(value).toFixed(digits);
+  };
+
+  const formatOptionalPercent = (value) => {
+    if (value == null || Number.isNaN(Number(value))) return "N/A";
+    const numeric = Number(value);
+    const percent = Math.abs(numeric) <= 1 ? numeric * 100 : numeric;
+    return `${percent.toFixed(2)}%`;
+  };
+
+  const formatOptionalDate = (value) => {
+    if (!value) return "N/A";
+    const numeric = Number(value);
+    const date = Number.isFinite(numeric) && numeric > 1e9 ? new Date(numeric * (numeric < 10_000_000_000 ? 1000 : 1)) : new Date(value);
+    if (Number.isNaN(date.getTime())) return "N/A";
+    return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  };
+
+  const formatRange = (low, high, symbol) => {
+    if (!low && !high) return "N/A";
+    return `${formatPrice(low || 0, symbol)} - ${formatPrice(high || 0, symbol)}`;
+  };
+
+  const buildDepth = (quote) => {
+    const spread = Math.max(Number(quote.price || 0) * 0.001, 0.01);
+    const bid = Number(quote.bid ?? (quote.price - spread / 2));
+    const ask = Number(quote.ask ?? (quote.price + spread / 2));
+    const bidSize = Number(quote.bidSize || Math.max(Math.round((quote.averageVolume || quote.volume || 10_000) / 1600), 24));
+    const askSize = Number(quote.askSize || Math.max(Math.round((quote.averageVolume || quote.volume || 10_000) / 1750), 20));
+    return {
+      bid,
+      ask,
+      bidSize,
+      askSize,
+      spread: Math.max(ask - bid, 0),
+    };
+  };
+
   return function renderQuote(panel) {
     const symbol = state.panelSymbols[panel] || "AAPL";
     const quote = buildQuote(symbol);
@@ -28,6 +68,18 @@ export function createQuoteRenderer(context) {
     const profile = deepDive?.profile || {};
     const financials = deepDive?.financials || {};
     const isAnalyzing = state.deepDiveLoading.has(symbol);
+    const depth = buildDepth(quote);
+    const statTiles = [
+      { label: "Mkt Cap", value: formatMarketCap(quote.marketCap) },
+      { label: "P/E Ratio", value: formatOptionalNumber(quote.trailingPE) },
+      { label: "Div Yield", value: formatOptionalPercent(quote.dividendYield) },
+      { label: "52W Range", value: formatRange(quote.fiftyTwoWeekLow, quote.fiftyTwoWeekHigh, symbol), className: "quote-stat-wide" },
+      { label: "Avg Volume", value: formatVolume(quote.averageVolume || quote.volume) },
+      { label: "Beta", value: formatOptionalNumber(quote.beta) },
+      { label: "Prev Close", value: formatPrice(quote.previousClose, symbol) },
+      { label: "Bid / Ask", value: `${formatPrice(depth.bid, symbol)} / ${formatPrice(depth.ask, symbol)}`, className: "quote-stat-wide" },
+      { label: "Next Earnings", value: formatOptionalDate(quote.earningsTimestamp || financials.nextEarningsDate || profile.nextEarningsDate) },
+    ];
 
     return `
       <section class="stack stack-lg">
@@ -65,15 +117,39 @@ export function createQuoteRenderer(context) {
           </div>
         </article>
 
-        <table class="data-table financial-data-table">
-          <tbody>
-            <tr><td>Previous close</td><td>${tabularValue(formatPrice(quote.previousClose, symbol))}</td><td>Day high</td><td>${tabularValue(formatPrice(quote.dayHigh, symbol))}</td></tr>
-            <tr><td>Day low</td><td>${tabularValue(formatPrice(quote.dayLow, symbol))}</td><td>Volume</td><td>${tabularValue(formatVolume(quote.volume))}</td></tr>
-            <tr><td>Market cap</td><td>${tabularValue(formatMarketCap(quote.marketCap))}</td><td>Change</td><td class="${quote.change >= 0 ? "positive" : "negative"}">${tabularValue(`${quote.change >= 0 ? "+" : ""}${Number(quote.change).toFixed(2)}`)}</td></tr>
-            <tr><td>52-wk high</td><td>${tabularValue(formatPrice(quote.fiftyTwoWeekHigh || quote.dayHigh, symbol))}</td><td>52-wk low</td><td>${tabularValue(formatPrice(quote.fiftyTwoWeekLow || quote.dayLow, symbol))}</td></tr>
-            <tr><td>P/E ratio</td><td>${tabularValue(quote.trailingPE ? Number(quote.trailingPE).toFixed(2) : "--")}</td><td>EPS</td><td>${tabularValue(quote.epsTrailingTwelveMonths ? formatPrice(quote.epsTrailingTwelveMonths, symbol) : "--")}</td></tr>
-          </tbody>
-        </table>
+        <article class="card">
+          <header class="card-head card-head-split"><h4>Key Statistics</h4><small>Quote intelligence grid</small></header>
+          <div class="quote-stats-grid">
+            ${statTiles
+              .map(
+                (tile) => `
+                  <div class="quote-stat-tile ${tile.className || ""}">
+                    <span>${tile.label}</span>
+                    <strong>${tabularValue(tile.value)}</strong>
+                  </div>
+                `,
+              )
+              .join("")}
+          </div>
+        </article>
+
+        <article class="card quote-depth-card">
+          <header class="card-head card-head-split"><h4>Mini Depth</h4><small>${tabularValue(formatPrice(depth.spread, symbol))} spread</small></header>
+          <div class="quote-depth-grid">
+            <div class="quote-depth-side bid-side">
+              <span>Bid stack</span>
+              <strong>${tabularValue(formatPrice(depth.bid, symbol))}</strong>
+              <small>${tabularValue(formatVolume(depth.bidSize))} bid size</small>
+              <div class="depth-bar"><i style="width: ${Math.min(100, Math.max(18, depth.bidSize / Math.max(depth.askSize, depth.bidSize) * 100))}%"></i></div>
+            </div>
+            <div class="quote-depth-side ask-side">
+              <span>Ask stack</span>
+              <strong>${tabularValue(formatPrice(depth.ask, symbol))}</strong>
+              <small>${tabularValue(formatVolume(depth.askSize))} ask size</small>
+              <div class="depth-bar"><i style="width: ${Math.min(100, Math.max(18, depth.askSize / Math.max(depth.askSize, depth.bidSize) * 100))}%"></i></div>
+            </div>
+          </div>
+        </article>
 
         <article class="card">
           <header class="card-head card-head-split"><h4>🔎 Deep Insight</h4><small>${deepDive?.provider === "rapidapi" ? "🟢 Live modules" : "📦 Provisioned research"}</small></header>

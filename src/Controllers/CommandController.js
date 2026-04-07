@@ -1,15 +1,20 @@
 export class CommandController {
-  constructor({ state, el, appCore, hideAutocomplete, closeCommandPalette }) {
+  constructor({ state, el, appCore, hideAutocomplete, closeCommandPalette, processRawCommand }) {
     this.state = state;
     this.el = el;
     this.appCore = appCore;
     this.hideAutocomplete = hideAutocomplete;
     this.closeCommandPalette = closeCommandPalette;
+    this.processRawCommand = processRawCommand;
   }
 
   processInput() {
     const raw = String(this.el.commandInput?.value || "").trim();
     if (!raw) return;
+    if (this.processRawCommand) {
+      this.processRawCommand(raw);
+      return;
+    }
     this.appCore?.dispatchRawCommand(raw);
   }
 

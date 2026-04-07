@@ -30,11 +30,14 @@ import { createDefaultModuleRegistry } from "./Registry.js";
 import { applyPriceTone, emptyState, formatPrice, formatSignedPct, tabularValue } from "./Renderers/Common.js";
 import { createStateStore } from "./StateStore.js";
 import { authApi, marketApi, uiCache, workspaceApi } from "./api.js";
+import { ActionEngine } from "./ActionEngine.js";
 import { getStockDeepDive } from "./marketService.js";
 import { fetchQuotes, fetchChart, fetchOptions, fetchNews, fetchFxRates } from "./services.js";
 import { NotificationManager } from "./NotificationManager.js";
 
 const DEFAULT_OVERVIEW_SYMBOLS = ["SPY", "QQQ", "NVDA", "TLT", "BTC-USD", "AAPL"];
+const MERIDIAN_STATE_KEY = "meridian_state";
+const LEGACY_UI_CACHE_KEY = "the-terminal.ui-cache.v2";
 const DEFAULT_CHART_RANGES = { 1: "1mo", 2: "1mo", 3: "1mo", 4: "1mo" };
 const CHART_RANGE_OPTIONS = [
   { label: "5D", value: "5d" },
@@ -47,15 +50,39 @@ const BIG_FOUR_DEFAULT_MODULES = { 1: "quote", 2: "chart", 3: "news", 4: "rules"
 const BIG_FOUR_DEFAULT_SYMBOLS = { 1: "AAPL", 2: "MSFT", 3: "QQQ", 4: "NVDA" };
 const AUTH_ENABLED = false;
 
+function readPersistedMeridianState() {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(MERIDIAN_STATE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    window.localStorage.removeItem(MERIDIAN_STATE_KEY);
+    window.localStorage.removeItem(LEGACY_UI_CACHE_KEY);
+    return null;
+  }
+}
+
 const universe = buildUniverse();
 const universeMap = new Map(universe.map((item) => [item.symbol, item]));
-const uiSnapshot = uiCache.read();
+const legacyUiSnapshot = uiCache.read();
+const persistedMeridianState = readPersistedMeridianState();
+const persistedUi = persistedMeridianState?.ui || {};
+const persistedWorkspace = persistedMeridianState?.workspace || {};
+const uiSnapshot = {
+  ...legacyUiSnapshot,
+  ...persistedUi,
+  guestWorkspace: {
+    ...(legacyUiSnapshot.guestWorkspace || {}),
+    ...persistedWorkspace,
+  },
+};
 const guestWorkspace = uiSnapshot.guestWorkspace || {};
 const chartViews = new Map();
 let lightweightChartsModulePromise = null;
 let moduleRegistry = null;
 let appCore = null;
 let commandController = null;
+let actionEngine = null;
 let workspaceController = null;
 let dockingController = null;
 let logicEngine = null;
@@ -65,6 +92,7 @@ let hasInitialized = false;
 let lastStateUpdatedAt = Date.now();
 let lastNotifCount = 0;
 let notifManager = null;
+let meridianStatePersistTimer = null;
 const pendingPriceChanges = new Map();
 
 const initialState = {
@@ -90,6 +118,7 @@ const initialState = {
   calculator: structuredClone(calculatorDefaults),
   quotes: new Map(),
   chartCache: new Map(),
+  chartLoading: new Set(),
   optionsCache: new Map(),
   deepDiveCache: new Map(),
   deepDiveLoading: new Set(),
@@ -97,6 +126,7 @@ const initialState = {
   newsFilter: String(uiSnapshot.newsFilter || "ALL"),
   fxRates: {},
   overviewQuotes: [],
+  overviewSparklineCache: new Map(),
   overviewSymbols: [...DEFAULT_OVERVIEW_SYMBOLS],
   optionsSelection: { symbol: "AAPL", expiration: null },
   sessionStartedAt: Date.now(),
@@ -107,13 +137,17 @@ const initialState = {
   marketPhase: "Loading",
   health: { ok: false, server: "Checking server", time: null },
   commandPaletteOpen: false,
-  rulesActiveTab: "history",
+  rulesActiveTab: String(uiSnapshot.rulesActiveTab || "history"),
+  compactMode: Boolean(uiSnapshot.compactMode),
+  theme: String(uiSnapshot.theme || "dark"),
+  lastDataFetchedAt: Number(uiSnapshot.lastDataFetchedAt || 0),
 };
 
 const stateStore = createStateStore(initialState);
 const state = stateStore.state;
 
 const el = {
+  terminalApp: document.querySelector("#terminalApp"),
   appTitle: document.querySelector("#appTitle"),
   functionRow: document.querySelector("#functionRow"),
   openCommandPalette: document.querySelector("#openCommandPalette"),
@@ -179,6 +213,18 @@ function init() {
   hasInitialized = true;
   notifManager = new NotificationManager();
   lastNotifCount = state.notifications.length;
+  actionEngine = new ActionEngine({
+    universe,
+    handlers: {
+      clearNotifications: () => clearNotificationsHistory(),
+      clearAlerts: () => clearAlerts(),
+      toggleRulesTab: () => toggleRulesTab(),
+      toggleCompactMode: () => setCompactMode(),
+      setTheme: (theme) => setTheme(theme),
+      goToSymbol: (symbol) => broadcastSymbol(symbol),
+      deleteSymbol: (symbol) => deleteSymbol(symbol),
+    },
+  });
   document.title = appName;
   if (el.appTitle) el.appTitle.textContent = appName;
   if (el.signupRole) {
@@ -207,6 +253,7 @@ function init() {
         });
         lastNotifCount = state.notifications.length;
       }
+      queueMeridianStatePersist();
       scheduleUiRefresh();
     });
   }
@@ -293,6 +340,13 @@ function init() {
       appCore,
       hideAutocomplete,
       closeCommandPalette,
+      processRawCommand: (raw) => {
+        if (actionEngine?.execute(raw)) {
+          finalizePaletteAction();
+          return;
+        }
+        appCore?.dispatchRawCommand(raw);
+      },
     });
     dockingController = new DockingController({
       state,
@@ -306,6 +360,7 @@ function init() {
   bindEvents();
   dockingController?.initialize();
   appCore.initialize();
+  applyWorkspaceModes();
   setActivePanel(state.activePanel);
   scheduleUiRefresh();
   applyTerminalInputClass(document);
@@ -396,11 +451,67 @@ function applyPriceTones(rootNode = document) {
   });
 }
 
+function snapshotMeridianState() {
+  return {
+    version: 1,
+    updatedAt: Date.now(),
+    ui: {
+      activePanel: state.activePanel,
+      focusedPanel: state.focusedPanel,
+      autoJumpToPanel: state.autoJumpToPanel,
+      chartRanges: state.chartRanges,
+      newsFilter: state.newsFilter,
+      rulesActiveTab: state.rulesActiveTab,
+      activeTicker: state.panelSymbols[state.activePanel] || "AAPL",
+      compactMode: state.compactMode,
+      theme: state.theme,
+      lastDataFetchedAt: state.lastDataFetchedAt,
+    },
+    workspace: {
+      watchlist: state.watchlist,
+      alerts: state.alerts,
+      positions: state.positions,
+      panelModules: state.panelModules,
+      panelSymbols: state.panelSymbols,
+      commandHistory: state.commandHistory,
+      activeRules: state.activeRules,
+      notifications: state.notifications,
+    },
+  };
+}
+
+function persistMeridianState() {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(MERIDIAN_STATE_KEY, JSON.stringify(snapshotMeridianState()));
+}
+
+function queueMeridianStatePersist() {
+  window.clearTimeout(meridianStatePersistTimer);
+  meridianStatePersistTimer = window.setTimeout(() => {
+    persistMeridianState();
+  }, 90);
+}
+
+function applyWorkspaceModes() {
+  document.body.dataset.theme = state.theme || "dark";
+  document.documentElement.style.colorScheme = state.theme === "light" ? "light" : "dark";
+  el.terminalApp?.classList.toggle("is-compact", Boolean(state.compactMode));
+}
+
+function finalizePaletteAction() {
+  if (el.commandInput) el.commandInput.value = "";
+  hideAutocomplete();
+  closeCommandPalette();
+  syncUiCache();
+  queueWorkspaceSave();
+}
+
 function scheduleUiRefresh() {
   if (uiRefreshQueued) return;
   uiRefreshQueued = true;
   requestAnimationFrame(() => {
     uiRefreshQueued = false;
+    applyWorkspaceModes();
     renderFunctionRow();
     renderOverviewStrip();
     renderRails();
@@ -431,11 +542,13 @@ function bindEvents() {
   el.notifDrawerClose?.addEventListener("click", () => closeNotifDrawer());
   el.notifBackdrop?.addEventListener("click", () => closeNotifDrawer());
   el.notifClearBtn?.addEventListener("click", () => {
-    notifManager?.clearHistory();
-    renderNotifDrawer();
+    clearNotificationsHistory();
   });
   window.addEventListener("meridian:notification", () => {
     updateNotifBadge();
+    el.notifBellBtn?.classList.remove("is-pinging");
+    void el.notifBellBtn?.offsetWidth;
+    el.notifBellBtn?.classList.add("is-pinging");
     if (el.notifDrawer?.classList.contains("is-open")) renderNotifDrawer();
   });
 
@@ -922,10 +1035,11 @@ function renderOverviewStrip() {
     ? state.overviewQuotes
         .map(
           (quote) => `
-            <button class="overview-card" type="button" data-load-module="quote" data-target-symbol="${quote.symbol}" data-target-panel="${state.activePanel}">
-              <span>${quote.symbol}</span>
+            <button class="overview-card" type="button" data-broadcast-symbol="${quote.symbol}">
+              <span>${quote.symbol}<i class="overview-live-dot"></i></span>
               <strong>${tabularValue(formatPrice(quote.price, quote.symbol), { flashKey: `overview:${quote.symbol}:price`, currentPrice: quote.price })}</strong>
               <small class="${Number(quote.changePct || 0) >= 0 ? "positive" : "negative"}">${tabularValue(formatSignedPct(quote.changePct || 0))}</small>
+              ${renderOverviewSparkline(quote.symbol, Number(quote.changePct || 0))}
             </button>
           `,
         )
@@ -1081,12 +1195,16 @@ function handleCommandKeydown(event) {
 }
 
 function renderAutocomplete() {
-  const value = String(el.commandInput?.value || "").trim().toUpperCase();
+  const rawValue = String(el.commandInput?.value || "").trim();
+  const value = rawValue.toUpperCase();
   if (!value) {
     hideAutocomplete();
     return;
   }
 
+  const actionMatches = (actionEngine?.search(rawValue) || [])
+    .slice(0, 4)
+    .map((item) => ({ label: item.command, description: item.description }));
   const commandMatches = commandCatalog
     .filter((item) => item.cmd.includes(value))
     .slice(0, 5)
@@ -1095,7 +1213,9 @@ function renderAutocomplete() {
     .filter((item) => item.symbol.startsWith(value) || item.name.toUpperCase().includes(value))
     .slice(0, 5)
     .map((item) => ({ label: `${item.symbol} Q`, description: item.name }));
-  const suggestions = [...commandMatches, ...symbolMatches].slice(0, 10);
+  const suggestions = [...actionMatches, ...commandMatches, ...symbolMatches]
+    .filter((item, index, items) => items.findIndex((candidate) => candidate.label === item.label) === index)
+    .slice(0, 10);
 
   if (!suggestions.length) {
     hideAutocomplete();
@@ -1117,6 +1237,39 @@ function renderAutocomplete() {
 
 function hideAutocomplete() {
   el.autocomplete?.classList.add("hidden");
+}
+
+function renderOverviewSparkline(symbol, changePct = 0) {
+  const points = state.overviewSparklineCache.get(symbol) || [];
+  if (!points.length) {
+    const tone = changePct >= 0 ? "positive" : "negative";
+    return `<div class="overview-sparkline overview-sparkline-${tone}"><span></span><span></span><span></span><span></span><span></span></div>`;
+  }
+
+  const width = 78;
+  const height = 24;
+  const closes = points.map((point) => Number(point.close || point.price || 0)).filter((value) => Number.isFinite(value));
+  if (!closes.length) {
+    const tone = changePct >= 0 ? "positive" : "negative";
+    return `<div class="overview-sparkline overview-sparkline-${tone}"><span></span><span></span><span></span><span></span><span></span></div>`;
+  }
+  const min = Math.min(...closes);
+  const max = Math.max(...closes);
+  const range = Math.max(max - min, 0.0001);
+  const path = closes
+    .map((price, index) => {
+      const x = (index / Math.max(closes.length - 1, 1)) * width;
+      const y = height - ((price - min) / range) * height;
+      return `${index === 0 ? "M" : "L"}${x.toFixed(2)} ${y.toFixed(2)}`;
+    })
+    .join(" ");
+  const tone = closes[closes.length - 1] >= closes[0] ? "positive" : "negative";
+
+  return `
+    <svg class="overview-sparkline-svg ${tone}" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" aria-hidden="true">
+      <path d="${path}" />
+    </svg>
+  `;
 }
 
 function handleDocumentClick(event) {
@@ -1413,6 +1566,22 @@ function addToWatchlist(symbol) {
   }
 }
 
+function clearAlerts() {
+  state.alerts = [];
+  renderRails();
+  queueWorkspaceSave();
+  showToast("Alerts cleared.", "neutral");
+}
+
+function clearNotificationsHistory() {
+  state.notifications = [];
+  lastNotifCount = 0;
+  notifManager?.clearHistory();
+  renderNotifDrawer();
+  queueWorkspaceSave();
+  showToast("Notifications cleared.", "neutral");
+}
+
 function removeFromWatchlist(symbol) {
   state.watchlist = state.watchlist.filter((item) => item !== symbol);
   renderRails();
@@ -1444,8 +1613,64 @@ function removePositionBySymbol(symbol) {
   queueWorkspaceSave();
 }
 
+function deleteSymbol(symbol) {
+  const ticker = String(symbol || "").trim().toUpperCase();
+  if (!ticker) return;
+
+  const before = {
+    watchlist: state.watchlist.length,
+    alerts: state.alerts.length,
+    positions: state.positions.length,
+    rules: state.activeRules.length,
+  };
+
+  state.watchlist = state.watchlist.filter((item) => item !== ticker);
+  state.alerts = state.alerts.filter((item) => item.symbol !== ticker);
+  state.positions = state.positions.filter((item) => item.symbol !== ticker);
+  state.activeRules = state.activeRules.filter((item) => item.symbol !== ticker);
+
+  const changed =
+    before.watchlist !== state.watchlist.length ||
+    before.alerts !== state.alerts.length ||
+    before.positions !== state.positions.length ||
+    before.rules !== state.activeRules.length;
+
+  if (!changed) {
+    showToast(`${ticker} was not in the local workspace.`, "neutral");
+    return;
+  }
+
+  renderRails();
+  renderAllPanels();
+  queueWorkspaceSave();
+  showToast(`${ticker} removed from local workspace.`, "success");
+}
+
+function toggleRulesTab() {
+  state.rulesActiveTab = state.rulesActiveTab === "history" ? "rules" : "history";
+  [1, 2, 3, 4].filter((panel) => state.panelModules[panel] === "rules").forEach((panel) => renderPanel(panel));
+  syncUiCache();
+  showToast(`Rules panel set to ${state.rulesActiveTab}.`, "neutral");
+}
+
+function setCompactMode(nextValue = !state.compactMode) {
+  state.compactMode = Boolean(nextValue);
+  applyWorkspaceModes();
+  syncUiCache();
+  showToast(`Compact mode ${state.compactMode ? "enabled" : "disabled"}.`, "neutral");
+}
+
+function setTheme(nextTheme = "dark") {
+  const theme = nextTheme === "light" ? "light" : "dark";
+  state.theme = theme;
+  applyWorkspaceModes();
+  syncUiCache();
+  showToast(`Theme set to ${theme}.`, "neutral");
+}
+
 function queueWorkspaceSave() {
   workspaceController?.queueSave();
+  queueMeridianStatePersist();
 }
 
 async function refreshAllData() {
@@ -1467,16 +1692,20 @@ async function refreshAllData() {
     .filter((panel) => state.panelModules[panel] === "options")
     .map((panel) => refreshOptions(state.panelSymbols[panel] || state.optionsSelection.symbol, state.optionsSelection.expiration));
 
+  const overviewSparklineRequests = state.overviewSymbols.map((symbol) => refreshOverviewSparkline(symbol));
+
   await Promise.allSettled([
     checkHealth(),
     refreshOverview(),
     refreshQuotes(symbols),
     refreshNews(),
     refreshFx(),
+    ...overviewSparklineRequests,
     ...chartRequests,
     ...optionRequests,
   ]);
 
+  state.lastDataFetchedAt = Date.now();
   renderOverviewStrip();
   renderRails();
   renderAllPanels();
@@ -1530,6 +1759,7 @@ function broadcastSymbol(symbol) {
   [1, 2, 3, 4].forEach((panel) => {
     state.panelSymbols[panel] = ticker;
   });
+  state.newsFilter = ticker;
   renderAllPanels();
   refreshAllData();
   showToast(`${ticker} broadcast to all panels.`, "success");
@@ -1677,13 +1907,33 @@ async function refreshQuotes(symbols) {
   }
 }
 
+async function refreshOverviewSparkline(symbol) {
+  try {
+    const payload = await marketApi.chart(symbol, "5d", "1h");
+    state.overviewSparklineCache.set(symbol, payload.points || []);
+    return;
+  } catch {
+    // backend unavailable — try direct
+  }
+
+  try {
+    const points = await fetchChart(symbol, "5d", "1h");
+    state.overviewSparklineCache.set(symbol, points || []);
+  } catch {
+    // noop
+  }
+}
+
 async function refreshChart(symbol, range = "1mo") {
   const interval = chartIntervalForRange(range);
   const key = chartKey(symbol, range, interval);
+  state.chartLoading.add(key);
+  renderAllPanels();
   // Try backend first
   try {
     const payload = await marketApi.chart(symbol, range, interval);
     state.chartCache.set(key, payload.points || []);
+    state.chartLoading.delete(key);
     renderAllPanels();
     return;
   } catch {
@@ -1693,10 +1943,12 @@ async function refreshChart(symbol, range = "1mo") {
     const points = await fetchChart(symbol, range, interval);
     if (points.length) {
       state.chartCache.set(key, points);
-      renderAllPanels();
     }
   } catch {
     // noop
+  } finally {
+    state.chartLoading.delete(key);
+    renderAllPanels();
   }
 }
 
@@ -1808,6 +2060,9 @@ function evaluateAlerts() {
 function buildQuote(symbol) {
   const base = universeMap.get(symbol);
   const live = state.quotes.get(symbol);
+  const deepDive = state.deepDiveCache.get(symbol);
+  const profile = deepDive?.profile || {};
+  const financials = deepDive?.financials || {};
   if (!base && !live) return null;
   return {
     symbol,
@@ -1820,9 +2075,21 @@ function buildQuote(symbol) {
     change: Number(live?.change || 0),
     marketCap: live?.marketCap || base?.marketCap || 0,
     volume: live?.volume || 0,
+    averageVolume: live?.averageVolume || 0,
     dayHigh: live?.dayHigh || live?.price || base?.seedPrice || 0,
     dayLow: live?.dayLow || live?.price || base?.seedPrice || 0,
     previousClose: live?.previousClose || base?.seedPrice || 0,
+    fiftyTwoWeekHigh: live?.fiftyTwoWeekHigh || profile.fiftyTwoWeekHigh || live?.dayHigh || 0,
+    fiftyTwoWeekLow: live?.fiftyTwoWeekLow || profile.fiftyTwoWeekLow || live?.dayLow || 0,
+    trailingPE: live?.trailingPE ?? financials.trailingPE ?? profile.trailingPE ?? null,
+    epsTrailingTwelveMonths: live?.epsTrailingTwelveMonths ?? financials.epsTrailingTwelveMonths ?? profile.epsTrailingTwelveMonths ?? null,
+    dividendYield: live?.dividendYield ?? financials.dividendYield ?? profile.dividendYield ?? null,
+    beta: live?.beta ?? financials.beta ?? profile.beta ?? null,
+    bid: live?.bid ?? null,
+    ask: live?.ask ?? null,
+    bidSize: live?.bidSize ?? null,
+    askSize: live?.askSize ?? null,
+    earningsTimestamp: live?.earningsTimestamp ?? financials.earningsTimestamp ?? profile.earningsTimestamp ?? null,
   };
 }
 
@@ -2137,6 +2404,7 @@ function calculatePulse() {
 
 function syncUiCache() {
   workspaceController?.syncUiCache();
+  queueMeridianStatePersist();
 }
 
 function currentTimeShort(value = Date.now()) {

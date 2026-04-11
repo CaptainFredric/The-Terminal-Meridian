@@ -9,6 +9,20 @@ import {
   tabularValue,
 } from "./Common.js";
 
+function formatRecommendation(key) {
+  if (!key) return "N/A";
+  const map = { buy: "Buy", strongbuy: "Strong Buy", strong_buy: "Strong Buy", hold: "Hold", sell: "Sell", strongsell: "Strong Sell", strong_sell: "Strong Sell", underperform: "Underperform", outperform: "Outperform" };
+  return map[String(key).toLowerCase().replace(/[\s-]/g, "")] || String(key);
+}
+
+function getRecommendationTone(key) {
+  if (!key) return "";
+  const lower = String(key).toLowerCase().replace(/[\s_-]/g, "");
+  if (lower.includes("buy") || lower === "outperform") return "rec-bullish";
+  if (lower.includes("sell") || lower === "underperform") return "rec-bearish";
+  return "rec-neutral";
+}
+
 export function createQuoteRenderer(context) {
   const { state, buildQuote, findRelatedSymbols } = context;
 
@@ -81,20 +95,26 @@ export function createQuoteRenderer(context) {
       { label: "Next Earnings", value: formatOptionalDate(quote.earningsTimestamp || financials.nextEarningsDate || profile.nextEarningsDate) },
     ];
 
+    const w52low = quote.fiftyTwoWeekLow || 0;
+    const w52high = quote.fiftyTwoWeekHigh || 0;
+    const w52pct = (w52low && w52high && w52high > w52low)
+      ? Math.max(0, Math.min(100, ((quote.price - w52low) / (w52high - w52low)) * 100))
+      : null;
+
     return `
       <section class="stack stack-lg">
         <div class="quote-action-row">
-          <button class="btn btn-primary" type="button" data-analyze-symbol="${symbol}">🔬 Analyze</button>
-          <button class="btn btn-ghost" type="button" data-open-news-symbol="${symbol}">📰 News</button>
-          <button class="btn btn-ghost" type="button" data-sync-symbol="${symbol}">🔄 Sync</button>
+          <button class="btn btn-primary" type="button" data-analyze-symbol="${symbol}">Analyze</button>
+          <button class="btn btn-ghost" type="button" data-open-news-symbol="${symbol}">News</button>
+          <button class="btn btn-ghost" type="button" data-sync-symbol="${symbol}">Sync</button>
         </div>
 
         <div class="toolbar toolbar-wrap">
-          <button class="btn btn-ghost" type="button" data-load-module="chart" data-target-symbol="${symbol}" data-target-panel="${panel}">📈 Chart</button>
-          <button class="btn btn-ghost" type="button" data-load-module="options" data-target-symbol="${symbol}" data-target-panel="${panel}">⛓ Options</button>
-          <button class="btn btn-ghost" type="button" data-news-filter="${symbol}">📋 Related news</button>
-          <button class="btn btn-ghost" type="button" data-watch-symbol="${symbol}">👁 Watchlist</button>
-          <button class="btn btn-primary" type="button" data-create-alert="${symbol}:>=:${alertThreshold.toFixed(2)}">🔔 Set 3% alert</button>
+          <button class="btn btn-ghost btn-sm" type="button" data-load-module="chart" data-target-symbol="${symbol}" data-target-panel="${panel}">Chart</button>
+          <button class="btn btn-ghost btn-sm" type="button" data-load-module="options" data-target-symbol="${symbol}" data-target-panel="${panel}">Options</button>
+          <button class="btn btn-ghost btn-sm" type="button" data-news-filter="${symbol}">Related news</button>
+          <button class="btn btn-ghost btn-sm" type="button" data-watch-symbol="${symbol}">+ Watchlist</button>
+          <button class="btn btn-outline btn-sm" type="button" data-create-alert="${symbol}:>=:${alertThreshold.toFixed(2)}">Set 3% alert</button>
         </div>
 
         <article class="card quote-card quote-card-feature">
@@ -107,6 +127,18 @@ export function createQuoteRenderer(context) {
                 <span class="${quote.changePct >= 0 ? "positive" : "negative"}">${tabularValue(formatSignedPct(quote.changePct))}</span>
               </div>
               <p>${quote.sector} · ${quote.universe}</p>
+              ${w52pct !== null ? `
+                <div class="w52-range-wrap">
+                  <div class="w52-range-bar">
+                    <div class="w52-range-fill" style="width:${w52pct.toFixed(1)}%"></div>
+                    <div class="w52-range-marker" style="left:${w52pct.toFixed(1)}%"></div>
+                  </div>
+                  <div class="w52-range-labels">
+                    <span>${formatPrice(w52low, symbol)}</span>
+                    <span class="w52-label-mid">52W Range</span>
+                    <span>${formatPrice(w52high, symbol)}</span>
+                  </div>
+                </div>` : ""}
             </div>
             <div class="quote-meta-grid">
               <div><span>Volume</span><strong>${tabularValue(formatVolume(quote.volume))}</strong></div>
@@ -152,7 +184,7 @@ export function createQuoteRenderer(context) {
         </article>
 
         <article class="card">
-          <header class="card-head card-head-split"><h4>🔎 Deep Insight</h4><small>${deepDive?.provider === "rapidapi" ? "🟢 Live modules" : "📦 Provisioned research"}</small></header>
+          <header class="card-head card-head-split"><h4>Deep Insight</h4><small>${deepDive?.provider === "rapidapi" ? "🟢 Live modules" : "📦 Provisioned research"}</small></header>
           ${isAnalyzing
             ? loadingSkeleton(4)
             : deepDive
@@ -170,8 +202,44 @@ export function createQuoteRenderer(context) {
               : `<div class="empty-inline">Run ANALYZE to pull profile, financials, and ticker-specific news.</div>`}
         </article>
 
+        ${deepDive && financials ? `
         <article class="card">
-          <header class="card-head card-head-split"><h4>🔗 Similar Names</h4><small>${quote.sector} · ${peers.length} peers</small></header>
+          <header class="card-head card-head-split"><h4>Analyst Consensus</h4><small>Wall Street ratings</small></header>
+          <div class="analyst-consensus">
+            <div class="analyst-rating-badge ${getRecommendationTone(financials.recommendationKey)}">
+              <strong>${formatRecommendation(financials.recommendationKey)}</strong>
+              <small>${formatInsightValue(financials.numberOfAnalystOpinions)} analysts</small>
+            </div>
+            <div class="analyst-targets">
+              <div class="target-row"><span>Target Low</span><strong>${tabularValue(formatInsightValue(financials.targetLowPrice))}</strong></div>
+              <div class="target-row"><span>Target Mean</span><strong class="accent-text">${tabularValue(formatInsightValue(financials.targetMeanPrice))}</strong></div>
+              <div class="target-row"><span>Target High</span><strong>${tabularValue(formatInsightValue(financials.targetHighPrice))}</strong></div>
+              <div class="target-row"><span>Current Price</span><strong>${tabularValue(formatPrice(quote.price, symbol))}</strong></div>
+            </div>
+          </div>
+        </article>
+
+        <article class="card">
+          <header class="card-head card-head-split"><h4>Financial Snapshot</h4><small>Key financial metrics</small></header>
+          <div class="financial-grid">
+            <div class="financial-metric"><span>Revenue</span><strong>${tabularValue(formatInsightValue(financials.totalRevenue))}</strong></div>
+            <div class="financial-metric"><span>Gross Profit</span><strong>${tabularValue(formatInsightValue(financials.grossProfits))}</strong></div>
+            <div class="financial-metric"><span>EBITDA</span><strong>${tabularValue(formatInsightValue(financials.ebitda))}</strong></div>
+            <div class="financial-metric"><span>Net Income</span><strong>${tabularValue(formatInsightValue(financials.netIncomeToCommon || financials.earningsGrowth))}</strong></div>
+            <div class="financial-metric"><span>Operating Margin</span><strong>${tabularValue(formatInsightValue(financials.operatingMargins))}</strong></div>
+            <div class="financial-metric"><span>Profit Margin</span><strong>${tabularValue(formatInsightValue(financials.profitMargins))}</strong></div>
+            <div class="financial-metric"><span>ROE</span><strong>${tabularValue(formatInsightValue(financials.returnOnEquity))}</strong></div>
+            <div class="financial-metric"><span>ROA</span><strong>${tabularValue(formatInsightValue(financials.returnOnAssets))}</strong></div>
+            <div class="financial-metric"><span>Debt/Equity</span><strong>${tabularValue(formatInsightValue(financials.debtToEquity))}</strong></div>
+            <div class="financial-metric"><span>Current Ratio</span><strong>${tabularValue(formatInsightValue(financials.currentRatio))}</strong></div>
+            <div class="financial-metric"><span>Revenue Growth</span><strong>${tabularValue(formatInsightValue(financials.revenueGrowth))}</strong></div>
+            <div class="financial-metric"><span>Earnings Growth</span><strong>${tabularValue(formatInsightValue(financials.earningsGrowth))}</strong></div>
+          </div>
+        </article>
+        ` : ""}
+
+        <article class="card">
+          <header class="card-head card-head-split"><h4>Similar Names</h4><small>${quote.sector} · ${peers.length} peers</small></header>
           <div class="chip-grid compact-chip-grid">
             ${peers.map((peer) => `<button class="chip chip-peer" type="button" data-load-module="quote" data-target-symbol="${peer.symbol}" data-target-panel="${panel}"><strong>${peer.symbol}</strong><span>${tabularValue(formatPrice(peer.price, peer.symbol), { flashKey: `quote:${peer.symbol}:price`, currentPrice: peer.price })}</span><small class="${peer.changePct >= 0 ? "positive" : "negative"}">${tabularValue(formatSignedPct(peer.changePct))}</small></button>`).join("") || `<div class="empty-inline">No comparable names found yet.</div>`}
           </div>

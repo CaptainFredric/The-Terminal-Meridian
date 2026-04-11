@@ -16,6 +16,12 @@ from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
 
+try:
+    import yfinance as yf
+    YFINANCE_AVAILABLE = True
+except ImportError:
+    YFINANCE_AVAILABLE = False
+
 from flask import Flask, g, jsonify, make_response, request, send_from_directory
 from werkzeug.security import check_password_hash, generate_password_hash
 
@@ -57,7 +63,7 @@ QUOTE_URL = "https://query1.finance.yahoo.com/v7/finance/quote?symbols={symbols}
 CHART_URL = "https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?range={range}&interval={interval}&includePrePost=false"
 OPTIONS_URL = "https://query1.finance.yahoo.com/v7/finance/options/{symbol}{suffix}"
 NEWS_FEEDS = [
-    ("Reuters Business", "https://feeds.reuters.com/reuters/businessNews"),
+    ("CNBC Markets", "https://www.cnbc.com/id/100727362/device/rss/rss.html"),
     ("Yahoo Finance", "https://finance.yahoo.com/news/rssindex"),
     ("MarketWatch", "https://feeds.marketwatch.com/marketwatch/topstories/"),
 ]
@@ -380,7 +386,10 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
 
     @app.get("/api/market/fx")
     def market_fx() -> Any:
-        return jsonify({"rates": fetch_fx_rates()})
+        try:
+            return jsonify({"rates": fetch_fx_rates()})
+        except Exception:
+            return jsonify({"rates": {}}), 200
 
     @app.get("/")
     def serve_index() -> Any:
@@ -587,31 +596,118 @@ def fetch_quotes(symbols: list[str]) -> list[dict[str, Any]]:
     clean_symbols = sorted({symbol for symbol in symbols if symbol})
     if not clean_symbols:
         return []
+
+    if YFINANCE_AVAILABLE:
+        try:
+            tickers = yf.Tickers(" ".join(clean_symbols))
+            quotes = []
+            for symbol in clean_symbols:
+                try:
+                    t = tickers.tickers.get(symbol) or yf.Ticker(symbol)
+                    info = t.fast_info
+                    prev_close = float(getattr(info, "previous_close", 0) or 0)
+                    price = float(getattr(info, "last_price", 0) or getattr(info, "regular_market_price", 0) or 0)
+                    change_pct = ((price - prev_close) / prev_close * 100) if prev_close else 0
+                    entry: dict[str, Any] = {
+                        "symbol": symbol,
+                        "name": getattr(info, "name", None) or symbol,
+                        "exchange": getattr(info, "exchange", "N/A") or "N/A",
+                        "price": price,
+                        "changePct": round(change_pct, 4),
+                        "change": round(price - prev_close, 4),
+                        "marketCap": float(getattr(info, "market_cap", 0) or 0),
+                        "volume": float(getattr(info, "last_volume", 0) or getattr(info, "three_month_average_volume", 0) or 0),
+                        "averageVolume": float(getattr(info, "three_month_average_volume", 0) or 0),
+                        "dayHigh": float(getattr(info, "day_high", price) or price),
+                        "dayLow": float(getattr(info, "day_low", price) or price),
+                        "previousClose": prev_close,
+                        "fiftyTwoWeekHigh": float(getattr(info, "year_high", 0) or 0),
+                        "fiftyTwoWeekLow": float(getattr(info, "year_low", 0) or 0),
+                        "currency": getattr(info, "currency", "USD") or "USD",
+                    }
+                    # Supplement with fundamental fields from full info (best-effort)
+                    try:
+                        full = t.info
+                        entry["trailingPE"] = full.get("trailingPE") or full.get("forwardPE")
+                        entry["beta"] = full.get("beta") or full.get("betaThreeYear")
+                        entry["dividendYield"] = full.get("trailingAnnualDividendYield") or full.get("dividendYield")
+                        entry["bid"] = full.get("bid")
+                        entry["ask"] = full.get("ask")
+                        entry["bidSize"] = full.get("bidSize")
+                        entry["askSize"] = full.get("askSize")
+                        entry["earningsTimestamp"] = full.get("earningsTimestamp") or full.get("earningsTimestampStart")
+                        if not entry["marketCap"]:
+                            entry["marketCap"] = float(full.get("marketCap") or 0)
+                    except Exception:
+                        pass
+                    quotes.append(entry)
+                except Exception:
+                    continue
+            if quotes:
+                return quotes
+        except Exception:
+            pass
+
+    # Fallback: direct Yahoo Finance API
     url = QUOTE_URL.format(symbols=urllib.parse.quote(",".join(clean_symbols)))
     payload = fetch_json(url)
     results = payload.get("quoteResponse", {}).get("result", [])
     quotes = []
     for item in results:
-        quotes.append(
-            {
-                "symbol": item.get("symbol"),
-                "name": item.get("shortName") or item.get("longName") or item.get("symbol"),
-                "exchange": item.get("fullExchangeName") or item.get("exchange") or "N/A",
-                "price": item.get("regularMarketPrice") or item.get("postMarketPrice") or 0,
-                "changePct": item.get("regularMarketChangePercent") or 0,
-                "change": item.get("regularMarketChange") or 0,
-                "marketCap": item.get("marketCap") or 0,
-                "volume": item.get("regularMarketVolume") or 0,
-                "dayHigh": item.get("regularMarketDayHigh") or item.get("regularMarketPrice") or 0,
-                "dayLow": item.get("regularMarketDayLow") or item.get("regularMarketPrice") or 0,
-                "previousClose": item.get("regularMarketPreviousClose") or item.get("regularMarketPrice") or 0,
-                "currency": item.get("currency") or "USD",
-            }
-        )
+        quotes.append({
+            "symbol": item.get("symbol"),
+            "name": item.get("shortName") or item.get("longName") or item.get("symbol"),
+            "exchange": item.get("fullExchangeName") or item.get("exchange") or "N/A",
+            "price": item.get("regularMarketPrice") or item.get("postMarketPrice") or 0,
+            "changePct": item.get("regularMarketChangePercent") or 0,
+            "change": item.get("regularMarketChange") or 0,
+            "marketCap": item.get("marketCap") or 0,
+            "volume": item.get("regularMarketVolume") or 0,
+            "averageVolume": item.get("averageDailyVolume3Month") or item.get("averageDailyVolume10Day") or 0,
+            "dayHigh": item.get("regularMarketDayHigh") or item.get("regularMarketPrice") or 0,
+            "dayLow": item.get("regularMarketDayLow") or item.get("regularMarketPrice") or 0,
+            "previousClose": item.get("regularMarketPreviousClose") or item.get("regularMarketPrice") or 0,
+            "fiftyTwoWeekHigh": item.get("fiftyTwoWeekHigh") or item.get("regularMarketDayHigh") or 0,
+            "fiftyTwoWeekLow": item.get("fiftyTwoWeekLow") or item.get("regularMarketDayLow") or 0,
+            "trailingPE": item.get("trailingPE") or item.get("forwardPE"),
+            "beta": item.get("beta") or item.get("betaThreeYear"),
+            "dividendYield": item.get("trailingAnnualDividendYield") or item.get("dividendYield"),
+            "bid": item.get("bid"),
+            "ask": item.get("ask"),
+            "bidSize": item.get("bidSize"),
+            "askSize": item.get("askSize"),
+            "earningsTimestamp": item.get("earningsTimestamp") or item.get("earningsTimestampStart"),
+            "currency": item.get("currency") or "USD",
+        })
     return quotes
 
 
 def fetch_chart(symbol: str, range_value: str, interval: str) -> list[dict[str, Any]]:
+    if YFINANCE_AVAILABLE:
+        try:
+            ticker = yf.Ticker(symbol)
+            df = ticker.history(period=range_value, interval=interval, auto_adjust=True)
+            if not df.empty:
+                points = []
+                for ts, row in df.iterrows():
+                    t = int(ts.timestamp())
+                    close = float(row.get("Close", 0) or 0)
+                    if not close:
+                        continue
+                    points.append({
+                        "timestamp": t,
+                        "open": float(row.get("Open", close) or close),
+                        "high": float(row.get("High", close) or close),
+                        "low": float(row.get("Low", close) or close),
+                        "close": close,
+                        "volume": int(row.get("Volume", 0) or 0),
+                    })
+                if points:
+                    return points
+        except Exception:
+            pass
+
+    # Fallback: direct Yahoo Finance API
     url = CHART_URL.format(
         symbol=urllib.parse.quote(symbol),
         range=urllib.parse.quote(range_value),
@@ -624,12 +720,23 @@ def fetch_chart(symbol: str, range_value: str, interval: str) -> list[dict[str, 
     timestamps = result.get("timestamp") or []
     quote = ((result.get("indicators") or {}).get("quote") or [{}])[0]
     closes = quote.get("close") or []
+    opens = quote.get("open") or []
+    highs = quote.get("high") or []
+    lows = quote.get("low") or []
+    volumes = quote.get("volume") or []
     points = []
     for index, timestamp in enumerate(timestamps):
         close_value = closes[index] if index < len(closes) else None
         if close_value is None:
             continue
-        points.append({"timestamp": timestamp, "close": close_value})
+        points.append({
+            "timestamp": timestamp,
+            "open": opens[index] if index < len(opens) else close_value,
+            "high": highs[index] if index < len(highs) else close_value,
+            "low": lows[index] if index < len(lows) else close_value,
+            "close": close_value,
+            "volume": volumes[index] if index < len(volumes) else 0,
+        })
     return points
 
 

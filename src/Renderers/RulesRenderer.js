@@ -22,18 +22,18 @@ export function createRulesRenderer(context) {
     return `
       <section class="stack stack-lg">
         <div class="card-grid card-grid-home">
-          <article class="card stat-card"><span>📏 Active Rules</span><strong>${rows.length}</strong><small>${uniqueSymbols.length} unique symbol${uniqueSymbols.length !== 1 ? "s" : ""}</small></article>
-          <article class="card stat-card"><span>🔔 Triggers</span><strong>${history.length}</strong><small>${history.length ? "Recent events" : "No events yet"}</small></article>
-          <article class="card stat-card"><span>🎯 Coverage</span><strong>${uniqueSymbols.slice(0, 4).join(", ") || "—"}</strong><small>${uniqueSymbols.length > 4 ? `+${uniqueSymbols.length - 4} more` : "Monitored"}</small></article>
+          <article class="card stat-card"><span>Active Rules</span><strong>${rows.length}</strong><small>${uniqueSymbols.length} symbol${uniqueSymbols.length !== 1 ? "s" : ""}</small></article>
+          <article class="card stat-card"><span>Triggers</span><strong>${history.length}</strong><small>${history.length ? "Recent events" : "No events yet"}</small></article>
+          <article class="card stat-card"><span>Coverage</span><strong>${uniqueSymbols.slice(0, 4).join(", ") || "—"}</strong><small>${uniqueSymbols.length > 4 ? `+${uniqueSymbols.length - 4} more` : "Monitored"}</small></article>
         </div>
 
         <div class="rules-tab-bar" role="tablist">
           <button class="rules-tab-btn${activeTab === "rules" ? " is-active" : ""}" type="button" data-rules-tab="rules" role="tab">
-            ⚙️ Active Rules
+            Active Rules
             <span class="rules-tab-badge">${rows.length}</span>
           </button>
           <button class="rules-tab-btn${activeTab === "history" ? " is-active" : ""}" type="button" data-rules-tab="history" role="tab">
-            📜 Trigger History
+            Trigger History
             <span class="rules-tab-badge">${history.length}</span>
           </button>
         </div>
@@ -72,7 +72,7 @@ export function createRulesRenderer(context) {
                       const time = formatSystemTime(item.triggeredAt);
                       const symbol = String(item.symbol || "--").toUpperCase();
                       const message = item.msg || "Condition Met";
-                      return `<div class="system-log-entry"><span class="system-log-line">[${time}] <span style='color: #58a6ff'>⚡</span> <strong>${symbol}</strong> — ${message}</span></div>`;
+                      return `<div class="system-log-entry"><span class="system-log-line">[${time}] <span class="log-trigger-dot"></span> <strong>${symbol}</strong> — ${message}</span></div>`;
                     })
                     .join("")
                 : `<div class="empty-state">No triggers yet. Fired rules appear here in real-time.</div>`}

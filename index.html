@@ -304,6 +304,126 @@
     </section>
   </div>
 
+  <!-- Onboarding overlay -->
+  <div class="onboarding-backdrop hidden" id="onboardingBackdrop">
+    <div class="onboarding-card">
+      <div style="display:flex;align-items:center;gap:14px;">
+        <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" width="48" height="48" aria-hidden="true">
+          <rect x="2" y="2" width="36" height="36" rx="11" fill="url(#bgGlow2)"/>
+          <path d="M9.8 14.4L20 20.6" stroke="#2fcf84" stroke-width="2.4" stroke-linecap="round"/>
+          <path d="M20 20.6L30.2 14.4" stroke="#ff5f7f" stroke-width="2.4" stroke-linecap="round"/>
+          <path d="M30.2 14.4L33 12.2" stroke="#2fcf84" stroke-width="2.2" stroke-linecap="round"/>
+          <rect x="8.1" y="14.2" width="3.4" height="12.4" rx="1" fill="#2fcf84"/>
+          <rect x="18.3" y="19.8" width="3.4" height="9.6" rx="1" fill="#ff5f7f"/>
+          <rect x="28.5" y="14.2" width="3.4" height="12.4" rx="1" fill="#2fcf84"/>
+          <circle cx="33" cy="12.2" r="1.8" fill="#9cb9ff"/>
+          <defs><linearGradient id="bgGlow2" x1="4" y1="4" x2="36" y2="36"><stop stop-color="#172953"/><stop offset="1" stop-color="#101a3b"/></linearGradient></defs>
+        </svg>
+        <div>
+          <h2>Welcome to Meridian</h2>
+          <p style="color:var(--muted);font-size:0.78rem;margin:0">Professional market workspace</p>
+        </div>
+      </div>
+
+      <p>Meridian is a Bloomberg-style market terminal built for speed, clarity, and zero ads. Here's what you can do:</p>
+
+      <div class="onboarding-features">
+        <div class="onboarding-feature">
+          <span class="onboarding-feature-icon">📊</span>
+          <div><h4>Live Charts</h4><p>Candlestick charts with volume, moving averages, and multi-timeframe analysis</p></div>
+        </div>
+        <div class="onboarding-feature">
+          <span class="onboarding-feature-icon">📋</span>
+          <div><h4>Instant Quotes</h4><p>Key stats, bid/ask depth, analyst ratings, and financial snapshots</p></div>
+        </div>
+        <div class="onboarding-feature">
+          <span class="onboarding-feature-icon">📰</span>
+          <div><h4>News Feed</h4><p>Aggregated headlines from Reuters, Yahoo, and MarketWatch with sentiment</p></div>
+        </div>
+        <div class="onboarding-feature">
+          <span class="onboarding-feature-icon">🔔</span>
+          <div><h4>Smart Alerts</h4><p>Set price alerts and IF/THEN rules that trigger on live data</p></div>
+        </div>
+        <div class="onboarding-feature">
+          <span class="onboarding-feature-icon">💼</span>
+          <div><h4>Portfolio Tracker</h4><p>Track positions, cost basis, and real-time P/L across your holdings</p></div>
+        </div>
+        <div class="onboarding-feature">
+          <span class="onboarding-feature-icon">🧮</span>
+          <div><h4>Options + Calc</h4><p>Options chains, Black-Scholes pricing, bond valuation tools</p></div>
+        </div>
+      </div>
+
+      <div>
+        <p style="margin-bottom:8px;color:var(--text);font-weight:600;font-size:0.82rem">Keyboard shortcuts</p>
+        <div class="onboarding-shortcuts">
+          <kbd>Cmd+K</kbd> <span style="color:var(--muted);font-size:0.72rem">Command palette</span>
+          <kbd>F1-F11</kbd> <span style="color:var(--muted);font-size:0.72rem">Switch modules</span>
+          <kbd>Up/Down</kbd> <span style="color:var(--muted);font-size:0.72rem">Command history</span>
+        </div>
+      </div>
+
+      <div class="onboarding-actions">
+        <button class="btn btn-ghost" id="onboardingSkip" type="button">Skip tour</button>
+        <button class="btn btn-primary" id="onboardingStart" type="button">Get started</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Pricing modal -->
+  <div class="modal-backdrop hidden" id="pricingModalBackdrop">
+    <section class="auth-modal" id="pricingModal" style="width:min(820px,100%)">
+      <header class="auth-head">
+        <h2>Upgrade to Meridian Pro</h2>
+        <button class="icon-btn" id="closePricingModal" type="button">x</button>
+      </header>
+      <p style="color:var(--muted);font-size:0.82rem;margin:0">Unlock advanced analytics, faster data, and professional tools.</p>
+      <div class="pricing-grid">
+        <div class="pricing-card">
+          <h3>Free</h3>
+          <div class="pricing-price">$0<small>/mo</small></div>
+          <ul class="pricing-features">
+            <li>10-symbol watchlist</li>
+            <li>Basic quotes and charts</li>
+            <li>News feed</li>
+            <li>2 price alerts</li>
+            <li>30s data refresh</li>
+          </ul>
+          <button class="btn btn-ghost" type="button" disabled>Current plan</button>
+        </div>
+        <div class="pricing-card is-featured">
+          <h3>Pro</h3>
+          <div class="pricing-price">$19<small>/mo</small></div>
+          <ul class="pricing-features">
+            <li>Unlimited watchlists</li>
+            <li>Technical indicators</li>
+            <li>Financial statements</li>
+            <li>Analyst ratings</li>
+            <li>Unlimited alerts + rules</li>
+            <li>10s data refresh</li>
+            <li>Portfolio export</li>
+            <li>Workspace sync</li>
+          </ul>
+          <button class="btn btn-primary" type="button" id="proUpgradeBtn">Coming soon</button>
+        </div>
+        <div class="pricing-card">
+          <h3>Pro+</h3>
+          <div class="pricing-price">$39<small>/mo</small></div>
+          <ul class="pricing-features">
+            <li>Everything in Pro</li>
+            <li>AI market analysis</li>
+            <li>Webhook alerts</li>
+            <li>API access</li>
+            <li>Custom screeners</li>
+            <li>Extended hours data</li>
+            <li>Priority support</li>
+          </ul>
+          <button class="btn btn-ghost" type="button">Coming soon</button>
+        </div>
+      </div>
+    </section>
+  </div>
+
   <script type="module" src="./src/clientApp.js"></script>
 </body>
 </html>

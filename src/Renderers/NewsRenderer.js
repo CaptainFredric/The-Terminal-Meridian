@@ -13,9 +13,9 @@ function sentimentClassForHeadline(headline) {
 
 function sentimentIcon(sentiment) {
   const s = String(sentiment || "").toLowerCase();
-  if (s === "positive") return "🟢";
-  if (s === "negative") return "🔴";
-  return "⚪";
+  if (s === "positive") return `<i class="sentiment-dot sentiment-dot-positive"></i>`;
+  if (s === "negative") return `<i class="sentiment-dot sentiment-dot-negative"></i>`;
+  return `<i class="sentiment-dot sentiment-dot-neutral"></i>`;
 }
 
 /** Ensure news links don't inject javascript: or data: URIs */
@@ -54,9 +54,9 @@ export function createNewsRenderer(context) {
           <div class="news-sentiment-bar">
             <strong>${items.length}</strong>&thinsp;headlines
             <span class="sentiment-sep">·</span>
-            <span class="positive">🟢 ${positiveCount}</span>
-            <span class="negative">🔴 ${negativeCount}</span>
-            <span class="sentiment-neutral">⚪ ${neutralCount}</span>
+            <span class="positive"><i class="sentiment-dot sentiment-dot-positive"></i> ${positiveCount}</span>
+            <span class="negative"><i class="sentiment-dot sentiment-dot-negative"></i> ${negativeCount}</span>
+            <span class="sentiment-neutral"><i class="sentiment-dot sentiment-dot-neutral"></i> ${neutralCount}</span>
             <span class="sentiment-filter-note">${isGlobalFallback ? "Global feed" : filterLabel}</span>
           </div>
         ` : ""}

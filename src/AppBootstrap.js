@@ -78,6 +78,7 @@ const uiSnapshot = {
 };
 const guestWorkspace = uiSnapshot.guestWorkspace || {};
 const chartViews = new Map();
+const chartMountGeneration = new Map(); // panel → monotonic counter, prevents stale async mounts
 let lightweightChartsModulePromise = null;
 let moduleRegistry = null;
 let appCore = null;
@@ -376,6 +377,11 @@ function init() {
   setInterval(handleRefreshCountdown, 1000);
   setInterval(checkHealth, 60000);
   window.addEventListener("resize", fitAllCharts);
+
+  // Show onboarding for first-time users
+  if (shouldShowOnboarding()) {
+    setTimeout(showOnboarding, 600);
+  }
 }
 
 function registerRenderers() {
@@ -725,6 +731,19 @@ function bindEvents() {
     }
   });
 
+  // Onboarding
+  document.querySelector("#onboardingStart")?.addEventListener("click", dismissOnboarding);
+  document.querySelector("#onboardingSkip")?.addEventListener("click", dismissOnboarding);
+  document.querySelector("#onboardingBackdrop")?.addEventListener("click", (event) => {
+    if (event.target.id === "onboardingBackdrop") dismissOnboarding();
+  });
+
+  // Pricing modal
+  document.querySelector("#closePricingModal")?.addEventListener("click", closePricingModal);
+  document.querySelector("#pricingModalBackdrop")?.addEventListener("click", (event) => {
+    if (event.target.id === "pricingModalBackdrop") closePricingModal();
+  });
+
   document.addEventListener("click", handleDocumentClick);
   document.addEventListener("input", handleDocumentInput);
   document.addEventListener("submit", handleDocumentSubmit);
@@ -736,6 +755,36 @@ function ensureTransientOverlaysClosed() {
   el.paletteBackdrop?.classList.add("hidden");
   el.authModalBackdrop?.classList.add("hidden");
   el.settingsModalBackdrop?.classList.add("hidden");
+}
+
+// ── Onboarding ──
+const ONBOARDING_KEY = "meridian_onboarded";
+
+function shouldShowOnboarding() {
+  if (typeof window === "undefined") return false;
+  return !window.localStorage.getItem(ONBOARDING_KEY);
+}
+
+function showOnboarding() {
+  const backdrop = document.querySelector("#onboardingBackdrop");
+  if (backdrop) backdrop.classList.remove("hidden");
+}
+
+function dismissOnboarding() {
+  const backdrop = document.querySelector("#onboardingBackdrop");
+  if (backdrop) backdrop.classList.add("hidden");
+  window.localStorage.setItem(ONBOARDING_KEY, "1");
+}
+
+// ── Pricing modal ──
+function openPricingModal() {
+  const backdrop = document.querySelector("#pricingModalBackdrop");
+  if (backdrop) backdrop.classList.remove("hidden");
+}
+
+function closePricingModal() {
+  const backdrop = document.querySelector("#pricingModalBackdrop");
+  if (backdrop) backdrop.classList.add("hidden");
 }
 
 function openAuthModal(tab = "login") {
@@ -1038,7 +1087,7 @@ function renderOverviewStrip() {
             <button class="overview-card" type="button" data-broadcast-symbol="${quote.symbol}">
               <span>${quote.symbol}<i class="overview-live-dot"></i></span>
               <strong>${tabularValue(formatPrice(quote.price, quote.symbol), { flashKey: `overview:${quote.symbol}:price`, currentPrice: quote.price })}</strong>
-              <small class="${Number(quote.changePct || 0) >= 0 ? "positive" : "negative"}">${tabularValue(formatSignedPct(quote.changePct || 0))}</small>
+              <small class="${Number(quote.changePct || 0) >= 0 ? "positive" : "negative"}">${quote.isLive ? tabularValue(formatSignedPct(quote.changePct || 0)) : "--"}</small>
               ${renderOverviewSparkline(quote.symbol, Number(quote.changePct || 0))}
             </button>
           `,
@@ -1057,13 +1106,13 @@ function renderOverviewStrip() {
         .join("");
 
   const pulse = calculatePulse();
-  const breadthIcon = pulse.gainers > pulse.losers ? "🟢" : pulse.losers > pulse.gainers ? "🔴" : "⚪";
+  const breadthTone = pulse.gainers > pulse.losers ? "positive" : pulse.losers > pulse.gainers ? "negative" : "neutral";
   el.overviewStrip.innerHTML = `
     ${cards}
     <article class="overview-card overview-card-summary">
-      <span>${breadthIcon} Market Pulse</span>
+      <span>Market Pulse</span>
       <strong>${state.marketPhase}</strong>
-      <small>${pulse.gainers} ↑ · ${pulse.losers} ↓ · ${state.health.ok ? "🟢 Live" : "🟡 Local"}</small>
+      <small class="${breadthTone}">${pulse.gainers} ↑ · ${pulse.losers} ↓ · ${state.health.ok ? "Live" : "Local"}</small>
     </article>
   `;
   applyPriceTones(el.overviewStrip);
@@ -1083,7 +1132,7 @@ function renderRails() {
               </div>
               <div>
                 <strong>${tabularValue(formatPrice(quote?.price || 0, symbol), { flashKey: `quote:${symbol}:price`, currentPrice: quote?.price || 0 })}</strong>
-                <small class="${(quote?.changePct || 0) >= 0 ? "positive" : "negative"}">${quote ? tabularValue(formatSignedPct(quote.changePct)) : "--"}</small>
+                <small class="${(quote?.changePct || 0) >= 0 ? "positive" : "negative"}">${quote?.isLive ? tabularValue(formatSignedPct(quote.changePct)) : "--"}</small>
               </div>
             </button>
             <button class="rail-remove" type="button" data-remove-watch="${symbol}">×</button>
@@ -1168,9 +1217,40 @@ async function renderPanel(panel) {
     : "";
   title.textContent = `${moduleTitles[moduleName] || moduleName}${symbolLabel}`;
 
+  // For chart panels: if chart is already mounted for this symbol+range, update data in-place
+  // without touching innerHTML (avoids destroying and re-creating the canvas on every tick)
+  if (moduleName === "chart") {
+    const symbol = state.panelSymbols[panel] || "AAPL";
+    const range = state.chartRanges[panel] || "1mo";
+    const interval = chartIntervalForRange(range);
+    const points = state.chartCache.get(chartKey(symbol, range, interval)) || [];
+    const view = chartViews.get(panel);
+    if (view?.series && view.symbol === symbol && view.range === range && view.container?.isConnected) {
+      const candles = toCandlestickData(points);
+      if (candles.length) {
+        try {
+          view.series.setData(candles);
+          view.chart.timeScale().fitContent();
+          return; // Chart updated in-place — skip DOM replacement entirely
+        } catch {
+          // Corrupt chart state — fall through to full re-mount below
+        }
+      } else {
+        return; // Data still loading — keep existing chart visible
+      }
+    }
+  }
+
   const renderer = moduleRegistry.get(moduleName) || moduleRegistry.get("home");
   panelNode.dataset.moduleKey = String(moduleName || "").toUpperCase();
-  const html = await Promise.resolve(renderer(panel));
+  let html = "";
+  try {
+    html = await Promise.resolve(renderer(panel));
+  } catch (renderError) {
+    console.error(`[Meridian] Panel ${panel} render error (${moduleName}):`, renderError);
+    html = `<div class="empty-state" style="color:var(--danger)">Render error: ${renderError.message}</div>`;
+  }
+  if (html == null) html = "";
   content.innerHTML = html;
   applyTerminalInputClass(content);
   applyPriceTones(content);
@@ -1204,18 +1284,47 @@ function renderAutocomplete() {
 
   const actionMatches = (actionEngine?.search(rawValue) || [])
     .slice(0, 4)
-    .map((item) => ({ label: item.command, description: item.description }));
+    .map((item) => ({ label: item.command, description: item.description, category: "action" }));
   const commandMatches = commandCatalog
     .filter((item) => item.cmd.includes(value))
     .slice(0, 5)
-    .map((item) => ({ label: item.cmd, description: item.desc }));
+    .map((item) => ({ label: item.cmd, description: item.desc, category: "command" }));
   const symbolMatches = universe
     .filter((item) => item.symbol.startsWith(value) || item.name.toUpperCase().includes(value))
-    .slice(0, 5)
-    .map((item) => ({ label: `${item.symbol} Q`, description: item.name }));
-  const suggestions = [...actionMatches, ...commandMatches, ...symbolMatches]
+    .slice(0, 6)
+    .map((item) => {
+      const quote = state.quotes.get(item.symbol);
+      const priceStr = quote ? formatPrice(quote.price, item.symbol) : "";
+      const pctStr = quote ? formatSignedPct(quote.changePct) : "";
+      const pctClass = quote && quote.changePct >= 0 ? "positive" : "negative";
+      return {
+        label: `${item.symbol} Q`,
+        description: item.name,
+        category: "symbol",
+        extra: quote ? `<span class="ac-price">${priceStr}</span><span class="ac-pct ${pctClass}">${pctStr}</span>` : "",
+      };
+    });
+
+  // Also search watchlist symbols not in universe
+  const watchlistExtras = state.watchlist
+    .filter((sym) => sym.toUpperCase().includes(value) && !universe.find((u) => u.symbol === sym))
+    .slice(0, 3)
+    .map((sym) => {
+      const quote = state.quotes.get(sym);
+      const priceStr = quote ? formatPrice(quote.price, sym) : "";
+      const pctStr = quote ? formatSignedPct(quote.changePct) : "";
+      const pctClass = quote && quote.changePct >= 0 ? "positive" : "negative";
+      return {
+        label: `${sym} Q`,
+        description: quote?.name || sym,
+        category: "symbol",
+        extra: quote ? `<span class="ac-price">${priceStr}</span><span class="ac-pct ${pctClass}">${pctStr}</span>` : "",
+      };
+    });
+
+  const suggestions = [...actionMatches, ...commandMatches, ...symbolMatches, ...watchlistExtras]
     .filter((item, index, items) => items.findIndex((candidate) => candidate.label === item.label) === index)
-    .slice(0, 10);
+    .slice(0, 12);
 
   if (!suggestions.length) {
     hideAutocomplete();
@@ -1226,8 +1335,12 @@ function renderAutocomplete() {
     .map(
       (item) => `
         <button class="autocomplete-item" type="button" data-autocomplete="${item.label}">
-          <strong>${item.label}</strong>
-          <span>${item.description}</span>
+          <div class="ac-left">
+            <span class="ac-category-dot ac-cat-${item.category}"></span>
+            <strong>${item.label}</strong>
+            <span class="ac-desc">${item.description}</span>
+          </div>
+          ${item.extra ? `<div class="ac-right">${item.extra}</div>` : ""}
         </button>
       `,
     )
@@ -1388,6 +1501,12 @@ function handleDocumentClick(event) {
     return;
   }
 
+  const exportPortfolio = event.target.closest("[data-export-portfolio]");
+  if (exportPortfolio) {
+    exportPortfolioCSV();
+    return;
+  }
+
   const removeRule = event.target.closest("[data-remove-rule]");
   if (removeRule) {
     appCore?.removeRule(removeRule.dataset.removeRule);
@@ -1423,6 +1542,12 @@ function handleDocumentClick(event) {
       el.commandInput.value = command;
       processCommand();
     }
+    return;
+  }
+
+  // Upgrade / pricing trigger
+  if (event.target.closest("[data-open-pricing]")) {
+    openPricingModal();
     return;
   }
 
@@ -1611,6 +1736,28 @@ function removePositionBySymbol(symbol) {
   state.positions = state.positions.filter((position) => position.symbol !== symbol);
   renderAllPanels();
   queueWorkspaceSave();
+}
+
+function exportPortfolioCSV() {
+  const rows = enrichPositions();
+  if (!rows.length) {
+    showToast("No positions to export.", "neutral");
+    return;
+  }
+  const header = ["Symbol", "Shares", "Avg Cost", "Market Price", "Value", "P/L", "Return %"];
+  const lines = rows.map((row) => {
+    const ret = row.cost ? (((row.price - row.cost) / row.cost) * 100).toFixed(2) : "0.00";
+    return [row.symbol, row.shares, row.cost.toFixed(2), row.price.toFixed(2), row.value.toFixed(2), row.pnl.toFixed(2), ret].join(",");
+  });
+  const csv = [header.join(","), ...lines].join("\n");
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `meridian-portfolio-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast("Portfolio exported.", "success");
 }
 
 function deleteSymbol(symbol) {
@@ -2066,6 +2213,7 @@ function buildQuote(symbol) {
   if (!base && !live) return null;
   return {
     symbol,
+    isLive: !!live,
     name: live?.name || base?.name || symbol,
     exchange: live?.exchange || base?.exchange || "N/A",
     sector: base?.sector || "Market",
@@ -2197,21 +2345,30 @@ async function loadLightweightChartsModule() {
 }
 
 async function mountCandlestickChart(panel, points) {
-  const container = document.querySelector(`#chartCanvas${panel}`);
-  if (!container) return;
-
   const candles = toCandlestickData(points);
   clearPanelChart(panel);
   if (!candles.length) return;
 
+  // Stamp a generation — if the DOM re-renders while we await, we'll abort
+  const gen = (chartMountGeneration.get(panel) || 0) + 1;
+  chartMountGeneration.set(panel, gen);
+
   const chartLib = await loadLightweightChartsModule();
+
+  // Abort if a newer mountCandlestickChart call has started since we began
+  if (chartMountGeneration.get(panel) !== gen) return;
+
+  // Re-query container AFTER the await — DOM may have been replaced during the async gap
+  const container = document.querySelector(`#chartCanvas${panel}`);
+  if (!container) return;
+
   if (!chartLib?.createChart) {
     container.innerHTML = `<div class="stack"><span class="skeleton-box lg"></span><span class="skeleton-box"></span><span class="skeleton-box sm"></span></div>`;
     return;
   }
 
   const width = Math.max(320, Math.floor(container.clientWidth || 0));
-  const height = Math.max(220, Math.floor(container.clientHeight || 0));
+  const height = 380;
 
   const chart = chartLib.createChart(container, {
     width,
@@ -2275,10 +2432,115 @@ async function mountCandlestickChart(panel, points) {
   }
 
   series.setData(candles);
+
+  // Volume histogram
+  const volumeData = points
+    .map((point) => {
+      const time = Number(point.timestamp ?? point.time ?? 0);
+      const vol = Number(point.volume ?? 0);
+      const close = Number(point.close ?? point.price ?? 0);
+      const open = Number(point.open ?? close);
+      if (time <= 0 || !Number.isFinite(vol)) return null;
+      return { time, value: vol, color: close >= open ? "rgba(0, 230, 118, 0.18)" : "rgba(255, 59, 48, 0.18)" };
+    })
+    .filter(Boolean);
+
+  if (volumeData.length) {
+    const volumeOptions = {
+      priceFormat: { type: "volume" },
+      priceScaleId: "volume",
+      lastValueVisible: false,
+      priceLineVisible: false,
+    };
+    let volumeSeries = null;
+    if (typeof chart.addHistogramSeries === "function") {
+      volumeSeries = chart.addHistogramSeries(volumeOptions);
+    } else if (typeof chart.addSeries === "function" && chartLib.HistogramSeries) {
+      volumeSeries = chart.addSeries(chartLib.HistogramSeries, volumeOptions);
+    }
+    if (volumeSeries) {
+      volumeSeries.setData(volumeData);
+      chart.priceScale("volume").applyOptions({
+        scaleMargins: { top: 0.82, bottom: 0 },
+        drawTicks: false,
+        borderVisible: false,
+        visible: false,
+      });
+    }
+  }
+
+  // 20-period moving average
+  if (candles.length >= 20) {
+    const maData = [];
+    for (let i = 19; i < candles.length; i++) {
+      let sum = 0;
+      for (let j = i - 19; j <= i; j++) sum += candles[j].close;
+      maData.push({ time: candles[i].time, value: sum / 20 });
+    }
+    const maOptions = { color: "rgba(111, 143, 255, 0.6)", lineWidth: 1.5, priceLineVisible: false, crosshairMarkerVisible: false, lastValueVisible: false };
+    let maSeries = null;
+    if (typeof chart.addLineSeries === "function") {
+      maSeries = chart.addLineSeries(maOptions);
+    } else if (typeof chart.addSeries === "function" && chartLib.LineSeries) {
+      maSeries = chart.addSeries(chartLib.LineSeries, maOptions);
+    }
+    if (maSeries) maSeries.setData(maData);
+  }
+
+  // RSI(14) on separate scale — shown as faint background line
+  if (candles.length >= 15) {
+    const closes = candles.map((c) => c.close);
+    const rsiData = [];
+    const period = 14;
+    let avgGain = 0;
+    let avgLoss = 0;
+    for (let i = 1; i <= period; i++) {
+      const diff = closes[i] - closes[i - 1];
+      if (diff > 0) avgGain += diff;
+      else avgLoss -= diff;
+    }
+    avgGain /= period;
+    avgLoss /= period;
+    for (let i = period + 1; i < closes.length; i++) {
+      const diff = closes[i] - closes[i - 1];
+      avgGain = (avgGain * (period - 1) + Math.max(diff, 0)) / period;
+      avgLoss = (avgLoss * (period - 1) + Math.max(-diff, 0)) / period;
+      const rs = avgLoss === 0 ? 100 : avgGain / avgLoss;
+      rsiData.push({ time: candles[i].time, value: 100 - 100 / (1 + rs) });
+    }
+    if (rsiData.length) {
+      const rsiSeriesOptions = {
+        color: "rgba(255, 200, 60, 0.45)",
+        lineWidth: 1,
+        priceLineVisible: false,
+        crosshairMarkerVisible: false,
+        lastValueVisible: false,
+        priceScaleId: "rsi",
+      };
+      let rsiSeries = null;
+      if (typeof chart.addLineSeries === "function") {
+        rsiSeries = chart.addLineSeries(rsiSeriesOptions);
+      } else if (typeof chart.addSeries === "function" && chartLib.LineSeries) {
+        rsiSeries = chart.addSeries(chartLib.LineSeries, rsiSeriesOptions);
+      }
+      if (rsiSeries) {
+        rsiSeries.setData(rsiData);
+        chart.priceScale("rsi").applyOptions({
+          scaleMargins: { top: 0.85, bottom: 0.02 },
+          drawTicks: false,
+          borderVisible: false,
+          visible: false,
+        });
+      }
+    }
+  }
+
   chart.timeScale().fitContent();
 
   const disconnectResizeObserver = observeChartResize(container, chart);
-  chartViews.set(panel, { chart, container, disconnectResizeObserver });
+  const symbol = state.panelSymbols[panel] || "AAPL";
+  const range = state.chartRanges[panel] || "1mo";
+  chartViews.set(panel, { chart, container, disconnectResizeObserver, series, symbol, range });
 }
 
 function calculateBlackScholes({ spot, strike, years, rate, volatility }) {
@@ -2383,8 +2645,28 @@ function normalizeChartRange(value) {
   return map[upper] || "1mo";
 }
 
+function calculateRsi(closes, period = 14) {
+  if (closes.length < period + 1) return null;
+  let gains = 0;
+  let losses = 0;
+  for (let i = 1; i <= period; i++) {
+    const diff = closes[i] - closes[i - 1];
+    if (diff > 0) gains += diff;
+    else losses -= diff;
+  }
+  let avgGain = gains / period;
+  let avgLoss = losses / period;
+  for (let i = period + 1; i < closes.length; i++) {
+    const diff = closes[i] - closes[i - 1];
+    avgGain = (avgGain * (period - 1) + Math.max(diff, 0)) / period;
+    avgLoss = (avgLoss * (period - 1) + Math.max(-diff, 0)) / period;
+  }
+  if (avgLoss === 0) return 100;
+  return 100 - 100 / (1 + avgGain / avgLoss);
+}
+
 function calculateChartStats(points) {
-  if (!points.length) return { high: 0, low: 0, returnPct: 0 };
+  if (!points.length) return { high: 0, low: 0, returnPct: 0, rsi: null };
   const closes = points.map((point) => Number(point.close || 0));
   const first = closes[0] || 0;
   const last = closes[closes.length - 1] || 0;
@@ -2392,6 +2674,7 @@ function calculateChartStats(points) {
     high: Math.max(...closes),
     low: Math.min(...closes),
     returnPct: first ? ((last - first) / first) * 100 : 0,
+    rsi: calculateRsi(closes),
   };
 }
 

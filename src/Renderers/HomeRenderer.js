@@ -9,23 +9,23 @@ function buildCommandSuggestions({ authEnabled, state, buildQuote, panel }) {
   } else if (authEnabled && state.user) {
     suggestions.push({ label: "Open account settings", detail: "Update profile, password, or account state", command: "SETTINGS", icon: "⚙" });
   } else {
-    suggestions.push({ label: "Save workspace now", detail: "Persist watchlist, alerts, and positions locally", command: "SAVE", icon: "💾" });
+    suggestions.push({ label: "Save workspace now", detail: "Persist watchlist, alerts, and positions locally", command: "SAVE", icon: "→" });
   }
 
-  suggestions.push({ label: "Open Meridian Briefing", detail: "Regime analysis, breadth metrics, and signal board", command: "BRIEF", icon: "📊" });
+  suggestions.push({ label: "Open Meridian Briefing", detail: "Regime analysis, breadth metrics, and signal board", command: "BRIEF", icon: "→" });
 
   if (!state.alerts.length) {
     const threshold = Math.max(1, Math.round((buildQuote(symbol)?.price || 100) * 1.03));
-    suggestions.push({ label: `Set ${symbol} price alert`, detail: `Get notified when ${symbol} crosses a level`, command: `ALERT ${symbol} ${threshold}`, icon: "🔔" });
+    suggestions.push({ label: `Set ${symbol} price alert`, detail: `Get notified when ${symbol} crosses a level`, command: `ALERT ${symbol} ${threshold}`, icon: "→" });
   } else {
-    suggestions.push({ label: "Review portfolio exposure", detail: "Check positions, P/L, and active alerts", command: "PORT", icon: "📈" });
+    suggestions.push({ label: "Review portfolio exposure", detail: "Check positions, P/L, and active alerts", command: "PORT", icon: "→" });
   }
 
   if (state.watchlist.length < 10) {
-    suggestions.push({ label: "Expand your watchlist", detail: "Track more symbols — try adding SPY or TSLA", command: "WATCH SPY", icon: "👁" });
+    suggestions.push({ label: "Expand your watchlist", detail: "Track more symbols — try adding SPY or TSLA", command: "WATCH SPY", icon: "→" });
   }
 
-  suggestions.push({ label: "Discover next action", detail: "Refresh this panel with contextual ideas", command: "SUGGEST", icon: "💡" });
+  suggestions.push({ label: "Discover next action", detail: "Refresh this panel with contextual ideas", command: "SUGGEST", icon: "→" });
   return suggestions.slice(0, 5);
 }
 
@@ -86,10 +86,10 @@ export function createHomeRenderer(context) {
             <small>Jump to any module</small>
           </header>
           <div class="action-grid">
-            <button class="action-tile" type="button" data-load-module="quote" data-target-symbol="${primarySymbol}" data-target-panel="${panel}"><strong>📋 Quote</strong><span>${primarySymbol} detail view</span></button>
-            <button class="action-tile" type="button" data-load-module="chart" data-target-symbol="${primarySymbol}" data-target-panel="${panel}"><strong>📈 Chart</strong><span>Price action & patterns</span></button>
-            <button class="action-tile" type="button" data-load-module="options" data-target-symbol="${primarySymbol}" data-target-panel="${panel}"><strong>⚡ Options</strong><span>Call/put chain</span></button>
-            <button class="action-tile" type="button" data-load-module="screener" data-target-panel="${panel}"><strong>🔍 Screener</strong><span>Filter the universe</span></button>
+            <button class="action-tile" type="button" data-load-module="quote" data-target-symbol="${primarySymbol}" data-target-panel="${panel}"><strong>Quote</strong><span>${primarySymbol} detail view</span></button>
+            <button class="action-tile" type="button" data-load-module="chart" data-target-symbol="${primarySymbol}" data-target-panel="${panel}"><strong>Chart</strong><span>Price action & patterns</span></button>
+            <button class="action-tile" type="button" data-load-module="options" data-target-symbol="${primarySymbol}" data-target-panel="${panel}"><strong>Options</strong><span>Call/put chain</span></button>
+            <button class="action-tile" type="button" data-load-module="screener" data-target-panel="${panel}"><strong>Screener</strong><span>Filter the universe</span></button>
           </div>
         </article>
 
@@ -161,6 +161,14 @@ export function createHomeRenderer(context) {
             ${suggestions.map((item) => `<button class="list-row" type="button" data-suggest-command="${item.command}"><strong>${item.icon} ${item.label}</strong><small>${item.detail}</small></button>`).join("")}
           </div>
         </article>
+
+        <div class="upgrade-banner">
+          <div class="upgrade-banner-text">
+            <h4>Unlock Meridian Pro</h4>
+            <p>Technical indicators, financial statements, unlimited alerts, and 10s refresh. Starting at $19/mo.</p>
+          </div>
+          <button class="btn-upgrade" type="button" data-open-pricing>View plans</button>
+        </div>
       </section>
     `;
   };

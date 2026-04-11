@@ -5,8 +5,7 @@ export function observeChartResize(container, chart) {
 
   const resize = () => {
     const width = Math.max(320, Math.floor(container.clientWidth || 0));
-    const height = Math.max(220, Math.floor(container.clientHeight || 0));
-    chart.resize(width, height);
+    chart.resize(width, 380);
     chart.timeScale?.().fitContent?.();
   };
 
@@ -39,14 +38,20 @@ export function createChartRenderer(context) {
       ? `Live feed · ${currentTimeShort(state.lastDataFetchedAt || Date.now())}`
       : `Stale snapshot · ${currentTimeShort(state.lastDataFetchedAt || Date.now())}`;
 
+    const rsiValue = stats.rsi;
+    const rsiClass = rsiValue === null ? "" : rsiValue >= 70 ? "negative" : rsiValue <= 30 ? "positive" : "";
+    const rsiLabel = rsiValue === null ? "--" : rsiValue.toFixed(1);
+    const rsiSignal = rsiValue === null ? "Insufficient data" : rsiValue >= 70 ? "Overbought" : rsiValue <= 30 ? "Oversold" : "Neutral";
+
     return `
       <section class="stack stack-lg">
         <div class="toolbar toolbar-wrap">
           ${chartRangeOptions.map((option) => `<button class="range-pill ${option.value === range ? "is-active" : ""}" type="button" data-chart-range="${panel}:${option.value}">${option.label}</button>`).join("")}
-          <button class="btn btn-ghost" type="button" data-load-module="quote" data-target-symbol="${symbol}" data-target-panel="${panel}">📋 Quote</button>
-          <button class="btn btn-ghost" type="button" data-load-module="options" data-target-symbol="${symbol}" data-target-panel="${panel}">⛓ Options</button>
-          <button class="btn btn-ghost" type="button" data-news-filter="${symbol}">📰 News</button>
-          <button class="btn btn-primary" type="button" data-refresh-chart="${panel}:${symbol}:${range}">🔄 Refresh</button>
+          <span class="toolbar-sep"></span>
+          <button class="btn btn-ghost btn-sm" type="button" data-load-module="quote" data-target-symbol="${symbol}" data-target-panel="${panel}">Quote</button>
+          <button class="btn btn-ghost btn-sm" type="button" data-load-module="options" data-target-symbol="${symbol}" data-target-panel="${panel}">Options</button>
+          <button class="btn btn-ghost btn-sm" type="button" data-news-filter="${symbol}">News</button>
+          <button class="btn btn-primary btn-sm" type="button" data-refresh-chart="${panel}:${symbol}:${range}">Refresh</button>
         </div>
 
         <article class="card chart-card chart-card-feature">
@@ -59,10 +64,16 @@ export function createChartRenderer(context) {
         </article>
 
         <div class="card-grid chart-summary-grid">
-          <article class="card stat-card"><span>📅 Range</span><strong>${range.toUpperCase()}</strong><small>${symbol} · ${points.length} data pts</small></article>
-          <article class="card stat-card"><span>📈 High</span><strong class="positive">${points.length ? tabularValue(formatPrice(stats.high, symbol)) : "--"}</strong><small>${points.length ? "Visible range" : "Waiting"}</small></article>
-          <article class="card stat-card"><span>📉 Low</span><strong class="negative">${points.length ? tabularValue(formatPrice(stats.low, symbol)) : "--"}</strong><small>${points.length ? "Visible range" : "Waiting"}</small></article>
-          <article class="card stat-card"><span>📊 Return</span><strong class="${stats.returnPct >= 0 ? "positive" : "negative"}">${points.length ? tabularValue(formatSignedPct(stats.returnPct)) : "--"}</strong><small>${points.length ? "Start to end" : "Waiting"}</small></article>
+          <article class="card stat-card"><span>Range</span><strong>${range.toUpperCase()}</strong><small>${symbol} · ${points.length} pts</small></article>
+          <article class="card stat-card"><span>High</span><strong class="positive">${points.length ? tabularValue(formatPrice(stats.high, symbol)) : "--"}</strong><small>${points.length ? "Period high" : "Waiting"}</small></article>
+          <article class="card stat-card"><span>Low</span><strong class="negative">${points.length ? tabularValue(formatPrice(stats.low, symbol)) : "--"}</strong><small>${points.length ? "Period low" : "Waiting"}</small></article>
+          <article class="card stat-card"><span>Return</span><strong class="${stats.returnPct >= 0 ? "positive" : "negative"}">${points.length ? tabularValue(formatSignedPct(stats.returnPct)) : "--"}</strong><small>${points.length ? "Start→end" : "Waiting"}</small></article>
+          <article class="card stat-card"><span>RSI(14)</span><strong class="${rsiClass}">${rsiLabel}</strong><small>${rsiSignal}</small></article>
+        </div>
+        <div class="chart-legend-bar">
+          <span class="chart-legend-item"><i class="legend-swatch" style="background:#00E676"></i>Candles</span>
+          <span class="chart-legend-item"><i class="legend-swatch" style="background:rgba(111,143,255,0.7)"></i>MA(20)</span>
+          <span class="chart-legend-item"><i class="legend-swatch" style="background:rgba(0,230,118,0.25)"></i>Volume</span>
         </div>
       </section>
     `;

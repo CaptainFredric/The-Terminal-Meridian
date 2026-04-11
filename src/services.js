@@ -95,11 +95,19 @@ export async function fetchChart(symbol, range = "1mo", interval = "1d") {
   const timestamps = result.timestamp ?? [];
   const quote = result.indicators?.quote?.[0] ?? {};
   const closes = quote.close ?? [];
+  const opens = quote.open ?? [];
+  const highs = quote.high ?? [];
+  const lows = quote.low ?? [];
+  const volumes = quote.volume ?? [];
 
   return timestamps
     .map((timestamp, index) => ({
       timestamp,
+      open: opens[index] ?? closes[index],
+      high: highs[index] ?? closes[index],
+      low: lows[index] ?? closes[index],
       close: closes[index],
+      volume: volumes[index] ?? 0,
     }))
     .filter((item) => item.close != null);
 }
@@ -123,7 +131,7 @@ export async function fetchOptions(symbol, expirationDate) {
 
 export async function fetchNews() {
   const feeds = [
-    "https://feeds.reuters.com/reuters/businessNews",
+    "https://www.cnbc.com/id/100727362/device/rss/rss.html",
     "https://finance.yahoo.com/news/rssindex",
     "https://feeds.marketwatch.com/marketwatch/topstories/",
   ];

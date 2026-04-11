@@ -41,7 +41,13 @@ export function createPortfolioRenderer(context) {
 
         ${rows.length ? `
           <article class="card">
-            <header class="card-head card-head-split"><h4>Holdings</h4><small>${rows.length} positions</small></header>
+            <header class="card-head card-head-split">
+              <h4>Holdings</h4>
+              <div style="display:flex;gap:8px;align-items:center">
+                <small>${rows.length} positions</small>
+                <button class="btn btn-ghost btn-sm" type="button" data-export-portfolio>Export CSV</button>
+              </div>
+            </header>
             <table class="data-table data-table-dense financial-data-table">
               <thead><tr><th>Ticker</th><th>Shares</th><th>Cost</th><th>Market</th><th>Value</th><th>P/L</th><th>Return</th><th></th></tr></thead>
               <tbody>

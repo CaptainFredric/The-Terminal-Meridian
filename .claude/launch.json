@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "meridian",
+      "runtimeExecutable": "/usr/local/bin/python3",
+      "runtimeArgs": ["backend/app.py"],
+      "port": 4173
+    }
+  ]
+}

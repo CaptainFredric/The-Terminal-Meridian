@@ -376,6 +376,13 @@ function init() {
   setInterval(updateSessionClock, 1000);
   setInterval(handleRefreshCountdown, 1000);
   setInterval(checkHealth, 60000);
+  // Fast tick: refresh overview + watchlist quotes every 5s for a live-feed feel.
+  // Skip while tab is hidden or a full refresh just happened to avoid duplicate work.
+  setInterval(() => {
+    if (document.hidden) return;
+    if (Date.now() - (state.lastDataFetchedAt || 0) < 3500) return;
+    void refreshLiveQuotes();
+  }, 5000);
   window.addEventListener("resize", fitAllCharts);
 
   // Show onboarding for first-time users
@@ -1107,12 +1114,28 @@ function renderOverviewStrip() {
 
   const pulse = calculatePulse();
   const breadthTone = pulse.gainers > pulse.losers ? "positive" : pulse.losers > pulse.gainers ? "negative" : "neutral";
+  const breadthPct = pulse.total ? Math.round((pulse.gainers / pulse.total) * 100) : 0;
+  const avgChangeStr = formatSignedPct(pulse.avgChange || 0);
+  const leader = pulse.strongest ? `${pulse.strongest.symbol} ${formatSignedPct(pulse.strongest.changePct || 0)}` : "--";
+  const laggard = pulse.weakest ? `${pulse.weakest.symbol} ${formatSignedPct(pulse.weakest.changePct || 0)}` : "--";
   el.overviewStrip.innerHTML = `
     ${cards}
     <article class="overview-card overview-card-summary">
-      <span>Market Pulse</span>
-      <strong>${state.marketPhase}</strong>
-      <small class="${breadthTone}">${pulse.gainers} ↑ · ${pulse.losers} ↓ · ${state.health.ok ? "Live" : "Local"}</small>
+      <div class="pulse-header">
+        <span>Market Pulse</span>
+        <strong>${state.marketPhase}</strong>
+      </div>
+      <div class="pulse-breadth-bar" title="${pulse.gainers} advancers · ${pulse.losers} decliners">
+        <i class="pulse-breadth-fill" style="width:${breadthPct}%"></i>
+      </div>
+      <div class="pulse-stats">
+        <div><span>Breadth</span><strong class="${breadthTone}">${pulse.gainers}↑ ${pulse.losers}↓</strong></div>
+        <div><span>Avg</span><strong class="${pulse.avgChange >= 0 ? "positive" : "negative"}">${avgChangeStr}</strong></div>
+      </div>
+      <div class="pulse-leaders">
+        <small class="positive" title="Strongest">▲ ${leader}</small>
+        <small class="negative" title="Weakest">▼ ${laggard}</small>
+      </div>
     </article>
   `;
   applyPriceTones(el.overviewStrip);
@@ -1123,17 +1146,22 @@ function renderRails() {
     el.watchlistRail.innerHTML = state.watchlist
       .map((symbol) => {
         const quote = buildQuote(symbol);
+        const changePct = Number(quote?.changePct || 0);
+        const arrow = changePct >= 0 ? "▲" : "▼";
         return `
           <div class="rail-row">
             <button class="rail-item" type="button" data-broadcast-symbol="${symbol}">
-              <div>
-                <strong>${symbol}</strong>
-                <small>${quote?.name || "Waiting for quote"}</small>
+              <div class="rail-item-head">
+                <div>
+                  <strong>${symbol}</strong>
+                  <small>${quote?.name || "Waiting for quote"}</small>
+                </div>
+                <div class="rail-item-price">
+                  <strong>${tabularValue(formatPrice(quote?.price || 0, symbol), { flashKey: `quote:${symbol}:price`, currentPrice: quote?.price || 0 })}</strong>
+                  <small class="${changePct >= 0 ? "positive" : "negative"}">${quote?.isLive ? `${arrow} ${tabularValue(formatSignedPct(changePct))}` : "--"}</small>
+                </div>
               </div>
-              <div>
-                <strong>${tabularValue(formatPrice(quote?.price || 0, symbol), { flashKey: `quote:${symbol}:price`, currentPrice: quote?.price || 0 })}</strong>
-                <small class="${(quote?.changePct || 0) >= 0 ? "positive" : "negative"}">${quote?.isLive ? tabularValue(formatSignedPct(quote.changePct)) : "--"}</small>
-              </div>
+              <div class="rail-item-spark">${renderOverviewSparkline(symbol, changePct)}</div>
             </button>
             <button class="rail-remove" type="button" data-remove-watch="${symbol}">×</button>
           </div>
@@ -1592,6 +1620,75 @@ function handleDocumentInput(event) {
   }
 }
 
+function ensureShortcutsOverlay() {
+  let overlay = document.getElementById("shortcutsOverlay");
+  if (overlay) return overlay;
+  overlay = document.createElement("div");
+  overlay.id = "shortcutsOverlay";
+  overlay.className = "shortcuts-overlay hidden";
+  overlay.innerHTML = `
+    <div class="shortcuts-panel">
+      <header class="shortcuts-head">
+        <h3>Keyboard Shortcuts</h3>
+        <button type="button" class="btn btn-ghost btn-sm" data-close-shortcuts>Esc</button>
+      </header>
+      <div class="shortcuts-grid">
+        <div class="shortcut-section">
+          <h4>Navigation</h4>
+          <div class="shortcut-row"><kbd>Tab</kbd><span>Cycle active panel</span></div>
+          <div class="shortcut-row"><kbd>F</kbd><span>Focus current panel</span></div>
+          <div class="shortcut-row"><kbd>G</kbd><span>Grid view (reset focus)</span></div>
+          <div class="shortcut-row"><kbd>/</kbd><span>Command palette</span></div>
+          <div class="shortcut-row"><kbd>⌘K</kbd><span>Command palette (alt)</span></div>
+          <div class="shortcut-row"><kbd>?</kbd><span>This help overlay</span></div>
+          <div class="shortcut-row"><kbd>Esc</kbd><span>Close any overlay</span></div>
+        </div>
+        <div class="shortcut-section">
+          <h4>Modules</h4>
+          <div class="shortcut-row"><kbd>F1</kbd><span>Briefing</span></div>
+          <div class="shortcut-row"><kbd>F2</kbd><span>Home</span></div>
+          <div class="shortcut-row"><kbd>F3</kbd><span>Quote</span></div>
+          <div class="shortcut-row"><kbd>F4</kbd><span>Chart</span></div>
+          <div class="shortcut-row"><kbd>F5</kbd><span>News</span></div>
+          <div class="shortcut-row"><kbd>F6</kbd><span>Screener</span></div>
+          <div class="shortcut-row"><kbd>F7</kbd><span>Heatmap</span></div>
+          <div class="shortcut-row"><kbd>F8</kbd><span>Portfolio</span></div>
+        </div>
+        <div class="shortcut-section">
+          <h4>Commands</h4>
+          <div class="shortcut-row"><code>GO AAPL</code><span>Broadcast symbol to all panels</span></div>
+          <div class="shortcut-row"><code>WATCH NVDA</code><span>Add to watchlist</span></div>
+          <div class="shortcut-row"><code>ALERT TSLA &gt;= 300</code><span>Create price alert</span></div>
+          <div class="shortcut-row"><code>ANALYZE MSFT</code><span>Load deep research</span></div>
+          <div class="shortcut-row"><code>CHART SPY 1Y</code><span>Load chart with range</span></div>
+        </div>
+      </div>
+      <footer class="shortcuts-foot">Press <kbd>?</kbd> any time to reopen</footer>
+    </div>
+  `;
+  overlay.addEventListener("click", (event) => {
+    if (event.target === overlay || event.target.closest("[data-close-shortcuts]")) {
+      closeShortcutsOverlay();
+    }
+  });
+  document.body.appendChild(overlay);
+  return overlay;
+}
+
+function toggleShortcutsOverlay() {
+  const overlay = ensureShortcutsOverlay();
+  if (overlay.classList.contains("hidden")) {
+    overlay.classList.remove("hidden");
+  } else {
+    overlay.classList.add("hidden");
+  }
+}
+
+function closeShortcutsOverlay() {
+  const overlay = document.getElementById("shortcutsOverlay");
+  if (overlay) overlay.classList.add("hidden");
+}
+
 function handleDocumentSubmit(event) {
   const addPositionForm = event.target.closest("#addPositionForm");
   if (!addPositionForm) return;
@@ -1607,7 +1704,10 @@ function handleDocumentSubmit(event) {
 
 function handleGlobalHotkeys(event) {
   if (event.key === "Escape") {
+    const shortcutsOverlay = document.getElementById("shortcutsOverlay");
+    const shortcutsOpen = shortcutsOverlay && !shortcutsOverlay.classList.contains("hidden");
     const hadOverlayOpen =
+      shortcutsOpen ||
       !el.paletteBackdrop?.classList.contains("hidden") ||
       !el.authModalBackdrop?.classList.contains("hidden") ||
       !el.settingsModalBackdrop?.classList.contains("hidden");
@@ -1617,9 +1717,18 @@ function handleGlobalHotkeys(event) {
       event.stopPropagation();
     }
 
+    closeShortcutsOverlay();
     closeSettingsModal();
     closeAuthModal();
     closeCommandPalette();
+    return;
+  }
+
+  if (event.key === "?" && !event.metaKey && !event.ctrlKey) {
+    const activeTag = document.activeElement?.tagName;
+    if (activeTag && ["INPUT", "TEXTAREA", "SELECT"].includes(activeTag)) return;
+    event.preventDefault();
+    toggleShortcutsOverlay();
     return;
   }
 
@@ -1839,7 +1948,8 @@ async function refreshAllData() {
     .filter((panel) => state.panelModules[panel] === "options")
     .map((panel) => refreshOptions(state.panelSymbols[panel] || state.optionsSelection.symbol, state.optionsSelection.expiration));
 
-  const overviewSparklineRequests = state.overviewSymbols.map((symbol) => refreshOverviewSparkline(symbol));
+  const sparklineSymbols = [...new Set([...state.overviewSymbols, ...state.watchlist])];
+  const overviewSparklineRequests = sparklineSymbols.map((symbol) => refreshOverviewSparkline(symbol));
 
   await Promise.allSettled([
     checkHealth(),
@@ -2010,12 +2120,33 @@ function scoreHeadlineSentiment(text) {
   return "Neutral";
 }
 
+async function refreshLiveQuotes() {
+  // Lightweight refresh — only prices for overview strip + watched symbols.
+  // Triggers the flash animation pipeline via state mutations without the
+  // heavy cost of a full refreshAllData (charts, news, options, fx).
+  const symbols = [
+    ...new Set([
+      ...state.watchlist,
+      ...Object.values(state.panelSymbols),
+    ]),
+  ];
+  try {
+    await Promise.allSettled([
+      refreshOverview(),
+      symbols.length ? refreshQuotes(symbols) : Promise.resolve(),
+    ]);
+    state.lastDataFetchedAt = Date.now();
+  } catch {
+    // noop — fast ticks are best-effort
+  }
+}
+
 async function refreshOverview() {
   // Try backend overview endpoint
   try {
     const payload = await marketApi.overview(state.overviewSymbols);
     if ((payload.quotes || []).length) {
-      state.overviewQuotes = payload.quotes;
+      state.overviewQuotes = payload.quotes.map((q) => ({ ...q, isLive: true }));
       if (payload.phase) state.marketPhase = payload.phase;
       return;
     }
@@ -2029,6 +2160,7 @@ async function refreshOverview() {
       symbol: q.symbol,
       price: q.price,
       changePct: q.changePct,
+      isLive: true,
     }));
   } catch {
     // noop
@@ -2196,11 +2328,28 @@ function updateSessionClock() {
 }
 
 function evaluateAlerts() {
+  const newlyTriggered = [];
   state.alerts = state.alerts.map((alert) => {
     const quote = buildQuote(alert.symbol);
     if (!quote) return alert;
     const triggered = alert.operator === ">=" ? quote.price >= alert.threshold : quote.price <= alert.threshold;
+    const wasWatching = alert.status !== "triggered";
+    if (triggered && wasWatching) {
+      newlyTriggered.push({ alert, price: quote.price });
+    }
     return { ...alert, status: triggered ? "triggered" : "watching" };
+  });
+
+  // Fire toasts + notifications for newly-triggered alerts only (deduped)
+  newlyTriggered.forEach(({ alert, price }) => {
+    const message = `${alert.symbol} ${alert.operator} ${Number(alert.threshold).toLocaleString()} — now $${Number(price).toFixed(2)}`;
+    showToast(message, "success");
+    notifManager?.push({
+      type: "alert-trigger",
+      title: `Alert · ${alert.symbol}`,
+      body: message,
+      symbol: alert.symbol,
+    });
   });
 }
 
@@ -2679,10 +2828,23 @@ function calculateChartStats(points) {
 }
 
 function calculatePulse() {
-  const quotes = state.overviewQuotes.length ? state.overviewQuotes : state.watchlist.map(buildQuote).filter(Boolean);
-  const gainers = quotes.filter((quote) => Number(quote.changePct || 0) >= 0).length;
-  const losers = Math.max(quotes.length - gainers, 0);
-  return { gainers, losers };
+  // Combine overview symbols + watchlist for a broader breadth reading
+  const overviewByKey = new Map(state.overviewQuotes.map((q) => [q.symbol, q]));
+  const watchlistQuotes = state.watchlist
+    .filter((sym) => !overviewByKey.has(sym))
+    .map(buildQuote)
+    .filter((q) => q && q.isLive);
+  const quotes = [...state.overviewQuotes, ...watchlistQuotes];
+  const changes = quotes.map((q) => Number(q.changePct || 0));
+  const gainers = changes.filter((v) => v > 0).length;
+  const losers = changes.filter((v) => v < 0).length;
+  const flat = Math.max(quotes.length - gainers - losers, 0);
+  const avgChange = changes.length ? changes.reduce((a, b) => a + b, 0) / changes.length : 0;
+  // Advance/decline ratio, guarded against divide-by-zero
+  const adRatio = losers === 0 ? gainers : gainers / losers;
+  const strongest = quotes.reduce((best, quote) => (!best || Number(quote.changePct || 0) > Number(best.changePct || 0) ? quote : best), null);
+  const weakest = quotes.reduce((worst, quote) => (!worst || Number(quote.changePct || 0) < Number(worst.changePct || 0) ? quote : worst), null);
+  return { gainers, losers, flat, total: quotes.length, avgChange, adRatio, strongest, weakest };
 }
 
 function syncUiCache() {

@@ -83,7 +83,12 @@ export function createQuoteRenderer(context) {
     const financials = deepDive?.financials || {};
     const isAnalyzing = state.deepDiveLoading.has(symbol);
     const depth = buildDepth(quote);
-    const statTiles = [
+    // Build the tile list, then filter out N/A entries so the grid stays
+    // populated rather than showing a wall of blank cells when deep-dive
+    // enrichment hasn't loaded. Tiles backed by always-present seed data
+    // (Mkt Cap, Prev Close, Bid/Ask) stay; the optional ones (P/E, Div,
+    // 52W, Beta, Volume, Earnings) appear only when we actually have them.
+    const allTiles = [
       { label: "Mkt Cap", value: formatMarketCap(quote.marketCap) },
       { label: "P/E Ratio", value: formatOptionalNumber(quote.trailingPE) },
       { label: "Div Yield", value: formatOptionalPercent(quote.dividendYield) },
@@ -94,6 +99,9 @@ export function createQuoteRenderer(context) {
       { label: "Bid / Ask", value: `${formatPrice(depth.bid, symbol)} / ${formatPrice(depth.ask, symbol)}`, className: "quote-stat-wide" },
       { label: "Next Earnings", value: formatOptionalDate(quote.earningsTimestamp || financials.nextEarningsDate || profile.nextEarningsDate) },
     ];
+    const isMissing = (v) => v == null || v === "N/A" || v === "" || v === "—";
+    const statTiles = allTiles.filter((tile) => !isMissing(tile.value));
+    const missingCount = allTiles.length - statTiles.length;
 
     const w52low = quote.fiftyTwoWeekLow || 0;
     const w52high = quote.fiftyTwoWeekHigh || 0;
@@ -150,9 +158,12 @@ export function createQuoteRenderer(context) {
         </article>
 
         <article class="card">
-          <header class="card-head card-head-split"><h4>Key Statistics</h4><small>Quote intelligence grid</small></header>
+          <header class="card-head card-head-split">
+            <h4>Key Statistics</h4>
+            <small>${missingCount > 0 ? `Run <button class="btn btn-ghost btn-xs" type="button" data-analyze-symbol="${symbol}" style="padding:1px 6px;font-size:0.68rem">ANALYZE</button> for ${missingCount} more` : "Quote intelligence grid"}</small>
+          </header>
           <div class="quote-stats-grid">
-            ${statTiles
+            ${statTiles.length ? statTiles
               .map(
                 (tile) => `
                   <div class="quote-stat-tile ${tile.className || ""}">
@@ -161,7 +172,7 @@ export function createQuoteRenderer(context) {
                   </div>
                 `,
               )
-              .join("")}
+              .join("") : `<div class="empty-inline" style="grid-column:1/-1">Statistics load after the first market refresh — try the <strong>ANALYZE</strong> button above for a deeper profile.</div>`}
           </div>
         </article>
 

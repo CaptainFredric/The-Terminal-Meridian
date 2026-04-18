@@ -86,15 +86,33 @@ const CHART_RANGE_OPTIONS = [
   { label: "5Y", value: "5y" },
   { label: "ALL", value: "max" },
 ];
-const BIG_FOUR_DEFAULT_MODULES = { 1: "quote", 2: "chart", 3: "news", 4: "rules" };
-const BIG_FOUR_DEFAULT_SYMBOLS = { 1: "AAPL", 2: "MSFT", 3: "QQQ", 4: "NVDA" };
+// Newcomer-friendly defaults: lead with the welcoming Briefing hero (sector
+// rotation, signal board, mover chips), then show a chart, news, and the
+// visual sector heatmap. Leaves Rules/Trade/etc. discoverable but not the
+// first thing a new visitor sees.
+const BIG_FOUR_DEFAULT_MODULES = { 1: "briefing", 2: "chart", 3: "news", 4: "heatmap" };
+const BIG_FOUR_DEFAULT_SYMBOLS = { 1: "AAPL", 2: "AAPL", 3: "AAPL", 4: "SPY" };
 const AUTH_ENABLED = true;
+
+// Bump when the *default panel layout* changes meaningfully. Existing visitors
+// get the new layout but keep their watchlist/positions/alerts/rules.
+const WORKSPACE_LAYOUT_VERSION = 2;
 
 function readPersistedMeridianState() {
   if (typeof window === "undefined") return null;
   try {
     const raw = window.localStorage.getItem(MERIDIAN_STATE_KEY);
-    return raw ? JSON.parse(raw) : null;
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    // Layout migration: older saves used quote/chart/news/rules as defaults.
+    // If the stored layout predates the newcomer-friendly defaults, drop the
+    // saved panelModules/panelSymbols so initial state falls back to the new
+    // defaults — but preserve watchlist, alerts, positions, rules, etc.
+    if ((parsed?.layoutVersion || 1) < WORKSPACE_LAYOUT_VERSION && parsed?.workspace) {
+      delete parsed.workspace.panelModules;
+      delete parsed.workspace.panelSymbols;
+    }
+    return parsed;
   } catch {
     window.localStorage.removeItem(MERIDIAN_STATE_KEY);
     window.localStorage.removeItem(LEGACY_UI_CACHE_KEY);
@@ -108,6 +126,12 @@ const legacyUiSnapshot = uiCache.read();
 const persistedMeridianState = readPersistedMeridianState();
 const persistedUi = persistedMeridianState?.ui || {};
 const persistedWorkspace = persistedMeridianState?.workspace || {};
+// Same layout-version check as readPersistedMeridianState — strip the legacy
+// uiCache's saved layout so returning visitors land on the new defaults.
+if ((persistedMeridianState?.layoutVersion || 1) < WORKSPACE_LAYOUT_VERSION && legacyUiSnapshot?.guestWorkspace) {
+  delete legacyUiSnapshot.guestWorkspace.panelModules;
+  delete legacyUiSnapshot.guestWorkspace.panelSymbols;
+}
 const uiSnapshot = {
   ...legacyUiSnapshot,
   ...persistedUi,
@@ -637,6 +661,7 @@ function applyPriceTones(rootNode = document) {
 function snapshotMeridianState() {
   return {
     version: 1,
+    layoutVersion: WORKSPACE_LAYOUT_VERSION,
     updatedAt: Date.now(),
     ui: {
       activePanel: state.activePanel,

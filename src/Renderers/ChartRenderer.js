@@ -38,10 +38,23 @@ export function createChartRenderer(context) {
       ? `Live feed · ${currentTimeShort(state.lastDataFetchedAt || Date.now())}`
       : `Stale snapshot · ${currentTimeShort(state.lastDataFetchedAt || Date.now())}`;
 
+    const ind = state.chartIndicators || {};
     const rsiValue = stats.rsi;
     const rsiClass = rsiValue === null ? "" : rsiValue >= 70 ? "negative" : rsiValue <= 30 ? "positive" : "";
     const rsiLabel = rsiValue === null ? "--" : rsiValue.toFixed(1);
     const rsiSignal = rsiValue === null ? "Insufficient data" : rsiValue >= 70 ? "Overbought" : rsiValue <= 30 ? "Oversold" : "Neutral";
+
+    // Pro indicators: bollinger, vwap, macd show a "Pro" badge
+    const PRO_INDICATORS = new Set(["bollinger", "vwap", "macd"]);
+
+    const indicatorToggle = (key, label) => {
+      const isActive = !!ind[key];
+      const isPro = PRO_INDICATORS.has(key);
+      const proTag = isPro ? `<button class="pro-lock-badge" type="button" data-open-pricing title="Upgrade to Pro for ${label}">🔒 Pro</button>` : "";
+      return `<span class="indicator-toggle-wrap">${proTag}<button class="indicator-toggle${isActive ? " is-active" : ""}" type="button" data-chart-indicator="${key}" title="Toggle ${label}">${label}</button></span>`;
+    };
+
+    const compareSymbol = state.chartCompareSymbol?.[panel] || null;
 
     return `
       <section class="stack stack-lg">
@@ -51,11 +64,23 @@ export function createChartRenderer(context) {
           <button class="btn btn-ghost btn-sm" type="button" data-load-module="quote" data-target-symbol="${symbol}" data-target-panel="${panel}">Quote</button>
           <button class="btn btn-ghost btn-sm" type="button" data-load-module="options" data-target-symbol="${symbol}" data-target-panel="${panel}">Options</button>
           <button class="btn btn-ghost btn-sm" type="button" data-news-filter="${symbol}">News</button>
+          ${compareSymbol
+            ? `<button class="btn btn-ghost btn-sm is-compare-active" type="button" data-chart-compare="${panel}">vs ${compareSymbol} ×</button>`
+            : `<button class="btn btn-ghost btn-sm" type="button" data-chart-compare="${panel}">+ Compare</button>`}
           <button class="btn btn-primary btn-sm" type="button" data-refresh-chart="${panel}:${symbol}:${range}">Refresh</button>
         </div>
 
         <article class="card chart-card chart-card-feature">
           <div class="chart-state-badge ${state.health?.ok ? "" : "is-stale"}">${freshnessLabel}</div>
+          <div class="chart-indicator-bar">
+            ${indicatorToggle("sma20", "SMA(20)")}
+            ${indicatorToggle("ema9", "EMA(9)")}
+            ${indicatorToggle("bollinger", "Bollinger")}
+            ${indicatorToggle("vwap", "VWAP")}
+            ${indicatorToggle("rsi", "RSI(14)")}
+            ${indicatorToggle("macd", "MACD")}
+            ${indicatorToggle("volume", "Volume")}
+          </div>
           <div class="chart-canvas-wrap">
             <div class="chart-canvas" id="chartCanvas${panel}" data-chart-panel="${panel}"></div>
             ${chartUnavailable ? `<div class="chart-loading chart-fallback">${loadingSkeleton(4)}<p class="empty-inline">Offline: ${symbol} chart feed unavailable. Last requested window ${range.toUpperCase()}.</p></div>` : ""}
@@ -71,9 +96,14 @@ export function createChartRenderer(context) {
           <article class="card stat-card"><span>RSI(14)</span><strong class="${rsiClass}">${rsiLabel}</strong><small>${rsiSignal}</small></article>
         </div>
         <div class="chart-legend-bar">
-          <span class="chart-legend-item"><i class="legend-swatch" style="background:#00E676"></i>Candles</span>
-          <span class="chart-legend-item"><i class="legend-swatch" style="background:rgba(111,143,255,0.7)"></i>MA(20)</span>
-          <span class="chart-legend-item"><i class="legend-swatch" style="background:rgba(0,230,118,0.25)"></i>Volume</span>
+          ${ind.sma20 !== false ? '<span class="chart-legend-item"><i class="legend-swatch" style="background:rgba(111,143,255,0.7)"></i>SMA(20)</span>' : ""}
+          ${ind.ema9 ? '<span class="chart-legend-item"><i class="legend-swatch" style="background:rgba(255,167,38,0.8)"></i>EMA(9)</span>' : ""}
+          ${ind.bollinger ? '<span class="chart-legend-item"><i class="legend-swatch" style="background:rgba(156,185,255,0.5)"></i>Bollinger(20,2)</span>' : ""}
+          ${ind.vwap ? '<span class="chart-legend-item"><i class="legend-swatch" style="background:rgba(233,30,99,0.7)"></i>VWAP</span>' : ""}
+          ${ind.rsi !== false ? '<span class="chart-legend-item"><i class="legend-swatch" style="background:rgba(255,200,60,0.5)"></i>RSI(14)</span>' : ""}
+          ${ind.macd ? '<span class="chart-legend-item"><i class="legend-swatch" style="background:rgba(79,172,255,0.8)"></i>MACD(12,26,9)</span>' : ""}
+          ${ind.volume !== false ? '<span class="chart-legend-item"><i class="legend-swatch" style="background:rgba(0,230,118,0.25)"></i>Volume</span>' : ""}
+          ${compareSymbol ? `<span class="chart-legend-item compare-legend"><i class="legend-swatch" style="background:rgba(255,200,60,0.85)"></i>${compareSymbol} % overlay</span>` : ""}
         </div>
       </section>
     `;

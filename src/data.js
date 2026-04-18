@@ -18,12 +18,12 @@ export const functionKeys = [
   { key: "F6", module: "screener", label: "Screener" },
   { key: "F7", module: "heatmap", label: "Heatmap" },
   { key: "F8", module: "portfolio", label: "Portfolio" },
-  { key: "F9", module: "macro", label: "Macro" },
+  { key: "F9", module: "trade", label: "Trade" },
   { key: "F10", module: "options", label: "Options" },
-  { key: "F11", module: "calculator", label: "Calculator" },
+  { key: "F11", module: "macro", label: "Macro" },
 ];
 
-export const moduleOrder = ["briefing", "home", "quote", "chart", "news", "screener", "heatmap", "portfolio", "macro", "options", "calculator", "rules"];
+export const moduleOrder = ["briefing", "home", "quote", "chart", "news", "screener", "heatmap", "portfolio", "trade", "macro", "options", "calculator", "rules"];
 
 export const moduleTitles = {
   briefing: "Briefing",
@@ -34,6 +34,7 @@ export const moduleTitles = {
   screener: "Screener",
   heatmap: "Heatmap",
   portfolio: "Portfolio",
+  trade: "Trade",
   macro: "Macro",
   options: "Options",
   calculator: "Calculator",
@@ -48,7 +49,7 @@ export const commandCatalog = [
   { cmd: "FOCUS 2", desc: "Focus panel 2" },
   { cmd: "NEXT", desc: "Move to the next module" },
   { cmd: "PREV", desc: "Move to the previous module" },
-  { cmd: "RANGE 1Y", desc: "Set chart range" },
+  { cmd: "RANGE 1Y", desc: "Set chart range (5D, 1M, 3M, 6M, YTD, 1Y, 2Y, 5Y, ALL)" },
   { cmd: "BRIEF", desc: "Open the Meridian briefing" },
   { cmd: "HOME", desc: "Open the home view" },
   { cmd: "SUGGEST", desc: "Show suggested next steps" },
@@ -57,15 +58,28 @@ export const commandCatalog = [
   { cmd: "ANALYZE NVDA", desc: "Load deep insight for NVDA" },
   { cmd: "SYNC NVDA", desc: "Save NVDA into your workspace" },
   { cmd: "PORT", desc: "Open the portfolio view" },
+  { cmd: "TRADE", desc: "Open the paper trading desk" },
+  { cmd: "BUY AAPL 10", desc: "Place a paper buy order" },
+  { cmd: "SELL NVDA 5", desc: "Place a paper sell order" },
   { cmd: "MACRO", desc: "Open the macro view" },
   { cmd: "AAPL Q", desc: "Open quote for AAPL" },
   { cmd: "AAPL CHART", desc: "Open chart for AAPL" },
+  { cmd: "CHART AAPL 2Y", desc: "Open chart with inline range" },
   { cmd: "WATCH TSLA", desc: "Add TSLA to watchlist" },
   { cmd: "ALERT NVDA 950", desc: "Create an alert level" },
-  { cmd: "ADDPOS MSFT 5 410", desc: "Add a portfolio position" },
+  { cmd: "ADDPOS MSFT 5 410", desc: "Add a portfolio position (symbol, shares, avg cost)" },
+  { cmd: "REMOVEPOS MSFT", desc: "Remove a position from portfolio" },
+  { cmd: "REMOVEALERT NVDA", desc: "Remove all alerts for a symbol" },
+  { cmd: "CLEARRULES", desc: "Clear all active IF/THEN rules" },
   { cmd: "OPTIONS NVDA", desc: "Open options for NVDA" },
   { cmd: "RULES", desc: "Open the rules manager" },
-  { cmd: "IF AAPL > 220 THEN Breakout", desc: "Create an active rule" },
+  { cmd: "IF AAPL > 220 THEN Breakout", desc: "Create an active rule (supports >, <, >=, <=, ==)" },
+  { cmd: "CALC", desc: "Open the option & bond calculator" },
+  { cmd: "HEAT", desc: "Open the sector heatmap" },
+  { cmd: "EQS", desc: "Open the equity screener" },
+  { cmd: "SCREENER", desc: "Open the equity screener" },
+  { cmd: "LOGIN", desc: "Sign in and sync workspace" },
+  { cmd: "ACCOUNT", desc: "Open account settings" },
 ];
 
 export const calculatorDefaults = {
@@ -100,9 +114,18 @@ export const macroDefaults = {
 };
 
 export const heatmapGroups = {
-  Technology: ["AAPL", "MSFT", "NVDA", "AMD", "AVGO", "QCOM"],
-  Growth: ["TSLA", "PLTR", "CRWD", "ABNB", "UBER", "COIN"],
-  Macro: ["SPY", "QQQ", "IWM", "BTC-USD", "ETH-USD", "TLT"],
+  "Information Technology": ["AAPL", "MSFT", "NVDA", "AMD", "AVGO", "QCOM", "ORCL", "CRM", "ADBE", "CSCO", "TXN", "INTC", "INTU", "NOW", "AMAT", "MU", "PANW", "CRWD", "ANET"],
+  "Communication Services": ["GOOGL", "META", "NFLX", "DIS", "CMCSA", "T", "VZ", "TMUS", "EA", "TTWO", "SPOT"],
+  "Consumer Discretionary": ["AMZN", "TSLA", "HD", "LOW", "MCD", "SBUX", "NKE", "BKNG", "ABNB", "CMG", "TJX", "F", "GM"],
+  "Consumer Staples": ["WMT", "COST", "PG", "KO", "PEP", "PM", "MDLZ", "CL", "TGT", "MO"],
+  "Health Care": ["LLY", "UNH", "JNJ", "MRK", "ABBV", "PFE", "TMO", "ABT", "AMGN", "ISRG", "VRTX", "BMY", "GILD"],
+  "Financials": ["JPM", "BAC", "V", "MA", "BRK-B", "WFC", "GS", "MS", "BLK", "AXP", "SCHW", "PYPL", "SPGI", "PGR"],
+  "Industrials": ["GE", "CAT", "HON", "UNP", "BA", "RTX", "LMT", "DE", "UPS", "FDX", "ETN", "WM"],
+  "Energy": ["XOM", "CVX", "COP", "EOG", "SLB", "MPC", "PSX", "OXY", "VLO"],
+  "Materials & Utilities": ["LIN", "SHW", "FCX", "NEM", "APD", "NEE", "SO", "DUK"],
+  "Real Estate": ["AMT", "PLD", "EQIX", "O", "SPG", "CCI"],
+  "ETFs & Macro": ["SPY", "QQQ", "IWM", "DIA", "TLT", "GLD", "SMH", "XLK", "XLF", "XLE", "XLV", "ARKK", "VXX"],
+  "Crypto": ["BTC-USD", "ETH-USD", "SOL-USD", "BNB-USD", "XRP-USD", "ADA-USD", "DOGE-USD", "AVAX-USD", "LINK-USD"],
 };
 
 const defaultUniverse = [

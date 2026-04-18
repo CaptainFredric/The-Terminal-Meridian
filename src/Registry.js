@@ -10,6 +10,7 @@ import { createPortfolioRenderer } from "./Renderers/PortfolioRenderer.js";
 import { createQuoteRenderer } from "./Renderers/QuoteRenderer.js";
 import { createRulesRenderer } from "./Renderers/RulesRenderer.js";
 import { createScreenerRenderer } from "./Renderers/ScreenerRenderer.js";
+import { createTradeRenderer } from "./Renderers/TradeRenderer.js";
 
 function normalizeKey(key) {
   return String(key || "").trim().toLowerCase();
@@ -49,6 +50,7 @@ export function createDefaultModuleRegistry(context) {
     ["screener", createScreenerRenderer(context)],
     ["heatmap", createHeatmapRenderer(context)],
     ["portfolio", createPortfolioRenderer(context)],
+    ["trade", createTradeRenderer(context)],
     ["macro", createMacroRenderer(context)],
     ["options", createOptionsRenderer(context)],
     ["calculator", createCalculatorRenderer(context)],

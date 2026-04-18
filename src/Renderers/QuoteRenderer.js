@@ -165,6 +165,60 @@ export function createQuoteRenderer(context) {
           </div>
         </article>
 
+        <article class="card position-sizer-card" data-position-sizer>
+          <header class="card-head card-head-split">
+            <h4>Position Sizer</h4>
+            <small>Risk-based share count · ${symbol}</small>
+          </header>
+          <div class="position-sizer-grid">
+            <label class="position-sizer-field">
+              <span>Account size ($)</span>
+              <input type="number" min="0" step="100" value="100000" data-pos-input="account" oninput="window.__updatePositionSizer && window.__updatePositionSizer(this)" />
+            </label>
+            <label class="position-sizer-field">
+              <span>Risk per trade (%)</span>
+              <input type="number" min="0.1" max="100" step="0.1" value="1" data-pos-input="risk" oninput="window.__updatePositionSizer && window.__updatePositionSizer(this)" />
+            </label>
+            <label class="position-sizer-field">
+              <span>Entry price ($)</span>
+              <input type="number" min="0" step="0.01" value="${quote.price.toFixed(2)}" data-pos-input="entry" oninput="window.__updatePositionSizer && window.__updatePositionSizer(this)" />
+            </label>
+            <label class="position-sizer-field">
+              <span>Stop loss ($)</span>
+              <input type="number" min="0" step="0.01" value="${(quote.price * 0.95).toFixed(2)}" data-pos-input="stop" oninput="window.__updatePositionSizer && window.__updatePositionSizer(this)" />
+            </label>
+          </div>
+          <div class="position-sizer-results">
+            <div class="sizer-result">
+              <span>Shares</span>
+              <strong data-pos-out="shares">—</strong>
+            </div>
+            <div class="sizer-result">
+              <span>Position size</span>
+              <strong data-pos-out="size">—</strong>
+            </div>
+            <div class="sizer-result">
+              <span>Max loss</span>
+              <strong class="negative" data-pos-out="loss">—</strong>
+            </div>
+            <div class="sizer-result">
+              <span>Stop distance</span>
+              <strong data-pos-out="distance">—</strong>
+            </div>
+            <div class="sizer-result sizer-result-wide">
+              <span>R-multiple targets</span>
+              <strong data-pos-out="targets">—</strong>
+            </div>
+          </div>
+          <div class="position-sizer-quick">
+            <button class="btn btn-ghost btn-sm" type="button" data-pos-quick="0.5">0.5%</button>
+            <button class="btn btn-ghost btn-sm" type="button" data-pos-quick="1">1%</button>
+            <button class="btn btn-ghost btn-sm" type="button" data-pos-quick="2">2%</button>
+            <button class="btn btn-ghost btn-sm" type="button" data-pos-quick="3">3%</button>
+            <span class="position-sizer-hint">Quick risk presets · educational only</span>
+          </div>
+        </article>
+
         <article class="card quote-depth-card">
           <header class="card-head card-head-split"><h4>Mini Depth</h4><small>${tabularValue(formatPrice(depth.spread, symbol))} spread</small></header>
           <div class="quote-depth-grid">
@@ -202,6 +256,16 @@ export function createQuoteRenderer(context) {
               : `<div class="empty-inline">Run ANALYZE to pull profile, financials, and ticker-specific news.</div>`}
         </article>
 
+        ${!deepDive ? `
+        <article class="card pro-teaser-card" style="border-style:dashed;border-color:rgba(246,179,75,0.3);background:rgba(246,179,75,0.03)">
+          <header class="card-head card-head-split">
+            <h4 style="color:var(--warning)">📋 Analyst Ratings &amp; Financial Statements</h4>
+            <button class="pro-lock-badge" type="button" data-open-pricing style="font-size:0.75rem;padding:3px 10px">🔒 Unlock with Pro</button>
+          </header>
+          <p style="color:var(--muted);font-size:0.78rem;margin:0">Run ANALYZE to load deep-dive data, or upgrade to Pro for analyst targets, revenue, margins, ROE, and full financials — always visible without a manual fetch.</p>
+        </article>
+        ` : ""}
+
         ${deepDive && financials ? `
         <article class="card">
           <header class="card-head card-head-split"><h4>Analyst Consensus</h4><small>Wall Street ratings</small></header>
@@ -237,6 +301,24 @@ export function createQuoteRenderer(context) {
           </div>
         </article>
         ` : ""}
+
+        <article class="card ticker-notes-card" data-ticker-notes-card="${symbol}">
+          <header class="card-head card-head-split">
+            <h4>📝 Trade Journal</h4>
+            <small data-ticker-notes-status="${symbol}">Local · auto-saved</small>
+          </header>
+          <textarea
+            class="ticker-notes-textarea"
+            data-ticker-notes-input="${symbol}"
+            placeholder="Notes about ${symbol}: thesis, entry plan, key levels, earnings expectations…"
+            rows="4"
+            maxlength="2000"
+          ></textarea>
+          <div class="ticker-notes-meta">
+            <small data-ticker-notes-count="${symbol}">0 / 2000 chars</small>
+            <small class="muted-cell">Stored locally — never leaves your device</small>
+          </div>
+        </article>
 
         <article class="card">
           <header class="card-head card-head-split"><h4>Similar Names</h4><small>${quote.sector} · ${peers.length} peers</small></header>

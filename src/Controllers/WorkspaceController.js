@@ -60,6 +60,9 @@ export function normalizePanelModules(source, fallback, moduleTitles) {
   return next;
 }
 
+// Cap notification history to prevent the synced payload from growing unbounded.
+const MAX_SYNCED_NOTIFICATIONS = 50;
+
 export class WorkspaceController {
   constructor({
     state,
@@ -83,6 +86,8 @@ export class WorkspaceController {
     this.setNetworkStatus = setNetworkStatus;
     this.updateAuthControls = updateAuthControls;
     this.onSessionHydrated = onSessionHydrated;
+    this._saveTimer = null;
+    this._retryCount = 0;
   }
 
   serializeWorkspace() {
@@ -94,46 +99,52 @@ export class WorkspaceController {
       panelSymbols: this.state.panelSymbols,
       commandHistory: this.state.commandHistory,
       activeRules: this.state.activeRules,
+      // Cap to most recent N notifications to keep payload lean
+      notifications: (this.state.notifications || []).slice(0, MAX_SYNCED_NOTIFICATIONS),
     };
   }
 
   async saveWorkspace() {
     if (!this.state.user) {
-      this.uiCache.write({
-        ...this.uiCache.read(),
-        guestWorkspace: this.serializeWorkspace(),
-      });
+      this._writeGuestCache();
       return;
     }
 
     this.setNetworkStatus("Live · Saving");
     try {
       await this.workspaceApi.save(this.serializeWorkspace());
+      this._retryCount = 0;
       this.setNetworkStatus("Live · Saved");
     } catch {
-      this.setNetworkStatus("Live · Retry");
+      this._scheduleRetry();
     }
   }
 
   queueSave() {
     if (!this.state.user) {
-      this.uiCache.write({
-        ...this.uiCache.read(),
-        guestWorkspace: this.serializeWorkspace(),
-      });
+      this._writeGuestCache();
       return;
     }
 
     this.setNetworkStatus("Live · Saving");
-    window.clearTimeout(this.state.persistTimer);
-    this.state.persistTimer = window.setTimeout(async () => {
-      try {
-        await this.workspaceApi.save(this.serializeWorkspace());
-        this.setNetworkStatus("Live · Saved");
-      } catch {
-        this.setNetworkStatus("Live · Retry");
-      }
-    }, 350);
+    window.clearTimeout(this._saveTimer);
+    this._saveTimer = window.setTimeout(() => this.saveWorkspace(), 350);
+  }
+
+  _writeGuestCache() {
+    this.uiCache.write({
+      ...this.uiCache.read(),
+      guestWorkspace: this.serializeWorkspace(),
+    });
+  }
+
+  _scheduleRetry() {
+    this._retryCount = (this._retryCount || 0) + 1;
+    // Exponential back-off capped at 30s: 2s, 4s, 8s, 16s, 30s, 30s, …
+    const delay = Math.min(2000 * Math.pow(2, this._retryCount - 1), 30_000);
+    this.setNetworkStatus("Live · Retry");
+    window.clearTimeout(this._saveTimer);
+    this._saveTimer = window.setTimeout(() => this.saveWorkspace(), delay);
   }
 
   syncUiCache() {
@@ -144,6 +155,9 @@ export class WorkspaceController {
       autoJumpToPanel: this.state.autoJumpToPanel,
       chartRanges: this.state.chartRanges,
       newsFilter: this.state.newsFilter,
+      compactMode: this.state.compactMode,
+      theme: this.state.theme,
+      rulesActiveTab: this.state.rulesActiveTab,
     });
   }
 
@@ -156,7 +170,14 @@ export class WorkspaceController {
     this.state.panelSymbols = normalizePanelMap(workspace.panelSymbols, this.defaults.panelSymbols);
     this.state.commandHistory = [...(workspace.commandHistory || [])];
     this.state.activeRules = structuredClone(seedLiveRules(workspace.activeRules));
-    this.state.notifications = structuredClone(seedLiveNotifications(workspace.notifications, this.state.activeRules));
+    // Restore saved notifications; fall back to seeds only when none exist at all.
+    const savedNotifications = Array.isArray(workspace.notifications) ? workspace.notifications.filter(Boolean) : [];
+    this.state.notifications = structuredClone(
+      savedNotifications.length
+        ? savedNotifications
+        : seedLiveNotifications([], this.state.activeRules),
+    );
+    this._retryCount = 0;
     this.state.sessionStartedAt = Date.now();
 
     this.updateAuthControls?.();

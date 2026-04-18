@@ -137,6 +137,39 @@ export const marketApi = {
   health() {
     return apiRequest("/api/health");
   },
+  screenerUniverse() {
+    return apiRequest("/api/screener/universe");
+  },
+  yields() {
+    return apiRequest("/api/macro/yields");
+  },
+};
+
+export const paperApi = {
+  account() {
+    return apiRequest("/api/paper/account");
+  },
+  order(payload) {
+    return apiRequest("/api/paper/order", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+  placePendingOrder(payload) {
+    return apiRequest("/api/paper/pending-order", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+  cancelPendingOrder(id) {
+    return apiRequest(`/api/paper/pending-order/${id}`, { method: "DELETE" });
+  },
+  reset() {
+    return apiRequest("/api/paper/reset", { method: "POST" });
+  },
+  achievements() {
+    return apiRequest("/api/achievements");
+  },
 };
 
 export const uiCache = {

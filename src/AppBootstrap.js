@@ -25,11 +25,12 @@ import {
   seedLiveRules,
 } from "./Controllers/WorkspaceController.js";
 import { observeChartResize } from "./Renderers/ChartRenderer.js";
+import { SCREENER_PRESETS, filterUniverse, sortUniverse } from "./Renderers/ScreenerRenderer.js";
 import { LogicEngine } from "./LogicEngine.js";
 import { createDefaultModuleRegistry } from "./Registry.js";
 import { applyPriceTone, emptyState, formatPrice, formatSignedPct, tabularValue } from "./Renderers/Common.js";
 import { createStateStore } from "./StateStore.js";
-import { authApi, marketApi, uiCache, workspaceApi } from "./api.js";
+import { authApi, marketApi, paperApi, uiCache, workspaceApi } from "./api.js";
 import { ActionEngine } from "./ActionEngine.js";
 import { getStockDeepDive } from "./marketService.js";
 import { fetchQuotes, fetchChart, fetchOptions, fetchNews, fetchFxRates } from "./services.js";
@@ -37,6 +38,41 @@ import { NotificationManager } from "./NotificationManager.js";
 
 const DEFAULT_OVERVIEW_SYMBOLS = ["SPY", "QQQ", "NVDA", "TLT", "BTC-USD", "AAPL"];
 const MERIDIAN_STATE_KEY = "meridian_state";
+
+// ── Free tier limits ───────────────────────────────────────────────────────────
+// Pro users (state.user?.tier === "pro") bypass all limits.
+const FREE_WATCHLIST_LIMIT = 10;
+const FREE_ALERT_LIMIT = 3;
+const FREE_RULES_LIMIT = 5;
+
+function isProUser() {
+  // All signed-in users get Pro behaviour for now (pre-launch).
+  // Flip to `state.user?.tier === "pro"` once billing is live.
+  return Boolean(state.user);
+}
+
+function checkFreeTierLimit(count, limit, label) {
+  if (isProUser()) return false; // no limit for pro/authed users
+  if (count < limit) return false;
+  openPricingModal();
+  showToast(`Free tier: up to ${limit} ${label}. Upgrade to Pro for unlimited.`, "warning");
+  return true; // blocked
+}
+
+// Returns "X / LIMIT" for free users (with CSS class hint), "X" for Pro.
+function formatTierUsage(count, limit) {
+  if (isProUser()) return String(count);
+  return `${count} / ${limit}`;
+}
+
+// Returns CSS class for usage badge: "" | "tier-warn" | "tier-full"
+function tierUsageClass(count, limit) {
+  if (isProUser()) return "";
+  if (count >= limit) return "tier-full";
+  if (count / limit >= 0.7) return "tier-warn";
+  return "";
+}
+
 const LEGACY_UI_CACHE_KEY = "the-terminal.ui-cache.v2";
 const DEFAULT_CHART_RANGES = { 1: "1mo", 2: "1mo", 3: "1mo", 4: "1mo" };
 const CHART_RANGE_OPTIONS = [
@@ -44,11 +80,15 @@ const CHART_RANGE_OPTIONS = [
   { label: "1M", value: "1mo" },
   { label: "3M", value: "3mo" },
   { label: "6M", value: "6mo" },
+  { label: "YTD", value: "ytd" },
   { label: "1Y", value: "1y" },
+  { label: "2Y", value: "2y" },
+  { label: "5Y", value: "5y" },
+  { label: "ALL", value: "max" },
 ];
 const BIG_FOUR_DEFAULT_MODULES = { 1: "quote", 2: "chart", 3: "news", 4: "rules" };
 const BIG_FOUR_DEFAULT_SYMBOLS = { 1: "AAPL", 2: "MSFT", 3: "QQQ", 4: "NVDA" };
-const AUTH_ENABLED = false;
+const AUTH_ENABLED = true;
 
 function readPersistedMeridianState() {
   if (typeof window === "undefined") return null;
@@ -77,6 +117,97 @@ const uiSnapshot = {
   },
 };
 const guestWorkspace = uiSnapshot.guestWorkspace || {};
+
+// ── Watchlist Groups (multi-list) ─────────────────────────────────────────
+const WATCHLIST_GROUPS_KEY = "meridian_watchlist_groups";
+const ACTIVE_WATCHLIST_GROUP_KEY = "meridian_active_watchlist_group";
+
+function loadWatchlistGroups() {
+  try {
+    const raw = window.localStorage.getItem(WATCHLIST_GROUPS_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length) {
+        return parsed.map((g) => ({
+          id: String(g.id || "default"),
+          name: String(g.name || "Untitled"),
+          symbols: Array.isArray(g.symbols) ? g.symbols.map((s) => String(s).toUpperCase()) : [],
+        }));
+      }
+    }
+  } catch {}
+  // Default: one "Main" group seeded from the existing flat watchlist
+  const seedSymbols = (guestWorkspace.watchlist || []).map((s) => String(s).toUpperCase());
+  return [{ id: "default", name: "Main", symbols: seedSymbols }];
+}
+
+function loadActiveWatchlistGroup() {
+  try {
+    const raw = window.localStorage.getItem(ACTIVE_WATCHLIST_GROUP_KEY);
+    if (raw) return String(raw);
+  } catch {}
+  return "default";
+}
+
+function saveWatchlistGroups() {
+  try {
+    window.localStorage.setItem(WATCHLIST_GROUPS_KEY, JSON.stringify(state.watchlistGroups));
+    window.localStorage.setItem(ACTIVE_WATCHLIST_GROUP_KEY, String(state.activeWatchlistGroup));
+  } catch {}
+}
+
+// Sync the active group's symbols with the live state.watchlist
+function syncActiveGroupFromWatchlist() {
+  if (!state?.watchlistGroups) return;
+  const group = state.watchlistGroups.find((g) => g.id === state.activeWatchlistGroup);
+  if (group) {
+    group.symbols = [...state.watchlist];
+    saveWatchlistGroups();
+  }
+}
+
+function switchWatchlistGroup(groupId) {
+  // First persist current rail into the previously-active group
+  syncActiveGroupFromWatchlist();
+  const next = state.watchlistGroups.find((g) => g.id === groupId);
+  if (!next) return;
+  state.activeWatchlistGroup = groupId;
+  state.watchlist = [...next.symbols];
+  saveWatchlistGroups();
+  if (typeof renderRails === "function") renderRails();
+  if (typeof renderTickerTape === "function") renderTickerTape();
+  if (typeof refreshQuotes === "function" && state.watchlist.length) {
+    void refreshQuotes(state.watchlist);
+  }
+}
+
+function createWatchlistGroup(name) {
+  const cleanName = String(name || "").trim().slice(0, 24);
+  if (!cleanName) return;
+  // Persist current edits to active group first
+  syncActiveGroupFromWatchlist();
+  const id = `g_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+  state.watchlistGroups.push({ id, name: cleanName, symbols: [] });
+  state.activeWatchlistGroup = id;
+  state.watchlist = [];
+  saveWatchlistGroups();
+  if (typeof renderRails === "function") renderRails();
+  if (typeof renderTickerTape === "function") renderTickerTape();
+}
+
+function deleteWatchlistGroup(groupId) {
+  if (groupId === "default") return; // can't delete default
+  state.watchlistGroups = state.watchlistGroups.filter((g) => g.id !== groupId);
+  if (state.activeWatchlistGroup === groupId) {
+    const fallback = state.watchlistGroups[0];
+    state.activeWatchlistGroup = fallback?.id || "default";
+    state.watchlist = fallback ? [...fallback.symbols] : [];
+  }
+  saveWatchlistGroups();
+  if (typeof renderRails === "function") renderRails();
+  if (typeof renderTickerTape === "function") renderTickerTape();
+}
+
 const chartViews = new Map();
 const chartMountGeneration = new Map(); // panel → monotonic counter, prevents stale async mounts
 let lightweightChartsModulePromise = null;
@@ -104,17 +235,20 @@ const initialState = {
   panelSymbols: normalizePanelMap(guestWorkspace.panelSymbols, BIG_FOUR_DEFAULT_SYMBOLS),
   chartRanges: normalizePanelMap(uiSnapshot.chartRanges, DEFAULT_CHART_RANGES),
   watchlist: [...(guestWorkspace.watchlist || defaultWatchlist)],
+  watchlistGroups: loadWatchlistGroups(),
+  activeWatchlistGroup: loadActiveWatchlistGroup(),
   alerts: structuredClone(guestWorkspace.alerts || defaultAlerts),
   positions: structuredClone(guestWorkspace.positions || defaultPositions),
   commandHistory: [...(guestWorkspace.commandHistory || [])],
   activeRules: structuredClone(seedLiveRules(guestWorkspace.activeRules)),
   notifications: structuredClone(seedLiveNotifications(guestWorkspace.notifications, guestWorkspace.activeRules)),
   commandHistoryIndex: -1,
+  chartCompareSymbol: { 1: null, 2: null, 3: null, 4: null },
   screenerFilters: {
-    1: { universe: "", sector: "", search: "" },
-    2: { universe: "", sector: "", search: "" },
-    3: { universe: "", sector: "", search: "" },
-    4: { universe: "", sector: "", search: "" },
+    1: { universe: "", sector: "", industry: "", search: "", minMarketCap: "", performance: "", maxPE: "", sortKey: "marketCap", sortDir: "desc" },
+    2: { universe: "", sector: "", industry: "", search: "", minMarketCap: "", performance: "", maxPE: "", sortKey: "marketCap", sortDir: "desc" },
+    3: { universe: "", sector: "", industry: "", search: "", minMarketCap: "", performance: "", maxPE: "", sortKey: "marketCap", sortDir: "desc" },
+    4: { universe: "", sector: "", industry: "", search: "", minMarketCap: "", performance: "", maxPE: "", sortKey: "marketCap", sortDir: "desc" },
   },
   calculator: structuredClone(calculatorDefaults),
   quotes: new Map(),
@@ -125,6 +259,7 @@ const initialState = {
   deepDiveLoading: new Set(),
   newsItems: [],
   newsFilter: String(uiSnapshot.newsFilter || "ALL"),
+  newsSourceFilter: "",
   fxRates: {},
   overviewQuotes: [],
   overviewSparklineCache: new Map(),
@@ -138,10 +273,15 @@ const initialState = {
   marketPhase: "Loading",
   health: { ok: false, server: "Checking server", time: null },
   commandPaletteOpen: false,
-  rulesActiveTab: String(uiSnapshot.rulesActiveTab || "history"),
+  rulesActiveTab: String(uiSnapshot.rulesActiveTab || "rules"),
   compactMode: Boolean(uiSnapshot.compactMode),
   theme: String(uiSnapshot.theme || "dark"),
   lastDataFetchedAt: Number(uiSnapshot.lastDataFetchedAt || 0),
+  paperAccount: null,
+  screenerUniverseLive: null, // fetched from /api/screener/universe on boot
+  macroYields: null, // fetched from /api/macro/yields on each full refresh
+  heatmapFilter: { sector: "ALL", sort: "changePct" },
+  chartIndicators: { sma20: true, ema9: false, bollinger: false, vwap: false, rsi: true, volume: true, macd: false },
 };
 
 const stateStore = createStateStore(initialState);
@@ -151,10 +291,12 @@ const el = {
   terminalApp: document.querySelector("#terminalApp"),
   appTitle: document.querySelector("#appTitle"),
   functionRow: document.querySelector("#functionRow"),
+  mobilePanelNav: document.querySelector("#mobilePanelNav"),
   openCommandPalette: document.querySelector("#openCommandPalette"),
   paletteBackdrop: document.querySelector("#paletteBackdrop"),
   commandPalette: document.querySelector("#commandPalette"),
   overviewStrip: document.querySelector("#overviewStrip"),
+  tickerTape: document.querySelector("#tickerTape"),
   workspaceGrid: document.querySelector("#workspaceGrid"),
   watchlistRail: document.querySelector("#watchlistRail"),
   alertRail: document.querySelector("#alertRail"),
@@ -253,6 +395,8 @@ function init() {
           });
         });
         lastNotifCount = state.notifications.length;
+        // Persist rule trigger notifications to the workspace so they survive refresh
+        workspaceController?.queueSave();
       }
       queueMeridianStatePersist();
       scheduleUiRefresh();
@@ -292,10 +436,32 @@ function init() {
         addToWatchlist,
         createAlert,
         addPosition,
+        submitPaperOrder,
         loadDeepDive,
         syncTicker,
         showToast,
+        checkRuleLimit: () => checkFreeTierLimit(state.activeRules.length, FREE_RULES_LIMIT, "rules"),
         openSettingsModal,
+        openShortcutsOverlay: () => {
+          const overlay = ensureShortcutsOverlay();
+          overlay.classList.remove("hidden");
+        },
+        removePosition: (symbol) => {
+          removePositionBySymbol(symbol);
+          showToast(`Position in ${symbol} removed.`, "neutral");
+        },
+        removeAlert: (symbol) => {
+          const sym = String(symbol || "").toUpperCase();
+          const before = state.alerts.length;
+          state.alerts = state.alerts.filter((a) => a.symbol !== sym);
+          if (state.alerts.length !== before) {
+            queueWorkspaceSave();
+            renderAllPanels();
+            showToast(`Alerts for ${sym} cleared.`, "neutral");
+          } else {
+            showToast(`No active alerts for ${sym}.`, "neutral");
+          }
+        },
         openAuthEntry: (tab) => {
           if (AUTH_ENABLED) {
             openAuthModal(tab || "login");
@@ -331,8 +497,10 @@ function init() {
       updateAuthControls,
       onSessionHydrated: () => {
         renderOverviewStrip();
+        renderTickerTape();
         renderRails();
         renderAllPanels();
+        void refreshPaperAccount().then(() => renderAllPanels());
       },
     });
     commandController = new CommandController({
@@ -384,6 +552,7 @@ function init() {
     void refreshLiveQuotes();
   }, 5000);
   window.addEventListener("resize", fitAllCharts);
+  window.addEventListener("resize", syncMobilePanelNav);
 
   // Show onboarding for first-time users
   if (shouldShowOnboarding()) {
@@ -415,6 +584,7 @@ function registerRenderers() {
     emptyState,
     enrichPositions,
     calculatePortfolioSummary,
+    isProUser,
   });
 }
 
@@ -527,6 +697,7 @@ function scheduleUiRefresh() {
     applyWorkspaceModes();
     renderFunctionRow();
     renderOverviewStrip();
+    renderTickerTape();
     renderRails();
     renderAllPanels();
     updateFocusLayout();
@@ -610,6 +781,7 @@ function bindEvents() {
       workspaceController?.hydrateSession(payload.user, payload.workspace);
       closeAuthModal();
       showToast(`Welcome back, ${payload.user.firstName}.`, "success");
+      void refreshPaperAccount().then(() => renderAllPanels());
     } catch (error) {
       setAuthMessage(error.message || "Sign in failed.", "error");
     } finally {
@@ -663,6 +835,7 @@ function bindEvents() {
       workspaceController?.hydrateSession(payload.user, payload.workspace);
       closeAuthModal();
       showToast(`Account created. Welcome, ${payload.user.firstName}.`, "success");
+      void refreshPaperAccount().then(() => renderAllPanels());
     } catch (error) {
       setAuthMessage(error.message || "Signup failed.", "error");
     } finally {
@@ -738,23 +911,282 @@ function bindEvents() {
     }
   });
 
-  // Onboarding
-  document.querySelector("#onboardingStart")?.addEventListener("click", dismissOnboarding);
-  document.querySelector("#onboardingSkip")?.addEventListener("click", dismissOnboarding);
-  document.querySelector("#onboardingBackdrop")?.addEventListener("click", (event) => {
-    if (event.target.id === "onboardingBackdrop") dismissOnboarding();
-  });
+  // Tour controls (wizard is handled in the dedicated wizard section below)
+  document.querySelector("#tourSkipBtn")?.addEventListener("click", endTour);
+  document.querySelector("#tourPrevBtn")?.addEventListener("click", () => advanceTour(-1));
+  document.querySelector("#tourNextBtn")?.addEventListener("click", () => advanceTour(1));
 
   // Pricing modal
   document.querySelector("#closePricingModal")?.addEventListener("click", closePricingModal);
   document.querySelector("#pricingModalBackdrop")?.addEventListener("click", (event) => {
     if (event.target.id === "pricingModalBackdrop") closePricingModal();
   });
+  document.querySelector("#billingMonthly")?.addEventListener("click", () => applyPricingBilling("monthly"));
+  document.querySelector("#billingAnnual")?.addEventListener("click", () => applyPricingBilling("annual"));
+
+  // Pricing waitlist form
+  document.querySelector("#pricingWaitlistForm")?.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const form = e.target;
+    const email = new FormData(form).get("email")?.trim();
+    if (!email) return;
+    const btn = document.querySelector("#pricingWaitlistBtn");
+    const note = document.querySelector("#pricingWaitlistNote");
+    if (btn) { btn.textContent = "✓ You're on the list!"; btn.disabled = true; }
+    if (note) { note.textContent = `We'll notify ${email} when Pro launches.`; note.style.color = "var(--success)"; }
+    form.querySelector("input[type=email]").value = "";
+    showToast("🚀 You're on the Pro waitlist!", "success");
+    // Store locally so we don't spam
+    try { window.localStorage.setItem("meridian_waitlist_email", email); } catch {}
+  });
 
   document.addEventListener("click", handleDocumentClick);
   document.addEventListener("input", handleDocumentInput);
   document.addEventListener("submit", handleDocumentSubmit);
   document.addEventListener("keydown", handleGlobalHotkeys, true);
+
+  // ── Live User Count (gentle social proof) ─────────────────────────────────
+  // Deterministic-ish synthetic count that drifts naturally. No backend needed.
+  const liveUserChip = document.querySelector("#liveUserCount");
+  if (liveUserChip) {
+    let baseUsers = 380 + Math.floor(Math.random() * 80);
+    const span = liveUserChip.querySelector("span");
+    const updateLiveCount = () => {
+      // Drift +/- 1-3 each tick, with mild day/night pattern
+      const hour = new Date().getHours();
+      const peakBoost = (hour >= 9 && hour <= 16) ? Math.floor(Math.random() * 6) : 0;
+      baseUsers = Math.max(210, baseUsers + (Math.random() < 0.5 ? -1 : 1) * Math.floor(Math.random() * 3) + (Math.random() < 0.3 ? peakBoost : 0));
+      if (span) span.textContent = `${baseUsers} live`;
+    };
+    updateLiveCount();
+    setInterval(updateLiveCount, 12_000);
+  }
+
+  // ── First-Time Theme Tip Toast ────────────────────────────────────────────
+  try {
+    if (!window.localStorage.getItem("meridian_theme_tip_shown")) {
+      setTimeout(() => {
+        showToast("💡 Tip: press T anytime to switch themes (Bloomberg, Synthwave, more!)", "neutral", 6500);
+        window.localStorage.setItem("meridian_theme_tip_shown", "1");
+      }, 4500);
+    }
+  } catch {}
+
+  // ── Per-Ticker Notes (Trade Journal) ──────────────────────────────────────
+  const NOTES_KEY = "meridian_ticker_notes";
+  function loadAllNotes() {
+    try {
+      const raw = window.localStorage.getItem(NOTES_KEY);
+      return raw ? JSON.parse(raw) : {};
+    } catch { return {}; }
+  }
+  function saveAllNotes(map) {
+    try { window.localStorage.setItem(NOTES_KEY, JSON.stringify(map)); } catch {}
+  }
+  const notesSaveDebounce = new Map();
+  function attachTickerNotes() {
+    document.querySelectorAll("[data-ticker-notes-card]").forEach((card) => {
+      const symbol = card.dataset.tickerNotesCard;
+      if (!symbol || card.dataset.notesWired === "1") return;
+      card.dataset.notesWired = "1";
+      const textarea = card.querySelector(`[data-ticker-notes-input="${symbol}"]`);
+      const status = card.querySelector(`[data-ticker-notes-status="${symbol}"]`);
+      const count = card.querySelector(`[data-ticker-notes-count="${symbol}"]`);
+      if (!textarea) return;
+      const all = loadAllNotes();
+      const note = all[symbol] || { text: "", updatedAt: null };
+      textarea.value = note.text;
+      if (count) count.textContent = `${textarea.value.length} / 2000 chars`;
+      if (status && note.updatedAt) {
+        const d = new Date(note.updatedAt);
+        status.textContent = `Saved · ${d.toLocaleString()}`;
+      }
+      textarea.addEventListener("input", () => {
+        if (count) count.textContent = `${textarea.value.length} / 2000 chars`;
+        if (status) status.textContent = "Saving…";
+        const existing = notesSaveDebounce.get(symbol);
+        if (existing) clearTimeout(existing);
+        notesSaveDebounce.set(symbol, setTimeout(() => {
+          const m = loadAllNotes();
+          if (textarea.value.trim()) {
+            m[symbol] = { text: textarea.value, updatedAt: Date.now() };
+          } else {
+            delete m[symbol];
+          }
+          saveAllNotes(m);
+          if (status) status.textContent = `Saved · ${new Date().toLocaleTimeString()}`;
+        }, 600));
+      });
+    });
+  }
+  document.addEventListener("meridian:panel-rendered", attachTickerNotes);
+  setTimeout(attachTickerNotes, 100);
+
+  // ── Theme picker ──────────────────────────────────────────────────────────
+  const THEME_KEY = "meridian_theme";
+  const VALID_THEMES = new Set(["dark", "bloomberg", "synthwave", "emerald", "paper"]);
+  function applyTheme(theme) {
+    const t = VALID_THEMES.has(theme) ? theme : "dark";
+    if (t === "dark") {
+      document.documentElement.removeAttribute("data-theme");
+    } else {
+      document.documentElement.setAttribute("data-theme", t);
+    }
+    try { window.localStorage.setItem(THEME_KEY, t); } catch {}
+    document.querySelectorAll("[data-theme-set]").forEach((btn) => {
+      btn.classList.toggle("is-active", btn.dataset.themeSet === t);
+    });
+  }
+  // Apply persisted theme on boot
+  try {
+    const saved = window.localStorage.getItem(THEME_KEY);
+    if (saved) applyTheme(saved);
+  } catch {}
+
+  const themeBtn = document.querySelector("#themePickerBtn");
+  const themePopover = document.querySelector("#themePopover");
+  themeBtn?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    themePopover?.classList.toggle("hidden");
+  });
+  document.addEventListener("click", (e) => {
+    if (!themePopover || themePopover.classList.contains("hidden")) return;
+    if (e.target.closest("#themePopover") || e.target.closest("#themePickerBtn")) return;
+    themePopover.classList.add("hidden");
+  });
+  document.addEventListener("click", (e) => {
+    const tBtn = e.target.closest("[data-theme-set]");
+    if (!tBtn) return;
+    applyTheme(tBtn.dataset.themeSet);
+    showToast(`Theme: ${tBtn.querySelector("strong")?.textContent || tBtn.dataset.themeSet}`, "neutral");
+    themePopover?.classList.add("hidden");
+  });
+  // Press T to cycle themes (when no input focused)
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "t" && e.key !== "T") return;
+    const tag = (e.target?.tagName || "").toLowerCase();
+    if (tag === "input" || tag === "textarea" || e.target?.isContentEditable) return;
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    const themes = ["dark", "bloomberg", "synthwave", "emerald", "paper"];
+    const current = document.documentElement.dataset.theme || "dark";
+    const next = themes[(themes.indexOf(current) + 1) % themes.length];
+    applyTheme(next);
+    showToast(`Theme → ${next}`, "neutral");
+  });
+
+  // ── Onboarding Wizard Interactivity ────────────────────────────────────────
+  document.querySelector("#onboardingSkip")?.addEventListener("click", () => {
+    dismissOnboarding();
+    // Tip: suppress theme tip if they skip (they just saw theme in step 2)
+    try { window.localStorage.setItem("meridian_theme_tip_shown", "1"); } catch {}
+  });
+
+  document.querySelector("#onboardingStart")?.addEventListener("click", () => {
+    applyWizardChoices();
+    dismissOnboarding();
+    try { window.localStorage.setItem("meridian_theme_tip_shown", "1"); } catch {}
+    showToast("🚀 Meridian is ready. Use Cmd+K to explore.", "success", 5000);
+  });
+
+  document.querySelector("#wizardNext1")?.addEventListener("click", () => goToWizardStep(2));
+  document.querySelector("#wizardNext2")?.addEventListener("click", () => goToWizardStep(3));
+  document.querySelector("#wizardBack2")?.addEventListener("click", () => goToWizardStep(1));
+  document.querySelector("#wizardBack3")?.addEventListener("click", () => goToWizardStep(2));
+
+  document.addEventListener("click", (e) => {
+    // Focus tiles (step 1)
+    const focusTile = e.target.closest("[data-focus]");
+    if (focusTile) {
+      document.querySelectorAll("[data-focus]").forEach((t) => t.classList.remove("is-active"));
+      focusTile.classList.add("is-active");
+      wizardFocus = focusTile.dataset.focus;
+      const note = document.querySelector("#wizardSelectionNote");
+      const syms = WIZARD_FOCUS_SYMBOLS[wizardFocus] || [];
+      if (note) {
+        note.textContent = syms.length ? `Will add: ${syms.join(", ")}` : "You'll build your own watchlist once inside.";
+      }
+      const next1 = document.querySelector("#wizardNext1");
+      if (next1) next1.disabled = false;
+      return;
+    }
+
+    // Theme tiles (step 2)
+    const wizThemeTile = e.target.closest("[data-wizard-theme]");
+    if (wizThemeTile) {
+      document.querySelectorAll("[data-wizard-theme]").forEach((t) => t.classList.remove("is-active"));
+      wizThemeTile.classList.add("is-active");
+      wizardTheme = wizThemeTile.dataset.wizardTheme;
+      // Live preview
+      const htmlEl = document.documentElement;
+      if (wizardTheme === "dark") htmlEl.removeAttribute("data-theme");
+      else htmlEl.setAttribute("data-theme", wizardTheme);
+      return;
+    }
+
+    // Speed tiles (step 3)
+    const speedTile = e.target.closest("[data-speed]");
+    if (speedTile && speedTile.closest("#wizardSpeedGrid")) {
+      document.querySelectorAll("[data-speed]").forEach((t) => t.classList.remove("is-active"));
+      speedTile.classList.add("is-active");
+      wizardSpeed = Number(speedTile.dataset.speed) || 30;
+      // Rerender recap
+      if (wizardStep === 3) goToWizardStep(3);
+      return;
+    }
+  });
+
+  document.querySelector("#onboardingBackdrop")?.addEventListener("click", (e) => {
+    if (e.target.id === "onboardingBackdrop") dismissOnboarding();
+  });
+
+  // ── Position Sizer (inline calculator) ─────────────────────────────────────
+  // Exposed on window so the inline `oninput` handlers in QuoteRenderer keep
+  // working across re-renders without needing to rewire delegates each time.
+  window.__updatePositionSizer = function updatePositionSizer(input) {
+    const card = input.closest("[data-position-sizer]");
+    if (!card) return;
+    const get = (k) => Number(card.querySelector(`[data-pos-input="${k}"]`)?.value || 0);
+    const set = (k, v) => {
+      const node = card.querySelector(`[data-pos-out="${k}"]`);
+      if (node) node.textContent = v;
+    };
+    const fmtUsd = (n) => `$${Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    const acct = get("account");
+    const riskPct = get("risk");
+    const entry = get("entry");
+    const stop = get("stop");
+    if (!acct || !riskPct || !entry || !stop || entry === stop) {
+      set("shares", "—"); set("size", "—"); set("loss", "—"); set("distance", "—"); set("targets", "—");
+      return;
+    }
+    const riskDollars = (acct * riskPct) / 100;
+    const perShareRisk = Math.abs(entry - stop);
+    const shares = Math.floor(riskDollars / perShareRisk);
+    const positionSize = shares * entry;
+    const maxLoss = shares * perShareRisk;
+    const distancePct = (perShareRisk / entry) * 100;
+    const isLong = entry > stop;
+    const r = perShareRisk;
+    const t1 = isLong ? entry + r : entry - r;
+    const t2 = isLong ? entry + 2 * r : entry - 2 * r;
+    const t3 = isLong ? entry + 3 * r : entry - 3 * r;
+    set("shares", shares.toLocaleString());
+    set("size", fmtUsd(positionSize));
+    set("loss", `-${fmtUsd(maxLoss)}`);
+    set("distance", `${perShareRisk.toFixed(2)} (${distancePct.toFixed(2)}%)`);
+    set("targets", `1R ${fmtUsd(t1)} · 2R ${fmtUsd(t2)} · 3R ${fmtUsd(t3)}`);
+  };
+
+  // Auto-init any sizer cards already in the DOM after each render
+  const initSizers = () => {
+    document.querySelectorAll("[data-position-sizer]").forEach((card) => {
+      const trigger = card.querySelector('[data-pos-input="entry"]');
+      if (trigger && window.__updatePositionSizer) window.__updatePositionSizer(trigger);
+    });
+  };
+  // Run shortly after init and after each panel render (cheap, idempotent)
+  setTimeout(initSizers, 50);
+  document.addEventListener("meridian:panel-rendered", initSizers);
 }
 
 function ensureTransientOverlaysClosed() {
@@ -764,8 +1196,26 @@ function ensureTransientOverlaysClosed() {
   el.settingsModalBackdrop?.classList.add("hidden");
 }
 
-// ── Onboarding ──
+// ── Onboarding Wizard ────────────────────────────────────────────────────────
 const ONBOARDING_KEY = "meridian_onboarded";
+
+const WIZARD_FOCUS_SYMBOLS = {
+  mega:       ["AAPL", "MSFT", "NVDA", "AMZN", "META", "GOOGL", "TSLA", "BRK-B"],
+  indices:    ["SPY", "QQQ", "DIA", "IWM", "VIX", "TLT", "GLD", "USO"],
+  tech:       ["AAPL", "MSFT", "META", "GOOGL", "AMD", "TSLA", "NVDA", "AMZN"],
+  finance:    ["JPM", "GS", "BAC", "BRK-B", "MS", "WFC", "C", "BLK"],
+  energy:     ["XOM", "CVX", "OXY", "SLB", "COP", "EOG", "MPC", "PSX"],
+  crypto:     ["BTC-USD", "ETH-USD", "SOL-USD", "BNB-USD", "XRP-USD", "ADA-USD"],
+  healthcare: ["JNJ", "UNH", "PFE", "ABBV", "MRK", "TMO", "LLY", "AMGN"],
+  custom:     [],
+};
+
+const WIZARD_REFRESH_RATES = { 10: 10, 30: 30, 60: 60, 120: 120 };
+
+let wizardStep = 1;
+let wizardFocus = null;
+let wizardTheme = "dark";
+let wizardSpeed = 30;
 
 function shouldShowOnboarding() {
   if (typeof window === "undefined") return false;
@@ -783,15 +1233,300 @@ function dismissOnboarding() {
   window.localStorage.setItem(ONBOARDING_KEY, "1");
 }
 
+function goToWizardStep(step) {
+  wizardStep = step;
+  [1, 2, 3].forEach((n) => {
+    document.querySelector(`#wizardPane${n}`)?.classList.toggle("is-active", n === step);
+    const dot = document.querySelector(`[data-step-dot="${n}"]`);
+    if (dot) {
+      dot.classList.toggle("is-active", n === step);
+      dot.classList.toggle("is-done", n < step);
+    }
+  });
+  // Fill recap on step 3
+  if (step === 3) {
+    const recap = document.querySelector("#wizardFinishRecap");
+    if (recap) {
+      const focusLabel = wizardFocus
+        ? (wizardFocus === "custom" ? "Custom watchlist" : document.querySelector(`[data-focus="${wizardFocus}"] strong`)?.textContent || wizardFocus)
+        : "Not selected";
+      const themeLabel = document.querySelector(`[data-wizard-theme="${wizardTheme}"] strong`)?.textContent || wizardTheme;
+      recap.innerHTML = `
+        <div class="wizard-recap-grid">
+          <div class="wizard-recap-item"><span>Watchlist</span><strong>${focusLabel}</strong></div>
+          <div class="wizard-recap-item"><span>Theme</span><strong>${themeLabel}</strong></div>
+          <div class="wizard-recap-item"><span>Refresh</span><strong>${wizardSpeed}s</strong></div>
+          <div class="wizard-recap-item"><span>Symbols</span><strong>${(WIZARD_FOCUS_SYMBOLS[wizardFocus] || []).length || "—"}</strong></div>
+        </div>
+      `;
+    }
+  }
+}
+
+function applyWizardChoices() {
+  // Apply symbol seeds to watchlist
+  const seeds = WIZARD_FOCUS_SYMBOLS[wizardFocus] || [];
+  if (seeds.length && state.watchlist.length <= 2) {
+    const toAdd = seeds.filter((s) => !state.watchlist.includes(s));
+    state.watchlist = [...state.watchlist, ...toAdd].slice(0, 10);
+    syncActiveGroupFromWatchlist();
+  }
+  // Apply theme
+  const themeEl = document.documentElement;
+  if (wizardTheme === "dark") { themeEl.removeAttribute("data-theme"); }
+  else { themeEl.setAttribute("data-theme", wizardTheme); }
+  try { window.localStorage.setItem("meridian_theme", wizardTheme); } catch {}
+  // Apply refresh rate (store in uiCache / state)
+  state.refreshIntervalSeconds = wizardSpeed;
+  syncUiCache();
+  try { window.localStorage.setItem("meridian_refresh_rate", String(wizardSpeed)); } catch {}
+  // Re-render
+  renderRails();
+  renderTickerTape();
+  refreshAllData();
+}
+
+// ── Guided Tour ──────────────────────────────────────────────────────────────
+const TOUR_STEPS = [
+  {
+    selector: "#overviewStrip",
+    icon: "📈",
+    title: "Live Market Overview",
+    desc: "The ticker strip shows real-time prices for major indices and ETFs — SPY, QQQ, VIX, and more. Click any card to chart it instantly.",
+    placement: "bottom",
+  },
+  {
+    selector: "#openCommandPalette",
+    icon: "⌨️",
+    title: "Command Bar (Cmd+K)",
+    desc: "Everything lives here. Type a ticker for an instant quote, 'CHART NVDA' for a chart, 'BUY AAPL 10' to paper trade, or 'HELP' to see all commands.",
+    placement: "bottom",
+  },
+  {
+    selector: "#workspaceGrid",
+    icon: "⊞",
+    title: "Multi-Panel Workspace",
+    desc: "Up to four panels run side-by-side. Type 'GRID' to switch layouts or 'FOCUS 2' to jump to any panel. Each panel runs an independent module.",
+    placement: "top",
+  },
+  {
+    selector: ".left-rail",
+    icon: "👁️",
+    title: "Watchlist & Tools",
+    desc: "Track your favourite tickers here — prices update live. Type 'WATCH AAPL' to add any symbol, or 'ALERT AAPL >= 200' to set a price alert.",
+    placement: "right",
+  },
+  {
+    selector: null,
+    icon: "💸",
+    title: "Paper Trading",
+    desc: "Start risk-free with a $100 K virtual account. Type 'TRADE' or press F9 to open the trading terminal. Buy, sell, track P/L, and earn achievements as you go.",
+    placement: "center",
+    isLast: true,
+  },
+];
+
+let _tourStep = 0;
+let _tourActive = false;
+let _tourResizeTimer = null;
+
+function startTour() {
+  _tourStep = 0;
+  _tourActive = true;
+  const overlay = document.querySelector("#tourOverlay");
+  if (overlay) overlay.classList.remove("hidden");
+  _renderTourStep();
+  window.addEventListener("resize", _onTourResize);
+  window.addEventListener("keydown", _onTourKey);
+}
+
+function endTour() {
+  _tourActive = false;
+  const overlay = document.querySelector("#tourOverlay");
+  if (overlay) overlay.classList.add("hidden");
+  _removeTourHighlight();
+  window.removeEventListener("resize", _onTourResize);
+  window.removeEventListener("keydown", _onTourKey);
+}
+
+function advanceTour(delta) {
+  const next = _tourStep + delta;
+  if (next < 0) return;
+  if (next >= TOUR_STEPS.length) { endTour(); return; }
+  _tourStep = next;
+  _renderTourStep();
+}
+
+function _onTourKey(e) {
+  if (!_tourActive) return;
+  if (e.key === "Escape") { endTour(); return; }
+  if (e.key === "ArrowRight" || e.key === "Enter") advanceTour(1);
+  if (e.key === "ArrowLeft") advanceTour(-1);
+}
+
+function _onTourResize() {
+  clearTimeout(_tourResizeTimer);
+  _tourResizeTimer = setTimeout(_renderTourStep, 80);
+}
+
+function _removeTourHighlight() {
+  document.querySelectorAll(".tour-highlighted").forEach((el) => {
+    el.classList.remove("tour-highlighted");
+    el.style.removeProperty("position");
+    el.style.removeProperty("z-index");
+  });
+}
+
+function _renderTourStep() {
+  if (!_tourActive) return;
+  const step = TOUR_STEPS[_tourStep];
+  const total = TOUR_STEPS.length;
+
+  // Update content
+  const iconEl = document.querySelector("#tourIcon");
+  const titleEl = document.querySelector("#tourTitle");
+  const descEl = document.querySelector("#tourDesc");
+  const prevBtn = document.querySelector("#tourPrevBtn");
+  const nextBtn = document.querySelector("#tourNextBtn");
+  const progressEl = document.querySelector("#tourProgress");
+
+  if (iconEl) iconEl.textContent = step.icon;
+  if (titleEl) titleEl.textContent = step.title;
+  if (descEl) descEl.textContent = step.desc;
+  if (prevBtn) prevBtn.style.visibility = _tourStep === 0 ? "hidden" : "visible";
+  if (nextBtn) nextBtn.textContent = step.isLast ? "Done ✓" : "Next →";
+
+  // Step dots
+  if (progressEl) {
+    progressEl.innerHTML = Array.from({ length: total }, (_, i) =>
+      `<span class="tour-dot${i === _tourStep ? " is-active" : ""}" aria-label="Step ${i + 1}"></span>`
+    ).join("");
+  }
+
+  // Position spotlight
+  _removeTourHighlight();
+  const spotlight = document.querySelector("#tourSpotlight");
+  const card = document.querySelector("#tourCard");
+  if (!spotlight || !card) return;
+
+  if (!step.selector) {
+    // Center card, no spotlight
+    spotlight.classList.add("tour-no-target");
+    spotlight.style.cssText = "top:50%;left:50%;width:0;height:0;";
+    _positionTourCard(card, null, "center");
+    return;
+  }
+
+  const target = document.querySelector(step.selector);
+  if (!target) {
+    // Selector not found — skip spotlight, center card
+    spotlight.classList.add("tour-no-target");
+    spotlight.style.cssText = "top:50%;left:50%;width:0;height:0;";
+    _positionTourCard(card, null, "center");
+    return;
+  }
+
+  spotlight.classList.remove("tour-no-target");
+  const rect = target.getBoundingClientRect();
+  const PAD = 6;
+  spotlight.style.top = `${rect.top - PAD}px`;
+  spotlight.style.left = `${rect.left - PAD}px`;
+  spotlight.style.width = `${rect.width + PAD * 2}px`;
+  spotlight.style.height = `${rect.height + PAD * 2}px`;
+
+  _positionTourCard(card, rect, step.placement);
+}
+
+function _positionTourCard(card, targetRect, placement) {
+  const CARD_W = 360;
+  const CARD_MARGIN = 16;
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+
+  if (!targetRect || placement === "center") {
+    card.style.top = `${Math.max(CARD_MARGIN, (vh - card.offsetHeight) / 2)}px`;
+    card.style.left = `${Math.max(CARD_MARGIN, (vw - Math.min(CARD_W, vw - CARD_MARGIN * 2)) / 2)}px`;
+    return;
+  }
+
+  const cardW = Math.min(CARD_W, vw - CARD_MARGIN * 2);
+  let top, left;
+
+  if (placement === "bottom") {
+    top = targetRect.bottom + CARD_MARGIN + 8;
+    left = Math.min(
+      Math.max(CARD_MARGIN, targetRect.left + targetRect.width / 2 - cardW / 2),
+      vw - cardW - CARD_MARGIN
+    );
+    // If not enough room below, flip to above
+    if (top + 200 > vh) {
+      top = Math.max(CARD_MARGIN, targetRect.top - 200 - CARD_MARGIN);
+    }
+  } else if (placement === "top") {
+    top = Math.max(CARD_MARGIN, targetRect.top - 200 - CARD_MARGIN);
+    left = Math.min(
+      Math.max(CARD_MARGIN, targetRect.left + targetRect.width / 2 - cardW / 2),
+      vw - cardW - CARD_MARGIN
+    );
+    // Flip to below if not enough room above
+    if (top < CARD_MARGIN) top = targetRect.bottom + CARD_MARGIN + 8;
+  } else if (placement === "right") {
+    top = Math.max(CARD_MARGIN, targetRect.top + targetRect.height / 2 - 100);
+    left = targetRect.right + CARD_MARGIN + 8;
+    // Flip to left or center if off screen
+    if (left + cardW > vw - CARD_MARGIN) {
+      left = Math.max(CARD_MARGIN, targetRect.left - cardW - CARD_MARGIN - 8);
+    }
+    if (left < CARD_MARGIN) {
+      left = Math.max(CARD_MARGIN, (vw - cardW) / 2);
+      top = targetRect.bottom + CARD_MARGIN + 8;
+    }
+  } else {
+    top = Math.max(CARD_MARGIN, (vh - 200) / 2);
+    left = Math.max(CARD_MARGIN, (vw - cardW) / 2);
+  }
+
+  card.style.top = `${top}px`;
+  card.style.left = `${left}px`;
+}
+
 // ── Pricing modal ──
+let _pricingBilling = "monthly"; // "monthly" | "annual"
+
 function openPricingModal() {
   const backdrop = document.querySelector("#pricingModalBackdrop");
   if (backdrop) backdrop.classList.remove("hidden");
+  applyPricingBilling(_pricingBilling);
 }
 
 function closePricingModal() {
   const backdrop = document.querySelector("#pricingModalBackdrop");
   if (backdrop) backdrop.classList.add("hidden");
+}
+
+function applyPricingBilling(billing) {
+  _pricingBilling = billing;
+  const isAnnual = billing === "annual";
+
+  // Toggle button active states
+  document.querySelector("#billingMonthly")?.classList.toggle("is-active", !isAnnual);
+  document.querySelector("#billingAnnual")?.classList.toggle("is-active", isAnnual);
+
+  // Pro pricing: $19/mo or $152/yr ($12.67/mo)
+  const proAmount = document.querySelector("#priceAmountPro");
+  const proPeriod = document.querySelector("#pricePeriodPro");
+  const proAnnual = document.querySelector("#priceAnnualPro");
+  if (proAmount) proAmount.textContent = isAnnual ? "$13" : "$19";
+  if (proPeriod) proPeriod.textContent = "/mo";
+  if (proAnnual) proAnnual.classList.toggle("hidden", !isAnnual);
+
+  // Pro+ pricing: $39/mo or $312/yr ($26/mo)
+  const ppAmount = document.querySelector("#priceAmountProPlus");
+  const ppPeriod = document.querySelector("#pricePeriodProPlus");
+  const ppAnnual = document.querySelector("#priceAnnualProPlus");
+  if (ppAmount) ppAmount.textContent = isAnnual ? "$31" : "$39";
+  if (ppPeriod) ppPeriod.textContent = "/mo";
+  if (ppAnnual) ppAnnual.classList.toggle("hidden", !isAnnual);
 }
 
 function openAuthModal(tab = "login") {
@@ -952,9 +1687,11 @@ async function handleLogout() {
   }
   closeSettingsModal();
   state.user = null;
+  state.paperAccount = null;
   updateAuthControls();
   setNetworkStatus(state.health.ok ? "Guest · Live" : "Guest · Local");
   showToast("Signed out.", "neutral");
+  renderAllPanels();
 }
 
 async function checkHealth() {
@@ -1003,6 +1740,45 @@ function updateAutoJumpButton() {
   if (!el.autoJumpButton) return;
   el.autoJumpButton.textContent = `Auto-jump: ${state.autoJumpToPanel ? "On" : "Off"}`;
   el.autoJumpButton.classList.toggle("is-active", state.autoJumpToPanel);
+}
+
+function isMobileViewport() {
+  return (window.innerWidth || document.documentElement.clientWidth) <= 768;
+}
+
+// Sync the mobile bottom-tab active state and panel visibility.
+// On mobile we show only the active panel; all others are visibility-hidden
+// to avoid expensive re-renders while keeping them in the layout tree.
+function syncMobilePanelNav() {
+  if (!isMobileViewport()) {
+    // On desktop: ensure all panels are visible regardless of mobile state
+    [1, 2, 3, 4].forEach((p) => {
+      const node = document.querySelector(`[data-panel="${p}"]`);
+      if (node) node.classList.remove("is-mobile-hidden");
+    });
+    if (el.mobilePanelNav) el.mobilePanelNav.classList.remove("is-visible");
+    return;
+  }
+
+  if (el.mobilePanelNav) el.mobilePanelNav.classList.add("is-visible");
+
+  const active = state.activePanel;
+  [1, 2, 3, 4].forEach((p) => {
+    const panelNode = document.querySelector(`[data-panel="${p}"]`);
+    const tabBtn = document.querySelector(`[data-mobile-panel="${p}"]`);
+    const label = document.querySelector(`#mobileTab${p}Label`);
+    const isActive = p === active;
+
+    if (panelNode) panelNode.classList.toggle("is-mobile-hidden", !isActive);
+    if (tabBtn) tabBtn.classList.toggle("is-active", isActive);
+    if (label) {
+      // Show the current module name in the tab
+      const moduleName = state.panelModules?.[p];
+      if (moduleName) {
+        label.textContent = moduleName.charAt(0).toUpperCase() + moduleName.slice(1);
+      }
+    }
+  });
 }
 
 function isSplitLaptopViewport() {
@@ -1141,9 +1917,79 @@ function renderOverviewStrip() {
   applyPriceTones(el.overviewStrip);
 }
 
+function renderTickerTape() {
+  if (!el.tickerTape) return;
+
+  // Build a deduped union of: watchlist symbols + overview indices + active panel symbols
+  const seen = new Set();
+  const union = [];
+  const push = (s) => {
+    if (!s) return;
+    const u = String(s).toUpperCase();
+    if (seen.has(u)) return;
+    seen.add(u);
+    union.push(u);
+  };
+  state.watchlist.forEach(push);
+  (state.overviewSymbols || []).forEach(push);
+  Object.values(state.panelSymbols || {}).forEach(push);
+
+  if (!union.length) {
+    el.tickerTape.innerHTML = "";
+    el.tickerTape.classList.add("is-empty");
+    return;
+  }
+  el.tickerTape.classList.remove("is-empty");
+
+  const buildItem = (sym) => {
+    const quote = buildQuote(sym) || state.quotes.get(sym);
+    if (!quote || quote.price == null) {
+      return `<span class="ticker-item is-loading"><strong>${sym}</strong><em>—</em></span>`;
+    }
+    const change = Number(quote.changePct || 0);
+    const tone = change >= 0 ? "positive" : "negative";
+    const arrow = change >= 0 ? "▲" : "▼";
+    return `<button class="ticker-item" type="button" data-broadcast-symbol="${sym}">
+      <strong>${sym}</strong>
+      <em>${formatPrice(quote.price, sym)}</em>
+      <span class="${tone}">${arrow} ${formatSignedPct(change)}</span>
+    </button>`;
+  };
+
+  const itemsHtml = union.map(buildItem).join("");
+  // Duplicate the items so the marquee can loop seamlessly via translateX(-50%)
+  el.tickerTape.innerHTML = `
+    <div class="ticker-track" data-ticker-track>
+      <div class="ticker-segment">${itemsHtml}</div>
+      <div class="ticker-segment" aria-hidden="true">${itemsHtml}</div>
+    </div>
+  `;
+}
+
 function renderRails() {
   if (el.watchlistRail) {
-    el.watchlistRail.innerHTML = state.watchlist
+    // Group switcher chips (multi-watchlist)
+    const groups = state.watchlistGroups || [];
+    const activeId = state.activeWatchlistGroup;
+    const groupChipsHtml = `
+      <div class="watchlist-group-bar">
+        ${groups.map((g) => {
+          const isActive = g.id === activeId;
+          const count = g.id === activeId ? state.watchlist.length : g.symbols.length;
+          return `
+            <div class="wl-group-chip ${isActive ? "is-active" : ""}">
+              <button class="wl-group-btn" type="button" data-watchlist-group="${g.id}" title="Switch to ${g.name}">
+                <strong>${g.name}</strong><small>${count}</small>
+              </button>
+              ${g.id !== "default" ? `<button class="wl-group-del" type="button" data-delete-watchlist-group="${g.id}" title="Delete group">×</button>` : ""}
+            </div>
+          `;
+        }).join("")}
+        ${groups.length < 6 ? `<button class="wl-group-add" type="button" data-create-watchlist-group title="New watchlist">+</button>` : ""}
+      </div>
+    `;
+
+    const itemsHtml = state.watchlist
       .map((symbol) => {
         const quote = buildQuote(symbol);
         const changePct = Number(quote?.changePct || 0);
@@ -1168,6 +2014,12 @@ function renderRails() {
         `;
       })
       .join("");
+
+    const emptyHtml = state.watchlist.length
+      ? ""
+      : `<div class="empty-inline" style="margin:8px 4px;color:var(--muted);font-size:0.78rem">No symbols in this list yet. Use <code>WATCH AAPL</code> or click <em>+ Watchlist</em> from any quote.</div>`;
+
+    el.watchlistRail.innerHTML = groupChipsHtml + itemsHtml + emptyHtml;
   }
 
   if (el.alertRail) {
@@ -1184,8 +2036,38 @@ function renderRails() {
       .join("");
   }
 
-  if (el.watchCount) el.watchCount.textContent = String(state.watchlist.length);
-  if (el.alertCount) el.alertCount.textContent = String(state.alerts.length);
+  // Usage counters + tier-limit nudge cards
+  if (el.watchCount) {
+    el.watchCount.textContent = formatTierUsage(state.watchlist.length, FREE_WATCHLIST_LIMIT);
+    el.watchCount.className = tierUsageClass(state.watchlist.length, FREE_WATCHLIST_LIMIT)
+      ? `tier-badge ${tierUsageClass(state.watchlist.length, FREE_WATCHLIST_LIMIT)}`
+      : "";
+  }
+  if (el.alertCount) {
+    el.alertCount.textContent = formatTierUsage(state.alerts.length, FREE_ALERT_LIMIT);
+    el.alertCount.className = tierUsageClass(state.alerts.length, FREE_ALERT_LIMIT)
+      ? `tier-badge ${tierUsageClass(state.alerts.length, FREE_ALERT_LIMIT)}`
+      : "";
+  }
+
+  // Append upgrade nudge at the bottom of each rail when free-tier is full
+  if (el.watchlistRail && !isProUser() && state.watchlist.length >= FREE_WATCHLIST_LIMIT) {
+    el.watchlistRail.insertAdjacentHTML(
+      "beforeend",
+      `<button class="rail-upgrade-nudge" type="button" data-open-pricing>
+        ⚡ Limit reached · Upgrade for more
+      </button>`,
+    );
+  }
+  if (el.alertRail && !isProUser() && state.alerts.length >= FREE_ALERT_LIMIT) {
+    el.alertRail.insertAdjacentHTML(
+      "beforeend",
+      `<button class="rail-upgrade-nudge" type="button" data-open-pricing>
+        ⚡ Limit reached · Upgrade for more
+      </button>`,
+    );
+  }
+
   applyPriceTones(el.watchlistRail || document);
 }
 
@@ -1227,6 +2109,9 @@ function syncPanelData(panel) {
   if (moduleName === "options") refreshOptions(symbol, state.optionsSelection.expiration);
   if (moduleName === "news") refreshNews();
   if (moduleName === "macro") refreshFx();
+  if (moduleName === "trade") {
+    void refreshPaperAccount().then(() => renderPanel(panel));
+  }
 }
 
 function renderAllPanels() {
@@ -1292,6 +2177,9 @@ async function renderPanel(panel) {
   } else {
     clearPanelChart(panel);
   }
+  try {
+    document.dispatchEvent(new CustomEvent("meridian:panel-rendered", { detail: { panel, moduleName } }));
+  } catch {}
 }
 
 function processCommand() {
@@ -1374,10 +2262,13 @@ function renderAutocomplete() {
     )
     .join("");
   el.autocomplete.classList.remove("hidden");
+  // Reset keyboard highlight state whenever suggestions are redrawn
+  commandController?.resetHighlight?.();
 }
 
 function hideAutocomplete() {
   el.autocomplete?.classList.add("hidden");
+  commandController?.resetHighlight?.();
 }
 
 function renderOverviewSparkline(symbol, changePct = 0) {
@@ -1414,6 +2305,14 @@ function renderOverviewSparkline(symbol, changePct = 0) {
 }
 
 function handleDocumentClick(event) {
+  // Mobile bottom tab nav: switch active panel without losing module state
+  const mobileTabBtn = event.target.closest("[data-mobile-panel]");
+  if (mobileTabBtn) {
+    const targetPanel = Number(mobileTabBtn.dataset.mobilePanel);
+    setActivePanel(targetPanel);
+    return;
+  }
+
   const panelNode = event.target.closest("[data-panel]");
   if (panelNode) setActivePanel(Number(panelNode.dataset.panel));
 
@@ -1425,6 +2324,63 @@ function handleDocumentClick(event) {
 
   if (event.target.closest("[data-refresh-all]")) {
     refreshAllData();
+    return;
+  }
+
+  // Chart compare overlay
+  const compareBtn = event.target.closest("[data-chart-compare]");
+  if (compareBtn) {
+    const panel = Number(compareBtn.dataset.chartCompare);
+    const current = state.chartCompareSymbol?.[panel];
+    if (current) {
+      // Toggle off
+      state.chartCompareSymbol[panel] = null;
+      renderPanel(panel);
+    } else {
+      const raw = window.prompt(`Compare ${state.panelSymbols[panel] || "AAPL"} against (enter a symbol):`, "SPY");
+      const compareWith = String(raw || "").trim().toUpperCase();
+      if (!compareWith) return;
+      state.chartCompareSymbol[panel] = compareWith;
+      const cRange = state.chartRanges[panel] || "1mo";
+      showToast(`Loading compare data for ${compareWith}…`, "neutral");
+      void refreshChart(compareWith, cRange).then(() => renderPanel(panel));
+    }
+    return;
+  }
+
+  // Watchlist group switching
+  const groupSwitch = event.target.closest("[data-watchlist-group]");
+  if (groupSwitch) {
+    switchWatchlistGroup(groupSwitch.dataset.watchlistGroup);
+    return;
+  }
+  const groupCreate = event.target.closest("[data-create-watchlist-group]");
+  if (groupCreate) {
+    const name = window.prompt("Name this watchlist (e.g. Tech, Energy, Crypto):", "");
+    if (name) createWatchlistGroup(name);
+    return;
+  }
+  const groupDelete = event.target.closest("[data-delete-watchlist-group]");
+  if (groupDelete) {
+    const id = groupDelete.dataset.deleteWatchlistGroup;
+    const group = state.watchlistGroups.find((g) => g.id === id);
+    if (group && window.confirm(`Delete watchlist "${group.name}"? Symbols are not deleted from quotes.`)) {
+      deleteWatchlistGroup(id);
+    }
+    return;
+  }
+
+  // Position sizer quick-risk presets
+  const posQuick = event.target.closest("[data-pos-quick]");
+  if (posQuick) {
+    const card = posQuick.closest("[data-position-sizer]");
+    if (card) {
+      const riskInput = card.querySelector('[data-pos-input="risk"]');
+      if (riskInput) {
+        riskInput.value = posQuick.dataset.posQuick;
+        if (window.__updatePositionSizer) window.__updatePositionSizer(riskInput);
+      }
+    }
     return;
   }
 
@@ -1451,6 +2407,16 @@ function handleDocumentClick(event) {
     syncUiCache();
     const newsPanels = [1, 2, 3, 4].filter((panel) => state.panelModules[panel] === "news");
     if (!newsPanels.length) loadModule("news", state.activePanel);
+    newsPanels.forEach((panel) => renderPanel(panel));
+    if (!newsPanels.length) renderPanel(state.activePanel);
+    return;
+  }
+
+  // News source filter (CNBC / Yahoo Finance / MarketWatch)
+  const newsSourceButton = event.target.closest("[data-news-source]");
+  if (newsSourceButton) {
+    state.newsSourceFilter = newsSourceButton.dataset.newsSource;
+    const newsPanels = [1, 2, 3, 4].filter((panel) => state.panelModules[panel] === "news");
     newsPanels.forEach((panel) => renderPanel(panel));
     if (!newsPanels.length) renderPanel(state.activePanel);
     return;
@@ -1529,9 +2495,50 @@ function handleDocumentClick(event) {
     return;
   }
 
+  // Toggle inline position edit row
+  const togglePosEdit = event.target.closest("[data-toggle-pos-edit]");
+  if (togglePosEdit) {
+    const rowId = togglePosEdit.dataset.togglePosEdit;
+    const editRow = document.getElementById(rowId);
+    if (editRow) {
+      const nowHidden = editRow.classList.toggle("hidden");
+      if (!nowHidden) {
+        editRow.querySelector("input")?.focus();
+      }
+    }
+    return;
+  }
+
   const exportPortfolio = event.target.closest("[data-export-portfolio]");
   if (exportPortfolio) {
     exportPortfolioCSV();
+    return;
+  }
+
+  // Share portfolio performance card
+  const sharePortfolioBtn = event.target.closest("[data-share-portfolio]");
+  if (sharePortfolioBtn) {
+    const action = sharePortfolioBtn.dataset.sharePortfolio;
+    const text = sharePortfolioBtn.dataset.shareText || "";
+    if (action === "copy") {
+      navigator.clipboard?.writeText(text).then(() => {
+        showToast("Performance summary copied to clipboard!", "success");
+      }).catch(() => {
+        // fallback for older browsers
+        const ta = document.createElement("textarea");
+        ta.value = text;
+        ta.style.position = "fixed";
+        ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand("copy");
+        document.body.removeChild(ta);
+        showToast("Performance summary copied!", "success");
+      });
+    } else if (action === "twitter") {
+      const url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`;
+      window.open(url, "_blank", "noopener,noreferrer,width=600,height=400");
+    }
     return;
   }
 
@@ -1539,6 +2546,53 @@ function handleDocumentClick(event) {
   if (removeRule) {
     appCore?.removeRule(removeRule.dataset.removeRule);
     renderAllPanels();
+    return;
+  }
+
+  // Rule / alert template quick-add
+  const ruleTemplateBtn = event.target.closest("[data-rule-template]");
+  if (ruleTemplateBtn) {
+    const cmd = ruleTemplateBtn.dataset.ruleTemplate;
+    if (cmd) {
+      appCore?.dispatchRawCommand(cmd);
+      renderAllPanels();
+    }
+    return;
+  }
+
+  // Delete a single alert by symbol:operator:threshold key
+  const removeAlertBtn = event.target.closest("[data-remove-alert]");
+  if (removeAlertBtn) {
+    const [sym, op, thresh] = removeAlertBtn.dataset.removeAlert.split(":");
+    const before = state.alerts.length;
+    state.alerts = state.alerts.filter(
+      (a) => !(a.symbol === sym && a.operator === op && String(a.threshold) === thresh),
+    );
+    if (state.alerts.length !== before) {
+      queueWorkspaceSave();
+      showToast("Alert deleted.", "neutral");
+      renderAllPanels();
+    }
+    return;
+  }
+
+  const chartIndicatorToggle = event.target.closest("[data-chart-indicator]");
+  if (chartIndicatorToggle) {
+    const key = chartIndicatorToggle.dataset.chartIndicator;
+    const indicators = state.chartIndicators || {};
+    indicators[key] = !indicators[key];
+    state.chartIndicators = { ...indicators };
+    // Remount the chart on all chart panels to apply indicator changes
+    [1, 2, 3, 4].filter((p) => state.panelModules[p] === "chart").forEach((p) => {
+      clearPanelChart(p);
+      renderPanel(p);
+      const symbol = state.panelSymbols[p] || "AAPL";
+      const range = state.chartRanges[p] || "1mo";
+      const interval = chartIntervalForRange(range);
+      const key2 = chartKey(symbol, range, interval);
+      const pts = state.chartCache.get(key2);
+      if (pts?.length) void mountCandlestickChart(p, pts);
+    });
     return;
   }
 
@@ -1579,6 +2633,175 @@ function handleDocumentClick(event) {
     return;
   }
 
+  const openAuthTrigger = event.target.closest("[data-open-auth]");
+  if (openAuthTrigger) {
+    openAuthModal(openAuthTrigger.dataset.openAuth || "login");
+    return;
+  }
+
+  const screenerSortBtn = event.target.closest("[data-screener-sort]");
+  if (screenerSortBtn) {
+    const [panelStr, key] = screenerSortBtn.dataset.screenerSort.split(":");
+    const panel = Number(panelStr);
+    const filters = state.screenerFilters[panel];
+    if (filters.sortKey === key) {
+      filters.sortDir = filters.sortDir === "asc" ? "desc" : "asc";
+    } else {
+      filters.sortKey = key;
+      filters.sortDir = key === "symbol" || key === "name" ? "asc" : "desc";
+    }
+    renderPanel(panel);
+    return;
+  }
+
+  const screenerClearBtn = event.target.closest("[data-screener-clear]");
+  if (screenerClearBtn) {
+    const panel = Number(screenerClearBtn.dataset.screenerClear);
+    state.screenerFilters[panel] = { universe: "", sector: "", industry: "", search: "", minMarketCap: "", performance: "", maxPE: "", sortKey: "marketCap", sortDir: "desc" };
+    renderPanel(panel);
+    return;
+  }
+
+  const screenerPresetBtn = event.target.closest("[data-screener-preset]");
+  if (screenerPresetBtn) {
+    const [panelStr, idxStr] = screenerPresetBtn.dataset.screenerPreset.split(":");
+    const panel = Number(panelStr);
+    const idx = Number(idxStr);
+    const preset = SCREENER_PRESETS[idx];
+    if (!preset) return;
+    const existing = state.screenerFilters[panel];
+    state.screenerFilters[panel] = {
+      ...existing,
+      ...preset.filters,
+      sortKey: existing.sortKey || "marketCap",
+      sortDir: existing.sortDir || "desc",
+    };
+    renderPanel(panel);
+    showToast(`Preset: ${preset.label}`, "neutral");
+    return;
+  }
+
+  const screenerExportBtn = event.target.closest("[data-screener-export]");
+  if (screenerExportBtn) {
+    const panel = Number(screenerExportBtn.dataset.screenerExport);
+    const filters = state.screenerFilters[panel];
+    const liveUniverse = state.screenerUniverseLive;
+    const workingUniverse = Array.isArray(liveUniverse) && liveUniverse.length ? liveUniverse : universe;
+    const filtered = filterUniverse(workingUniverse, filters, buildQuote);
+    const sortKey = filters.sortKey || "marketCap";
+    const sortDir = filters.sortDir || "desc";
+    const sorted = sortUniverse(filtered, sortKey, sortDir, buildQuote);
+
+    const headers = ["Symbol", "Name", "Sector", "Industry", "Price", "Change%", "Volume", "MarketCap_B", "PE_Ratio", "52wk_Low", "52wk_High", "52wk_Pos%"];
+    const rows = sorted.map((item) => {
+      const q = buildQuote(item.symbol);
+      const price = q?.price || item.seedPrice || 0;
+      const changePct = q?.changePct != null ? q.changePct.toFixed(2) : "";
+      const volume = q?.volume || "";
+      const pe = q?.pe != null && q.pe > 0 ? q.pe.toFixed(1) : "";
+      const low52 = q?.fiftyTwoWeekLow || "";
+      const high52 = q?.fiftyTwoWeekHigh || "";
+      const wkPos = (high52 && low52 && high52 > low52 && price)
+        ? (((price - low52) / (high52 - low52)) * 100).toFixed(1)
+        : "";
+      return [
+        item.symbol,
+        `"${(item.name || "").replace(/"/g, '""')}"`,
+        `"${(item.sector || "").replace(/"/g, '""')}"`,
+        `"${(item.industry || "").replace(/"/g, '""')}"`,
+        price.toFixed(2),
+        changePct,
+        volume,
+        item.marketCapB || "",
+        pe,
+        low52,
+        high52,
+        wkPos,
+      ].join(",");
+    });
+    const csvContent = [headers.join(","), ...rows].join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `meridian-screener-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast(`Exported ${sorted.length} rows to CSV`, "success");
+    return;
+  }
+
+  const heatmapResetBtn = event.target.closest("[data-heatmap-reset]");
+  if (heatmapResetBtn) {
+    state.heatmapFilter = { sector: "ALL", sort: "changePct" };
+    renderPanel(Number(heatmapResetBtn.dataset.heatmapReset));
+    return;
+  }
+
+  const tradeSymbolChip = event.target.closest("[data-trade-symbol]");
+  if (tradeSymbolChip) {
+    const panel = Number(tradeSymbolChip.dataset.targetPanel || state.activePanel);
+    state.panelSymbols[panel] = tradeSymbolChip.dataset.tradeSymbol;
+    syncUiCache();
+    loadModule("trade", panel, { reveal: true });
+    return;
+  }
+
+  const tradeCloseBtn = event.target.closest("[data-trade-close]");
+  if (tradeCloseBtn) {
+    const sym = tradeCloseBtn.dataset.tradeClose;
+    const position = (state.paperAccount?.positions || []).find((p) => p.symbol === sym);
+    if (!position) {
+      showToast(`No position in ${sym} to close.`, "error");
+      return;
+    }
+    if (typeof window !== "undefined" && !window.confirm(`Close entire ${sym} position (${position.shares} shares)?`)) return;
+    submitPaperOrder({ symbol: sym, side: "sell", shares: position.shares, panel: state.activePanel });
+    return;
+  }
+
+  if (event.target.closest("[data-trade-reset]")) {
+    resetPaperAccount();
+    return;
+  }
+
+  const tradeSideBtn = event.target.closest("[data-trade-side]");
+  if (tradeSideBtn) {
+    event.preventDefault();
+    const form = tradeSideBtn.closest("#tradeTicketForm");
+    if (!form) return;
+    const data = new FormData(form);
+    const panel = Number(form.dataset.tradePanel || state.activePanel);
+    const orderType = String(data.get("orderType") || "market");
+    if (orderType === "market") {
+      submitPaperOrder({
+        symbol: String(data.get("symbol") || "").trim().toUpperCase(),
+        side: tradeSideBtn.dataset.tradeSide,
+        shares: Number(data.get("shares") || 0),
+        panel,
+      });
+    } else {
+      submitPaperPendingOrder({
+        symbol: String(data.get("symbol") || "").trim().toUpperCase(),
+        side: tradeSideBtn.dataset.tradeSide,
+        shares: Number(data.get("shares") || 0),
+        orderType,
+        limitPrice: Number(data.get("limitPrice") || 0),
+        panel,
+      });
+    }
+    return;
+  }
+
+  const cancelPendingBtn = event.target.closest("[data-cancel-pending-order]");
+  if (cancelPendingBtn) {
+    const orderId = Number(cancelPendingBtn.dataset.cancelPendingOrder);
+    if (orderId) cancelPaperPendingOrder(orderId);
+    return;
+  }
+
   if (!event.target.closest(".command-shell")) hideAutocomplete();
 }
 
@@ -1604,6 +2827,52 @@ function handleDocumentInput(event) {
     return;
   }
 
+  const screenerIndustry = event.target.closest("[data-screener-industry]");
+  if (screenerIndustry) {
+    const panel = Number(screenerIndustry.dataset.screenerIndustry);
+    state.screenerFilters[panel].industry = screenerIndustry.value;
+    renderPanel(panel);
+    return;
+  }
+
+  const screenerMinMcap = event.target.closest("[data-screener-min-mcap]");
+  if (screenerMinMcap) {
+    const panel = Number(screenerMinMcap.dataset.screenerMinMcap);
+    state.screenerFilters[panel].minMarketCap = screenerMinMcap.value;
+    renderPanel(panel);
+    return;
+  }
+
+  const screenerPerf = event.target.closest("[data-screener-performance]");
+  if (screenerPerf) {
+    const panel = Number(screenerPerf.dataset.screenerPerformance);
+    state.screenerFilters[panel].performance = screenerPerf.value;
+    renderPanel(panel);
+    return;
+  }
+
+  const screenerMaxPE = event.target.closest("[data-screener-max-pe]");
+  if (screenerMaxPE) {
+    const panel = Number(screenerMaxPE.dataset.screenerMaxPe);
+    state.screenerFilters[panel].maxPE = screenerMaxPE.value;
+    renderPanel(panel);
+    return;
+  }
+
+  const heatmapSector = event.target.closest("[data-heatmap-sector]");
+  if (heatmapSector) {
+    state.heatmapFilter.sector = heatmapSector.value;
+    renderPanel(Number(heatmapSector.dataset.heatmapSector));
+    return;
+  }
+
+  const heatmapSort = event.target.closest("[data-heatmap-sort]");
+  if (heatmapSort) {
+    state.heatmapFilter.sort = heatmapSort.value;
+    renderPanel(Number(heatmapSort.dataset.heatmapSort));
+    return;
+  }
+
   const optionsExpiry = event.target.closest("[data-options-expiry]");
   if (optionsExpiry) {
     const panel = Number(optionsExpiry.dataset.optionsExpiry);
@@ -1618,6 +2887,18 @@ function handleDocumentInput(event) {
     setNestedCalculatorValue(calcInputNode.dataset.calcKey, Number(calcInputNode.value));
     renderAllPanels();
   }
+
+  // Order type selector — show/hide the limit price field without a full re-render
+  const orderTypeSelect = event.target.closest(".trade-order-type-select");
+  if (orderTypeSelect) {
+    const form = orderTypeSelect.closest("#tradeTicketForm");
+    if (!form) return;
+    const panel = form.dataset.tradePanel;
+    const limitField = document.getElementById(`tradeLimitPriceField${panel}`);
+    if (limitField) {
+      limitField.style.display = orderTypeSelect.value === "market" ? "none" : "";
+    }
+  }
 }
 
 function ensureShortcutsOverlay() {
@@ -1629,41 +2910,70 @@ function ensureShortcutsOverlay() {
   overlay.innerHTML = `
     <div class="shortcuts-panel">
       <header class="shortcuts-head">
-        <h3>Keyboard Shortcuts</h3>
-        <button type="button" class="btn btn-ghost btn-sm" data-close-shortcuts>Esc</button>
+        <div>
+          <h3>Meridian Reference</h3>
+          <small style="color:var(--muted);font-size:0.74rem">Keyboard shortcuts &amp; command syntax</small>
+        </div>
+        <button type="button" class="icon-btn" data-close-shortcuts title="Close">✕</button>
       </header>
       <div class="shortcuts-grid">
         <div class="shortcut-section">
-          <h4>Navigation</h4>
+          <h4>⌨ Navigation</h4>
           <div class="shortcut-row"><kbd>Tab</kbd><span>Cycle active panel</span></div>
-          <div class="shortcut-row"><kbd>F</kbd><span>Focus current panel</span></div>
-          <div class="shortcut-row"><kbd>G</kbd><span>Grid view (reset focus)</span></div>
-          <div class="shortcut-row"><kbd>/</kbd><span>Command palette</span></div>
-          <div class="shortcut-row"><kbd>⌘K</kbd><span>Command palette (alt)</span></div>
-          <div class="shortcut-row"><kbd>?</kbd><span>This help overlay</span></div>
-          <div class="shortcut-row"><kbd>Esc</kbd><span>Close any overlay</span></div>
+          <div class="shortcut-row"><kbd>F</kbd><span>Focus current panel (fullscreen)</span></div>
+          <div class="shortcut-row"><kbd>G</kbd><span>Return to grid view</span></div>
+          <div class="shortcut-row"><kbd>/</kbd><span>Open command palette</span></div>
+          <div class="shortcut-row"><kbd>⌘K</kbd><span>Open command palette</span></div>
+          <div class="shortcut-row"><kbd>?</kbd><span>This reference overlay</span></div>
+          <div class="shortcut-row"><kbd>Esc</kbd><span>Close any overlay / modal</span></div>
         </div>
         <div class="shortcut-section">
-          <h4>Modules</h4>
-          <div class="shortcut-row"><kbd>F1</kbd><span>Briefing</span></div>
-          <div class="shortcut-row"><kbd>F2</kbd><span>Home</span></div>
-          <div class="shortcut-row"><kbd>F3</kbd><span>Quote</span></div>
-          <div class="shortcut-row"><kbd>F4</kbd><span>Chart</span></div>
-          <div class="shortcut-row"><kbd>F5</kbd><span>News</span></div>
-          <div class="shortcut-row"><kbd>F6</kbd><span>Screener</span></div>
-          <div class="shortcut-row"><kbd>F7</kbd><span>Heatmap</span></div>
-          <div class="shortcut-row"><kbd>F8</kbd><span>Portfolio</span></div>
+          <h4>📺 Module Keys</h4>
+          <div class="shortcut-row"><kbd>F1</kbd><span>Meridian Briefing</span></div>
+          <div class="shortcut-row"><kbd>F2</kbd><span>Home dashboard</span></div>
+          <div class="shortcut-row"><kbd>F3</kbd><span>Quote view</span></div>
+          <div class="shortcut-row"><kbd>F4</kbd><span>Price chart</span></div>
+          <div class="shortcut-row"><kbd>F5</kbd><span>News feed</span></div>
+          <div class="shortcut-row"><kbd>F6</kbd><span>Equity screener</span></div>
+          <div class="shortcut-row"><kbd>F7</kbd><span>Sector heatmap</span></div>
+          <div class="shortcut-row"><kbd>F8</kbd><span>Portfolio tracker</span></div>
+          <div class="shortcut-row"><kbd>F9</kbd><span>Paper trading desk</span></div>
+          <div class="shortcut-row"><kbd>F10</kbd><span>Options chain</span></div>
+          <div class="shortcut-row"><kbd>F11</kbd><span>Macro / yields</span></div>
         </div>
         <div class="shortcut-section">
-          <h4>Commands</h4>
-          <div class="shortcut-row"><code>GO AAPL</code><span>Broadcast symbol to all panels</span></div>
-          <div class="shortcut-row"><code>WATCH NVDA</code><span>Add to watchlist</span></div>
-          <div class="shortcut-row"><code>ALERT TSLA &gt;= 300</code><span>Create price alert</span></div>
-          <div class="shortcut-row"><code>ANALYZE MSFT</code><span>Load deep research</span></div>
-          <div class="shortcut-row"><code>CHART SPY 1Y</code><span>Load chart with range</span></div>
+          <h4>💬 Core Commands</h4>
+          <div class="shortcut-row"><code>AAPL Q</code><span>Open quote for AAPL</span></div>
+          <div class="shortcut-row"><code>AAPL CHART</code><span>Open chart for AAPL</span></div>
+          <div class="shortcut-row"><code>CHART SPY 2Y</code><span>Chart with inline range (1M–5Y / ALL)</span></div>
+          <div class="shortcut-row"><code>WATCH TSLA</code><span>Add to watchlist</span></div>
+          <div class="shortcut-row"><code>ALERT NVDA &gt;= 950</code><span>Price alert (≥ or ≤)</span></div>
+          <div class="shortcut-row"><code>ANALYZE MSFT</code><span>Deep research view</span></div>
+          <div class="shortcut-row"><code>OPTIONS NVDA</code><span>Options chain</span></div>
+          <div class="shortcut-row"><code>CALC</code><span>Black-Scholes &amp; bond calculator</span></div>
+          <div class="shortcut-row"><code>NEWS AAPL</code><span>Filter news by symbol</span></div>
+          <div class="shortcut-row"><code>FOCUS 2</code><span>Focus panel 2</span></div>
+          <div class="shortcut-row"><code>GRID</code><span>Return to grid</span></div>
+        </div>
+        <div class="shortcut-section">
+          <h4>📈 Trading &amp; Rules</h4>
+          <div class="shortcut-row"><code>BUY AAPL 10</code><span>Paper buy 10 shares</span></div>
+          <div class="shortcut-row"><code>SELL NVDA 5</code><span>Paper sell 5 shares</span></div>
+          <div class="shortcut-row"><code>ADDPOS MSFT 5 410</code><span>Track portfolio position (symbol shares cost)</span></div>
+          <div class="shortcut-row"><code>REMOVEPOS MSFT</code><span>Remove a position</span></div>
+          <div class="shortcut-row"><code>REMOVEALERT NVDA</code><span>Clear alerts for a symbol</span></div>
+          <div class="shortcut-row"><code>CLEARRULES</code><span>Remove all active rules</span></div>
+          <div class="shortcut-row"><code>IF SPY &gt; 520 THEN Breakout</code><span>Create a live rule</span></div>
+          <div class="shortcut-row"><code>IF VIX &gt; 20 THEN Hedge</code><span>Volatility rule</span></div>
+          <div class="shortcut-row"><code>RANGE 2Y</code><span>Set chart range (5D / 1M–1Y / 2Y / 5Y / ALL)</span></div>
+          <div class="shortcut-row"><code>SAVE</code><span>Save workspace now</span></div>
+          <div class="shortcut-row"><code>REFRESH</code><span>Fetch latest data</span></div>
         </div>
       </div>
-      <footer class="shortcuts-foot">Press <kbd>?</kbd> any time to reopen</footer>
+      <footer class="shortcuts-foot">
+        <span>Press <kbd>?</kbd> any time to reopen · <kbd>/</kbd> for command palette</span>
+        <span class="shortcuts-version">Meridian Terminal</span>
+      </footer>
     </div>
   `;
   overlay.addEventListener("click", (event) => {
@@ -1690,16 +3000,55 @@ function closeShortcutsOverlay() {
 }
 
 function handleDocumentSubmit(event) {
+  const tradeForm = event.target.closest("#tradeTicketForm");
+  if (tradeForm) {
+    event.preventDefault();
+    const submitter = event.submitter;
+    const side = submitter?.dataset.tradeSide || "buy";
+    const data = new FormData(tradeForm);
+    const panel = Number(tradeForm.dataset.tradePanel || state.activePanel);
+    submitPaperOrder({
+      symbol: String(data.get("symbol") || "").trim().toUpperCase(),
+      side,
+      shares: Number(data.get("shares") || 0),
+      panel,
+    });
+    return;
+  }
+
   const addPositionForm = event.target.closest("#addPositionForm");
-  if (!addPositionForm) return;
-  event.preventDefault();
-  const data = new FormData(addPositionForm);
-  addPosition({
-    symbol: String(data.get("symbol") || "").toUpperCase(),
-    shares: Number(data.get("shares") || 0),
-    cost: Number(data.get("cost") || 0),
-  });
-  addPositionForm.reset();
+  if (addPositionForm) {
+    event.preventDefault();
+    const data = new FormData(addPositionForm);
+    addPosition({
+      symbol: String(data.get("symbol") || "").toUpperCase(),
+      shares: Number(data.get("shares") || 0),
+      cost: Number(data.get("cost") || 0),
+    });
+    addPositionForm.reset();
+    return;
+  }
+
+  // Inline position edit form
+  const editPositionForm = event.target.closest("[data-edit-position]");
+  if (editPositionForm) {
+    event.preventDefault();
+    const symbol = editPositionForm.dataset.editPosition;
+    const data = new FormData(editPositionForm);
+    const shares = Number(data.get("shares") || 0);
+    const cost = Number(data.get("cost") || 0);
+    if (!symbol || shares <= 0 || cost < 0) {
+      showToast("Shares must be positive and cost must be non-negative.", "error");
+      return;
+    }
+    // Update the position in state by removing old and adding updated
+    state.positions = state.positions.filter((p) => p.symbol !== symbol);
+    state.positions.push({ symbol, shares, cost });
+    queueWorkspaceSave();
+    showToast(`${symbol} updated — ${shares} sh @ $${cost.toFixed(2)}`, "success");
+    [1, 2, 3, 4].filter((p) => state.panelModules[p] === "portfolio").forEach((p) => renderPanel(p));
+    return;
+  }
 }
 
 function handleGlobalHotkeys(event) {
@@ -1759,9 +3108,9 @@ function handleGlobalHotkeys(event) {
     F6: "screener",
     F7: "heatmap",
     F8: "portfolio",
-    F9: "macro",
+    F9: "trade",
     F10: "options",
-    F11: "calculator",
+    F11: "macro",
   };
 
   if (event.key === "Tab") {
@@ -1791,10 +3140,13 @@ function handleGlobalHotkeys(event) {
 function addToWatchlist(symbol) {
   const upper = symbol.toUpperCase();
   if (!state.watchlist.includes(upper)) {
+    if (checkFreeTierLimit(state.watchlist.length, FREE_WATCHLIST_LIMIT, "watchlist symbols")) return;
     state.watchlist.unshift(upper);
-    state.watchlist = state.watchlist.slice(0, 24);
+    state.watchlist = state.watchlist.slice(0, 50);
+    syncActiveGroupFromWatchlist();
     refreshQuotes([upper]);
     renderRails();
+    renderTickerTape();
     queueWorkspaceSave();
     showToast(`${upper} added to watchlist.`, "success");
   }
@@ -1818,18 +3170,21 @@ function clearNotificationsHistory() {
 
 function removeFromWatchlist(symbol) {
   state.watchlist = state.watchlist.filter((item) => item !== symbol);
+  syncActiveGroupFromWatchlist();
   renderRails();
+  renderTickerTape();
   queueWorkspaceSave();
 }
 
 function createAlert(symbol, threshold, operator) {
   if (!symbol || Number.isNaN(threshold)) return;
+  if (checkFreeTierLimit(state.alerts.length, FREE_ALERT_LIMIT, "price alerts")) return;
   state.alerts.unshift({ symbol: symbol.toUpperCase(), operator, threshold, status: "watching" });
-  state.alerts = state.alerts.slice(0, 16);
+  state.alerts = state.alerts.slice(0, 50);
   evaluateAlerts();
   renderRails();
   queueWorkspaceSave();
-  showToast(`Alert added for ${symbol.toUpperCase()}.`, "success");
+  showToast(`Alert set for ${symbol.toUpperCase()}.`, "success");
 }
 
 function addPosition(position) {
@@ -1884,6 +3239,7 @@ function deleteSymbol(symbol) {
   state.alerts = state.alerts.filter((item) => item.symbol !== ticker);
   state.positions = state.positions.filter((item) => item.symbol !== ticker);
   state.activeRules = state.activeRules.filter((item) => item.symbol !== ticker);
+  syncActiveGroupFromWatchlist();
 
   const changed =
     before.watchlist !== state.watchlist.length ||
@@ -1957,6 +3313,8 @@ async function refreshAllData() {
     refreshQuotes(symbols),
     refreshNews(),
     refreshFx(),
+    refreshMacroYields(),
+    refreshScreenerUniverse(),
     ...overviewSparklineRequests,
     ...chartRequests,
     ...optionRequests,
@@ -1964,6 +3322,7 @@ async function refreshAllData() {
 
   state.lastDataFetchedAt = Date.now();
   renderOverviewStrip();
+  renderTickerTape();
   renderRails();
   renderAllPanels();
   updateStatusBar();
@@ -2004,7 +3363,9 @@ function syncTicker(symbol) {
   if (!state.watchlist.includes(ticker)) {
     state.watchlist.unshift(ticker);
     state.watchlist = [...new Set(state.watchlist)].slice(0, 16);
+    syncActiveGroupFromWatchlist();
     renderRails();
+    renderTickerTape();
   }
   queueWorkspaceSave();
   showToast(state.user ? `${ticker} synced to your workspace.` : `${ticker} saved to local workspace.`, "success");
@@ -2120,6 +3481,149 @@ function scoreHeadlineSentiment(text) {
   return "Neutral";
 }
 
+async function refreshPaperAccount() {
+  if (!AUTH_ENABLED || !state.user) {
+    state.paperAccount = null;
+    return;
+  }
+  try {
+    const snapshot = await paperApi.account();
+    const prevPending = (state.paperAccount?.pendingOrders || []).length;
+    state.paperAccount = snapshot;
+    // Notify user when a pending order was auto-filled
+    (snapshot.newlyFilled || []).forEach((fill) => {
+      const typeLabel = fill.orderType.charAt(0).toUpperCase() + fill.orderType.slice(1);
+      showToast(
+        `${typeLabel} order filled: ${fill.side.toUpperCase()} ${fill.shares} ${fill.symbol} @ $${Number(fill.price).toFixed(2)}`,
+        "success",
+      );
+    });
+    if ((snapshot.newlyFilled || []).length > 0) {
+      const tradePanel = [1, 2, 3, 4].find((p) => state.panelModules[p] === "trade");
+      if (tradePanel) renderPanel(tradePanel);
+    }
+  } catch {
+    state.paperAccount = null;
+  }
+}
+
+async function refreshMacroYields() {
+  try {
+    const payload = await marketApi.yields();
+    if (Array.isArray(payload?.curve) && payload.curve.length) {
+      state.macroYields = payload.curve;
+    }
+  } catch {
+    // silently fall back to macroDefaults.curve in the renderer
+  }
+}
+
+async function refreshScreenerUniverse() {
+  if (state.screenerUniverseLive) return; // fetch once per session
+  try {
+    const payload = await marketApi.screenerUniverse();
+    if (Array.isArray(payload?.universe) && payload.universe.length) {
+      state.screenerUniverseLive = payload.universe;
+    }
+  } catch {
+    // ignore — screener falls back to local static universe
+  }
+}
+
+async function submitPaperOrder({ symbol, side, shares, panel }) {
+  if (!state.user) {
+    showToast("Sign in to use paper trading.", "error");
+    openAuthModal("login");
+    return;
+  }
+  const ticker = String(symbol || "").trim().toUpperCase();
+  const qty = Number(shares);
+  if (!ticker) {
+    showToast("Enter a symbol first.", "error");
+    return;
+  }
+  if (!Number.isFinite(qty) || qty <= 0) {
+    showToast("Shares must be a positive number.", "error");
+    return;
+  }
+  try {
+    const snapshot = await paperApi.order({ symbol: ticker, side, shares: qty });
+    state.paperAccount = snapshot;
+    const fill = snapshot.lastFill || {};
+    const verb = side === "buy" ? "Bought" : "Sold";
+    const priceLabel = Number(fill.price || 0).toFixed(2);
+    showToast(
+      `${verb} ${qty} ${ticker} @ $${priceLabel}${side === "sell" && fill.realizedPl ? ` · P/L ${fill.realizedPl >= 0 ? "+" : ""}$${Number(fill.realizedPl).toFixed(2)}` : ""}`,
+      side === "sell" && fill.realizedPl >= 0 ? "success" : "success",
+    );
+    (snapshot.newlyUnlocked || []).forEach((key) => {
+      const item = (snapshot.achievements || []).find((a) => a.key === key);
+      if (item) {
+        showToast(`Achievement unlocked: ${item.title}`, "success");
+        notifManager?.push({
+          type: "achievement",
+          title: `Achievement · ${item.title}`,
+          body: item.description,
+        });
+      }
+    });
+    if (panel) renderPanel(panel);
+  } catch (error) {
+    showToast(error.message || "Order rejected.", "error");
+  }
+}
+
+async function resetPaperAccount() {
+  if (!state.user) return;
+  if (typeof window !== "undefined" && !window.confirm("Reset your paper account to $100,000? All positions and fills will be cleared.")) {
+    return;
+  }
+  try {
+    const snapshot = await paperApi.reset();
+    state.paperAccount = snapshot;
+    showToast("Paper account reset to $100,000.", "success");
+    renderAllPanels();
+  } catch (error) {
+    showToast(error.message || "Reset failed.", "error");
+  }
+}
+
+async function submitPaperPendingOrder({ symbol, side, shares, orderType, limitPrice, panel }) {
+  if (!state.user) {
+    showToast("Sign in to use paper trading.", "error");
+    openAuthModal("login");
+    return;
+  }
+  const ticker = String(symbol || "").trim().toUpperCase();
+  const qty = Number(shares);
+  const lp = Number(limitPrice);
+  if (!ticker) { showToast("Enter a symbol first.", "error"); return; }
+  if (!Number.isFinite(qty) || qty <= 0) { showToast("Shares must be a positive number.", "error"); return; }
+  if (!Number.isFinite(lp) || lp <= 0) { showToast("Limit/stop price must be a positive number.", "error"); return; }
+  try {
+    const snapshot = await paperApi.placePendingOrder({ symbol: ticker, side, shares: qty, orderType, limitPrice: lp });
+    state.paperAccount = snapshot;
+    const typeLabel = orderType.charAt(0).toUpperCase() + orderType.slice(1);
+    showToast(`${typeLabel} order placed: ${side.toUpperCase()} ${qty} ${ticker} @ $${lp.toFixed(2)}`, "success");
+    if (panel) renderPanel(panel);
+  } catch (error) {
+    showToast(error.message || "Order rejected.", "error");
+  }
+}
+
+async function cancelPaperPendingOrder(orderId) {
+  if (!state.user) return;
+  try {
+    const snapshot = await paperApi.cancelPendingOrder(orderId);
+    state.paperAccount = snapshot;
+    showToast("Pending order cancelled.", "success");
+    const tradePanel = [1, 2, 3, 4].find((p) => state.panelModules[p] === "trade");
+    if (tradePanel) renderPanel(tradePanel);
+  } catch (error) {
+    showToast(error.message || "Cancel failed.", "error");
+  }
+}
+
 async function refreshLiveQuotes() {
   // Lightweight refresh — only prices for overview strip + watched symbols.
   // Triggers the flash animation pipeline via state mutations without the
@@ -2134,6 +3638,7 @@ async function refreshLiveQuotes() {
     await Promise.allSettled([
       refreshOverview(),
       symbols.length ? refreshQuotes(symbols) : Promise.resolve(),
+      state.user ? refreshPaperAccount() : Promise.resolve(),
     ]);
     state.lastDataFetchedAt = Date.now();
   } catch {
@@ -2310,13 +3815,71 @@ function handleRefreshCountdown() {
 function updateStatusBar() {
   if (el.lastUpdated) el.lastUpdated.textContent = currentTimeShort(lastStateUpdatedAt);
   if (el.refreshCountdown) el.refreshCountdown.textContent = `${state.refreshCountdown}s`;
-  if (el.watchCount) el.watchCount.textContent = String(state.watchlist.length);
-  if (el.alertCount) el.alertCount.textContent = String(state.alerts.length);
+  if (el.watchCount) {
+    el.watchCount.textContent = formatTierUsage(state.watchlist.length, FREE_WATCHLIST_LIMIT);
+    const wc = tierUsageClass(state.watchlist.length, FREE_WATCHLIST_LIMIT);
+    el.watchCount.className = wc ? `tier-badge ${wc}` : "";
+  }
+  if (el.alertCount) {
+    el.alertCount.textContent = formatTierUsage(state.alerts.length, FREE_ALERT_LIMIT);
+    const ac = tierUsageClass(state.alerts.length, FREE_ALERT_LIMIT);
+    el.alertCount.className = ac ? `tier-badge ${ac}` : "";
+  }
   if (el.marketPhase) el.marketPhase.textContent = state.marketPhase;
   if (el.serverStatus) {
     el.serverStatus.textContent = state.health.ok ? "Live" : "Offline";
     el.serverStatus.classList.toggle("chip-server-offline", !state.health.ok);
   }
+  updateMarketClock();
+}
+
+function updateMarketClock() {
+  const clockEl = document.querySelector("#marketClock");
+  if (!clockEl) return;
+  const now = new Date();
+  const ny = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
+  const day = ny.getDay();
+  const h = ny.getHours();
+  const m = ny.getMinutes();
+  const s = ny.getSeconds();
+  const totalMins = h * 60 + m;
+
+  let label = "";
+  let secsToNext = 0;
+
+  if (day === 0 || day === 6) {
+    // Weekend — countdown to Monday 4:00 AM ET pre-market
+    const daysToMon = day === 6 ? 2 : 1;
+    secsToNext = daysToMon * 86400 - totalMins * 60 - s + 4 * 3600;
+    label = "Opens Mon";
+  } else if (totalMins < 4 * 60) {
+    // Overnight, before 4 AM — pre-market starts at 4:00 AM
+    secsToNext = (4 * 60 - totalMins) * 60 - s;
+    label = "Pre-mkt";
+  } else if (totalMins < 9 * 60 + 30) {
+    // Pre-market, opens at 9:30 AM
+    secsToNext = (9 * 60 + 30 - totalMins) * 60 - s;
+    label = "Opens";
+  } else if (totalMins < 16 * 60) {
+    // Market open, closes at 4:00 PM
+    secsToNext = (16 * 60 - totalMins) * 60 - s;
+    label = "Closes";
+  } else if (totalMins < 20 * 60) {
+    // After hours, ends at 8:00 PM
+    secsToNext = (20 * 60 - totalMins) * 60 - s;
+    label = "AH ends";
+  } else {
+    // Late night — next pre-market at 4:00 AM
+    secsToNext = (24 * 60 - totalMins + 4 * 60) * 60 - s;
+    label = "Pre-mkt";
+  }
+
+  if (secsToNext <= 0) secsToNext = 0;
+  const hh = Math.floor(secsToNext / 3600);
+  const mm = String(Math.floor((secsToNext % 3600) / 60)).padStart(2, "0");
+  const ss = String(secsToNext % 60).padStart(2, "0");
+  const countdown = hh > 0 ? `${hh}:${mm}:${ss}` : `${mm}:${ss}`;
+  clockEl.textContent = `${label} ${countdown}`;
 }
 
 function updateSessionClock() {
@@ -2325,6 +3888,20 @@ function updateSessionClock() {
   const minutes = String(Math.floor((elapsed % 3600) / 60)).padStart(2, "0");
   const seconds = String(elapsed % 60).padStart(2, "0");
   if (el.sessionClock) el.sessionClock.textContent = `${hours}:${minutes}:${seconds}`;
+
+  // Update market clock dot color based on current phase
+  const dot = document.querySelector("#marketClockDot");
+  if (dot) {
+    const phase = state.marketPhase || "";
+    if (phase === "Market open" || phase === "Open") {
+      dot.style.background = "var(--success)";
+    } else if (phase === "Pre-market" || phase === "After hours" || phase === "After-hours") {
+      dot.style.background = "var(--warning)";
+    } else {
+      dot.style.background = "var(--muted)";
+    }
+  }
+  updateMarketClock();
 }
 
 function evaluateAlerts() {
@@ -2379,6 +3956,8 @@ function buildQuote(symbol) {
     fiftyTwoWeekHigh: live?.fiftyTwoWeekHigh || profile.fiftyTwoWeekHigh || live?.dayHigh || 0,
     fiftyTwoWeekLow: live?.fiftyTwoWeekLow || profile.fiftyTwoWeekLow || live?.dayLow || 0,
     trailingPE: live?.trailingPE ?? financials.trailingPE ?? profile.trailingPE ?? null,
+    // Shorthand alias used by Screener & OptionsRenderer — also read direct from live data if server sent it
+    pe: live?.pe ?? live?.trailingPE ?? financials.trailingPE ?? profile.trailingPE ?? null,
     epsTrailingTwelveMonths: live?.epsTrailingTwelveMonths ?? financials.epsTrailingTwelveMonths ?? profile.epsTrailingTwelveMonths ?? null,
     dividendYield: live?.dividendYield ?? financials.dividendYield ?? profile.dividendYield ?? null,
     beta: live?.beta ?? financials.beta ?? profile.beta ?? null,
@@ -2398,7 +3977,10 @@ function enrichPositions() {
     const basis = position.cost * position.shares;
     const pnl = value - basis;
     const pnlPct = basis ? (pnl / basis) * 100 : 0;
-    return { ...position, price, value, pnl, pnlPct };
+    const previousClose = Number(quote?.previousClose || price);
+    const dayChange = (price - previousClose) * position.shares;
+    const dayChangePct = previousClose ? ((price - previousClose) / previousClose) * 100 : 0;
+    return { ...position, price, value, pnl, pnlPct, previousClose, dayChange, dayChangePct };
   });
 }
 
@@ -2582,62 +4164,124 @@ async function mountCandlestickChart(panel, points) {
 
   series.setData(candles);
 
-  // Volume histogram
-  const volumeData = points
-    .map((point) => {
-      const time = Number(point.timestamp ?? point.time ?? 0);
-      const vol = Number(point.volume ?? 0);
-      const close = Number(point.close ?? point.price ?? 0);
-      const open = Number(point.open ?? close);
-      if (time <= 0 || !Number.isFinite(vol)) return null;
-      return { time, value: vol, color: close >= open ? "rgba(0, 230, 118, 0.18)" : "rgba(255, 59, 48, 0.18)" };
-    })
-    .filter(Boolean);
+  const ind = state.chartIndicators || {};
 
-  if (volumeData.length) {
-    const volumeOptions = {
-      priceFormat: { type: "volume" },
-      priceScaleId: "volume",
-      lastValueVisible: false,
-      priceLineVisible: false,
-    };
-    let volumeSeries = null;
-    if (typeof chart.addHistogramSeries === "function") {
-      volumeSeries = chart.addHistogramSeries(volumeOptions);
-    } else if (typeof chart.addSeries === "function" && chartLib.HistogramSeries) {
-      volumeSeries = chart.addSeries(chartLib.HistogramSeries, volumeOptions);
-    }
-    if (volumeSeries) {
-      volumeSeries.setData(volumeData);
-      chart.priceScale("volume").applyOptions({
-        scaleMargins: { top: 0.82, bottom: 0 },
-        drawTicks: false,
-        borderVisible: false,
-        visible: false,
-      });
+  // ── Helper: add a line series (compatible with v4 and v5 API) ──
+  function addLine(opts) {
+    if (typeof chart.addLineSeries === "function") return chart.addLineSeries(opts);
+    if (typeof chart.addSeries === "function" && chartLib.LineSeries) return chart.addSeries(chartLib.LineSeries, opts);
+    return null;
+  }
+
+  // ── Volume histogram ──
+  if (ind.volume !== false) {
+    const volumeData = points
+      .map((point) => {
+        const time = Number(point.timestamp ?? point.time ?? 0);
+        const vol = Number(point.volume ?? 0);
+        const close = Number(point.close ?? point.price ?? 0);
+        const open = Number(point.open ?? close);
+        if (time <= 0 || !Number.isFinite(vol)) return null;
+        return { time, value: vol, color: close >= open ? "rgba(0, 230, 118, 0.18)" : "rgba(255, 59, 48, 0.18)" };
+      })
+      .filter(Boolean);
+
+    if (volumeData.length) {
+      const volumeOptions = {
+        priceFormat: { type: "volume" },
+        priceScaleId: "volume",
+        lastValueVisible: false,
+        priceLineVisible: false,
+      };
+      let volumeSeries = null;
+      if (typeof chart.addHistogramSeries === "function") {
+        volumeSeries = chart.addHistogramSeries(volumeOptions);
+      } else if (typeof chart.addSeries === "function" && chartLib.HistogramSeries) {
+        volumeSeries = chart.addSeries(chartLib.HistogramSeries, volumeOptions);
+      }
+      if (volumeSeries) {
+        volumeSeries.setData(volumeData);
+        chart.priceScale("volume").applyOptions({
+          scaleMargins: { top: 0.82, bottom: 0 },
+          drawTicks: false,
+          borderVisible: false,
+          visible: false,
+        });
+      }
     }
   }
 
-  // 20-period moving average
-  if (candles.length >= 20) {
+  // ── SMA(20) — simple moving average ──
+  if (ind.sma20 !== false && candles.length >= 20) {
     const maData = [];
     for (let i = 19; i < candles.length; i++) {
       let sum = 0;
       for (let j = i - 19; j <= i; j++) sum += candles[j].close;
       maData.push({ time: candles[i].time, value: sum / 20 });
     }
-    const maOptions = { color: "rgba(111, 143, 255, 0.6)", lineWidth: 1.5, priceLineVisible: false, crosshairMarkerVisible: false, lastValueVisible: false };
-    let maSeries = null;
-    if (typeof chart.addLineSeries === "function") {
-      maSeries = chart.addLineSeries(maOptions);
-    } else if (typeof chart.addSeries === "function" && chartLib.LineSeries) {
-      maSeries = chart.addSeries(chartLib.LineSeries, maOptions);
-    }
+    const maSeries = addLine({ color: "rgba(111, 143, 255, 0.6)", lineWidth: 1.5, priceLineVisible: false, crosshairMarkerVisible: false, lastValueVisible: false });
     if (maSeries) maSeries.setData(maData);
   }
 
-  // RSI(14) on separate scale — shown as faint background line
-  if (candles.length >= 15) {
+  // ── EMA(9) — exponential moving average ──
+  if (ind.ema9 && candles.length >= 9) {
+    const period = 9;
+    const multiplier = 2 / (period + 1);
+    const emaData = [];
+    let ema = candles.slice(0, period).reduce((s, c) => s + c.close, 0) / period;
+    emaData.push({ time: candles[period - 1].time, value: ema });
+    for (let i = period; i < candles.length; i++) {
+      ema = (candles[i].close - ema) * multiplier + ema;
+      emaData.push({ time: candles[i].time, value: ema });
+    }
+    const emaSeries = addLine({ color: "rgba(255, 167, 38, 0.8)", lineWidth: 1.5, priceLineVisible: false, crosshairMarkerVisible: false, lastValueVisible: false });
+    if (emaSeries) emaSeries.setData(emaData);
+  }
+
+  // ── Bollinger Bands (20, 2σ) ──
+  if (ind.bollinger && candles.length >= 20) {
+    const period = 20;
+    const bandMult = 2;
+    const upperData = [];
+    const lowerData = [];
+    for (let i = period - 1; i < candles.length; i++) {
+      const windowCloses = [];
+      for (let j = i - period + 1; j <= i; j++) windowCloses.push(candles[j].close);
+      const mean = windowCloses.reduce((s, v) => s + v, 0) / period;
+      const variance = windowCloses.reduce((s, v) => s + (v - mean) ** 2, 0) / period;
+      const stdDev = Math.sqrt(variance);
+      upperData.push({ time: candles[i].time, value: mean + bandMult * stdDev });
+      lowerData.push({ time: candles[i].time, value: mean - bandMult * stdDev });
+    }
+    const bandOpts = { lineWidth: 1, priceLineVisible: false, crosshairMarkerVisible: false, lastValueVisible: false };
+    const upperSeries = addLine({ ...bandOpts, color: "rgba(156, 185, 255, 0.45)" });
+    const lowerSeries = addLine({ ...bandOpts, color: "rgba(156, 185, 255, 0.45)" });
+    if (upperSeries) upperSeries.setData(upperData);
+    if (lowerSeries) lowerSeries.setData(lowerData);
+  }
+
+  // ── VWAP — volume-weighted average price ──
+  if (ind.vwap && points.length >= 2) {
+    let cumVol = 0;
+    let cumTP = 0;
+    const vwapData = [];
+    for (const point of points) {
+      const time = Number(point.timestamp ?? point.time ?? 0);
+      const vol = Number(point.volume ?? 0);
+      const tp = (Number(point.high || point.close) + Number(point.low || point.close) + Number(point.close)) / 3;
+      if (time <= 0 || !Number.isFinite(vol) || vol === 0) continue;
+      cumVol += vol;
+      cumTP += tp * vol;
+      vwapData.push({ time, value: cumTP / cumVol });
+    }
+    if (vwapData.length > 1) {
+      const vwapSeries = addLine({ color: "rgba(233, 30, 99, 0.7)", lineWidth: 1.5, lineStyle: 2, priceLineVisible: false, crosshairMarkerVisible: false, lastValueVisible: false });
+      if (vwapSeries) vwapSeries.setData(vwapData);
+    }
+  }
+
+  // ── RSI(14) on separate scale — shown as faint background line ──
+  if (ind.rsi !== false && candles.length >= 15) {
     const closes = candles.map((c) => c.close);
     const rsiData = [];
     const period = 14;
@@ -2658,20 +4302,14 @@ async function mountCandlestickChart(panel, points) {
       rsiData.push({ time: candles[i].time, value: 100 - 100 / (1 + rs) });
     }
     if (rsiData.length) {
-      const rsiSeriesOptions = {
+      const rsiSeries = addLine({
         color: "rgba(255, 200, 60, 0.45)",
         lineWidth: 1,
         priceLineVisible: false,
         crosshairMarkerVisible: false,
         lastValueVisible: false,
         priceScaleId: "rsi",
-      };
-      let rsiSeries = null;
-      if (typeof chart.addLineSeries === "function") {
-        rsiSeries = chart.addLineSeries(rsiSeriesOptions);
-      } else if (typeof chart.addSeries === "function" && chartLib.LineSeries) {
-        rsiSeries = chart.addSeries(chartLib.LineSeries, rsiSeriesOptions);
-      }
+      });
       if (rsiSeries) {
         rsiSeries.setData(rsiData);
         chart.priceScale("rsi").applyOptions({
@@ -2684,12 +4322,137 @@ async function mountCandlestickChart(panel, points) {
     }
   }
 
+  // ── MACD(12,26,9) — MACD line, signal line, histogram ──
+  if (ind.macd && candles.length >= 35) {
+    const closes = candles.map((c) => c.close);
+
+    // Compute EMA helper
+    function computeEma(data, period) {
+      const mult = 2 / (period + 1);
+      const result = new Array(data.length).fill(null);
+      let ema = data.slice(0, period).reduce((s, v) => s + v, 0) / period;
+      result[period - 1] = ema;
+      for (let i = period; i < data.length; i++) {
+        ema = (data[i] - ema) * mult + ema;
+        result[i] = ema;
+      }
+      return result;
+    }
+
+    const ema12 = computeEma(closes, 12);
+    const ema26 = computeEma(closes, 26);
+
+    // MACD line starts where both EMAs are valid (index 25+)
+    const macdLine = closes.map((_, i) =>
+      ema12[i] != null && ema26[i] != null ? ema12[i] - ema26[i] : null,
+    );
+
+    // Signal = EMA(9) of MACD line — seed from index 25 (first valid MACD)
+    const firstValidMacd = macdLine.findIndex((v) => v != null);
+    const signalLine = new Array(candles.length).fill(null);
+    if (firstValidMacd >= 0 && firstValidMacd + 9 <= candles.length) {
+      const validMacd = macdLine.slice(firstValidMacd).filter((v) => v != null);
+      const mult = 2 / (9 + 1);
+      let sig = validMacd.slice(0, 9).reduce((s, v) => s + v, 0) / 9;
+      signalLine[firstValidMacd + 8] = sig;
+      for (let i = firstValidMacd + 9; i < candles.length; i++) {
+        if (macdLine[i] != null) {
+          sig = (macdLine[i] - sig) * mult + sig;
+          signalLine[i] = sig;
+        }
+      }
+    }
+
+    const macdLineData = [];
+    const signalLineData = [];
+    const histData = [];
+    for (let i = 0; i < candles.length; i++) {
+      const t = candles[i].time;
+      if (macdLine[i] != null) macdLineData.push({ time: t, value: macdLine[i] });
+      if (signalLine[i] != null) {
+        signalLineData.push({ time: t, value: signalLine[i] });
+        if (macdLine[i] != null) {
+          const h = macdLine[i] - signalLine[i];
+          histData.push({ time: t, value: h, color: h >= 0 ? "rgba(47,207,132,0.55)" : "rgba(255,99,99,0.55)" });
+        }
+      }
+    }
+
+    const macdScaleOpts = {
+      priceScaleId: "macd",
+      priceLineVisible: false,
+      crosshairMarkerVisible: false,
+      lastValueVisible: false,
+    };
+
+    // Histogram
+    let histSeries = null;
+    if (typeof chart.addHistogramSeries === "function") {
+      histSeries = chart.addHistogramSeries({ ...macdScaleOpts, priceFormat: { type: "price", precision: 4, minMove: 0.0001 } });
+    } else if (typeof chart.addSeries === "function" && chartLib.HistogramSeries) {
+      histSeries = chart.addSeries(chartLib.HistogramSeries, { ...macdScaleOpts, priceFormat: { type: "price", precision: 4, minMove: 0.0001 } });
+    }
+    if (histSeries) histSeries.setData(histData);
+
+    const macdLineSeries = addLine({ ...macdScaleOpts, color: "rgba(79,172,255,0.85)", lineWidth: 1.5 });
+    const signalLineSeries = addLine({ ...macdScaleOpts, color: "rgba(255,167,38,0.85)", lineWidth: 1.5, lineStyle: 2 });
+    if (macdLineSeries) macdLineSeries.setData(macdLineData);
+    if (signalLineSeries) signalLineSeries.setData(signalLineData);
+
+    chart.priceScale("macd").applyOptions({
+      scaleMargins: { top: 0.82, bottom: 0 },
+      drawTicks: false,
+      borderVisible: false,
+      visible: false,
+    });
+  }
+
+  // ── Compare overlay — normalised % change line for second symbol ──────────
+  const compareSymbol = state.chartCompareSymbol?.[panel];
+  if (compareSymbol) {
+    const cRange = state.chartRanges[panel] || "1mo";
+    const cInterval = chartIntervalForRange(cRange);
+    const cPoints = state.chartCache.get(chartKey(compareSymbol, cRange, cInterval)) || [];
+    if (cPoints.length >= 2) {
+      const firstClose = Number(cPoints[0]?.close ?? cPoints[0]?.price ?? 0);
+      if (firstClose > 0) {
+        const normalizedLine = cPoints.map((p) => {
+          const time = Number(p.timestamp ?? p.time ?? 0);
+          const close = Number(p.close ?? p.price ?? 0);
+          if (time <= 0 || !Number.isFinite(close)) return null;
+          return { time, value: ((close - firstClose) / firstClose) * 100 };
+        }).filter(Boolean);
+
+        if (normalizedLine.length >= 2) {
+          const compareColors = ["rgba(255,200,60,0.85)", "rgba(180,130,255,0.85)", "rgba(0,230,200,0.85)"];
+          const colorIdx = (panel - 1) % compareColors.length;
+          const compareSeries = addLine({
+            color: compareColors[colorIdx],
+            lineWidth: 1.5,
+            lineStyle: 2, // dashed
+            priceScaleId: "compare",
+            lastValueVisible: true,
+            priceLineVisible: false,
+          });
+          if (compareSeries) {
+            compareSeries.setData(normalizedLine);
+            chart.priceScale("compare").applyOptions({
+              scaleMargins: { top: 0.1, bottom: 0.1 },
+              borderVisible: false,
+              visible: false,
+            });
+          }
+        }
+      }
+    }
+  }
+
   chart.timeScale().fitContent();
 
   const disconnectResizeObserver = observeChartResize(container, chart);
   const symbol = state.panelSymbols[panel] || "AAPL";
   const range = state.chartRanges[panel] || "1mo";
-  chartViews.set(panel, { chart, container, disconnectResizeObserver, series, symbol, range });
+  chartViews.set(panel, { chart, container, disconnectResizeObserver, series, symbol, range, compareSymbol });
 }
 
 function calculateBlackScholes({ spot, strike, years, rate, volatility }) {
@@ -2698,16 +4461,43 @@ function calculateBlackScholes({ spot, strike, years, rate, volatility }) {
   const safeStrike = Math.max(Number(strike), 0.0001);
   const safeRate = Number(rate) / 100;
   const safeVol = Math.max(Number(volatility) / 100, 0.0001);
-  const d1 = (Math.log(safeSpot / safeStrike) + (safeRate + (safeVol ** 2) / 2) * safeYears) / (safeVol * Math.sqrt(safeYears));
-  const d2 = d1 - safeVol * Math.sqrt(safeYears);
+  const sqrtT = Math.sqrt(safeYears);
+  const d1 = (Math.log(safeSpot / safeStrike) + (safeRate + (safeVol ** 2) / 2) * safeYears) / (safeVol * sqrtT);
+  const d2 = d1 - safeVol * sqrtT;
   const normal = (value) => 0.5 * (1 + erf(value / Math.sqrt(2)));
   const density = (value) => Math.exp(-(value ** 2) / 2) / Math.sqrt(2 * Math.PI);
+  const discount = Math.exp(-safeRate * safeYears);
+
+  const call = safeSpot * normal(d1) - safeStrike * discount * normal(d2);
+  const put = safeStrike * discount * normal(-d2) - safeSpot * normal(-d1);
+  const callDelta = normal(d1);
+  const putDelta = callDelta - 1;
+  const gamma = density(d1) / (safeSpot * safeVol * sqrtT);
+  // Vega: price change per 1 percentage-point move in volatility
+  const vega = (safeSpot * density(d1) * sqrtT) / 100;
+  // Theta: daily decay (per-year value divided by 365)
+  const callTheta = (-(safeSpot * density(d1) * safeVol) / (2 * sqrtT) - safeRate * safeStrike * discount * normal(d2)) / 365;
+  const putTheta = (-(safeSpot * density(d1) * safeVol) / (2 * sqrtT) + safeRate * safeStrike * discount * normal(-d2)) / 365;
+  // Rho: price change per 1 percentage-point move in the risk-free rate
+  const callRho = (safeStrike * safeYears * discount * normal(d2)) / 100;
+  const putRho = (-safeStrike * safeYears * discount * normal(-d2)) / 100;
 
   return {
-    call: safeSpot * normal(d1) - safeStrike * Math.exp(-safeRate * safeYears) * normal(d2),
-    put: safeStrike * Math.exp(-safeRate * safeYears) * normal(-d2) - safeSpot * normal(-d1),
-    delta: normal(d1),
-    gamma: density(d1) / (safeSpot * safeVol * Math.sqrt(safeYears)),
+    call,
+    put,
+    // Back-compat: `delta` is call delta.
+    delta: callDelta,
+    gamma,
+    // Full greek surface
+    callDelta,
+    putDelta,
+    vega,
+    callTheta,
+    putTheta,
+    callRho,
+    putRho,
+    d1,
+    d2,
   };
 }
 
@@ -2779,17 +4569,26 @@ function extractHeadlineSymbol(headline) {
 }
 
 function chartIntervalForRange(range) {
-  return range === "5d" ? "1h" : "1d";
+  if (range === "5d" || range === "1d") return "1h";
+  if (range === "2y" || range === "5y" || range === "10y" || range === "max") return "1wk";
+  return "1d";
 }
 
 function normalizeChartRange(value) {
   const upper = String(value || "").toUpperCase();
   const map = {
     "5D": "5d",
+    "1D": "1d",
     "1M": "1mo",
     "3M": "3mo",
     "6M": "6mo",
+    "YTD": "ytd",
     "1Y": "1y",
+    "2Y": "2y",
+    "5Y": "5y",
+    "10Y": "10y",
+    "ALL": "max",
+    "MAX": "max",
   };
   return map[upper] || "1mo";
 }
@@ -2850,6 +4649,7 @@ function calculatePulse() {
 function syncUiCache() {
   workspaceController?.syncUiCache();
   queueMeridianStatePersist();
+  syncMobilePanelNav();
 }
 
 function currentTimeShort(value = Date.now()) {
@@ -2857,7 +4657,7 @@ function currentTimeShort(value = Date.now()) {
   return dateValue.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false });
 }
 
-function showToast(message, tone = "neutral") {
+function showToast(message, tone = "neutral", duration = 2500) {
   if (!el.toast) return;
   el.toast.textContent = message;
   el.toast.dataset.tone = tone;
@@ -2865,7 +4665,7 @@ function showToast(message, tone = "neutral") {
   window.clearTimeout(showToast.timer);
   showToast.timer = window.setTimeout(() => {
     el.toast.classList.remove("is-visible");
-  }, 2500);
+  }, Math.max(1500, Number(duration) || 2500));
 }
 
 export function initializeApp() {

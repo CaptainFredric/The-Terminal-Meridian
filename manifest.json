@@ -1,0 +1,24 @@
+{
+  "name": "Meridian Market Workspace",
+  "short_name": "Meridian",
+  "description": "Bloomberg-style market terminal — quotes, charts, screener, and portfolio in one workspace.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#06080d",
+  "theme_color": "#06080d",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/static/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/static/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ],
+  "categories": ["finance", "productivity"],
+  "screenshots": []
+}

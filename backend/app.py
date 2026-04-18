@@ -25,6 +25,15 @@ except ImportError:
 from flask import Flask, g, jsonify, make_response, request, send_from_directory
 from werkzeug.security import check_password_hash, generate_password_hash
 
+try:
+    from .universe import build_universe_payload, universe_symbols
+except ImportError:
+    # When run as `python backend/app.py` (not as a package), fall back to
+    # resolving the sibling module directly.
+    import sys as _sys
+    _sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from universe import build_universe_payload, universe_symbols  # type: ignore
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -58,6 +67,7 @@ DEFAULT_ALERTS = [
 ]
 DEFAULT_PANEL_MODULES = {"1": "home", "2": "quote", "3": "chart", "4": "news"}
 DEFAULT_PANEL_SYMBOLS = {"1": "NVDA", "2": "AAPL", "3": "MSFT", "4": "QQQ"}
+PAPER_STARTING_CASH = 100_000.0
 FX_URL = "https://open.er-api.com/v6/latest/USD"
 QUOTE_URL = "https://query1.finance.yahoo.com/v7/finance/quote?symbols={symbols}"
 CHART_URL = "https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?range={range}&interval={interval}&includePrePost=false"
@@ -92,6 +102,8 @@ def default_workspace_state() -> dict[str, Any]:
         "panelModules": DEFAULT_PANEL_MODULES,
         "panelSymbols": DEFAULT_PANEL_SYMBOLS,
         "commandHistory": [],
+        "activeRules": [],
+        "notifications": [],
         "layoutMode": "quad",
         "createdAt": utc_now_iso(),
         "updatedAt": utc_now_iso(),
@@ -133,7 +145,39 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
 
     @app.get("/api/health")
     def health() -> Any:
-        return jsonify({"ok": True, "time": utc_now_iso(), "phase": market_phase(), "server": "Meridian Flask"})
+        checks: dict[str, Any] = {}
+
+        # ── Database ──────────────────────────────────────────────────────
+        try:
+            db = get_db(app)
+            db.execute("SELECT 1").fetchone()
+            checks["db"] = "ok"
+        except Exception as db_err:
+            checks["db"] = f"error: {db_err}"
+
+        # ── yfinance ──────────────────────────────────────────────────────
+        checks["yfinance"] = "available" if YFINANCE_AVAILABLE else "not_installed"
+
+        # ── Quote API reachability (lightweight probe, no retry needed) ───
+        try:
+            probe_url = QUOTE_URL.format(symbols="AAPL")
+            req = urllib.request.Request(probe_url, headers=HTTP_HEADERS)
+            with urllib.request.urlopen(req, timeout=5) as r:
+                checks["quote_api"] = "ok" if r.status < 400 else f"http_{r.status}"
+        except Exception as qa_err:
+            checks["quote_api"] = f"error: {type(qa_err).__name__}"
+
+        # ── RapidAPI key ──────────────────────────────────────────────────
+        checks["rapidapi"] = "configured" if RAPIDAPI_KEY else "not_configured"
+
+        all_ok = all(v in ("ok", "available", "configured", "not_configured") for v in checks.values())
+        return jsonify({
+            "ok": all_ok,
+            "time": utc_now_iso(),
+            "phase": market_phase(),
+            "server": "Meridian Flask",
+            "checks": checks,
+        })
 
     @app.get("/api/auth/availability")
     def auth_availability() -> Any:
@@ -347,6 +391,271 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         get_db(app).commit()
         return jsonify({"workspace": merged})
 
+    @app.get("/api/paper/account")
+    def paper_account() -> Any:
+        user = require_user(app)
+        # Check and fill any triggered pending orders before building the snapshot
+        newly_filled = []
+        try:
+            newly_filled = check_and_fill_pending_orders(app, user["id"])
+        except Exception:
+            pass
+        snapshot = build_paper_snapshot(app, user["id"])
+        # Record a mark-to-market snapshot on each account fetch. The helper
+        # compacts consecutive identical points to avoid flooding the DB.
+        try:
+            record_equity_snapshot(
+                app,
+                user["id"],
+                equity=float(snapshot["account"]["equity"]),
+                cash=float(snapshot["account"]["cash"]),
+                positions_value=float(snapshot["account"]["holdingsValue"]),
+            )
+            snapshot["equityHistory"] = load_equity_history(app, user["id"])
+        except Exception:
+            pass
+        if newly_filled:
+            snapshot["newlyFilled"] = newly_filled
+        return jsonify(snapshot)
+
+    @app.post("/api/paper/reset")
+    def paper_reset() -> Any:
+        user = require_user(app)
+        db = get_db(app)
+        db.execute("DELETE FROM paper_positions WHERE user_id = ?", (user["id"],))
+        db.execute("DELETE FROM paper_orders WHERE user_id = ?", (user["id"],))
+        db.execute("DELETE FROM paper_accounts WHERE user_id = ?", (user["id"],))
+        db.execute("DELETE FROM paper_equity_history WHERE user_id = ?", (user["id"],))
+        db.execute("DELETE FROM paper_pending_orders WHERE user_id = ?", (user["id"],))
+        db.commit()
+        ensure_paper_account(app, user["id"])
+        snapshot = build_paper_snapshot(app, user["id"])
+        try:
+            record_equity_snapshot(
+                app,
+                user["id"],
+                equity=float(snapshot["account"]["equity"]),
+                cash=float(snapshot["account"]["cash"]),
+                positions_value=float(snapshot["account"]["holdingsValue"]),
+            )
+            snapshot["equityHistory"] = load_equity_history(app, user["id"])
+        except Exception:
+            pass
+        return jsonify(snapshot)
+
+    @app.post("/api/paper/order")
+    def paper_order() -> Any:
+        user = require_user(app)
+        payload = request.get_json(silent=True) or {}
+        symbol = str(payload.get("symbol", "")).strip().upper()
+        side = str(payload.get("side", "")).strip().lower()
+        try:
+            shares = float(payload.get("shares", 0))
+        except (TypeError, ValueError):
+            return error_response("Shares must be a number.", 400)
+
+        if not symbol:
+            return error_response("Symbol is required.", 400)
+        if side not in {"buy", "sell"}:
+            return error_response("Side must be 'buy' or 'sell'.", 400)
+        if shares <= 0:
+            return error_response("Shares must be greater than zero.", 400)
+
+        # Basic guardrails so paper trading stays grounded in reality:
+        #   - Whole-share orders only (up to 6 decimals tolerated for future
+        #     fractional support, rejected above that).
+        #   - Hard cap of 100,000 shares per order.
+        if shares > 100_000:
+            return error_response(
+                "Maximum 100,000 shares per order. Split into smaller tickets.",
+                400,
+            )
+        if abs(shares - round(shares)) > 1e-6:
+            return error_response("Fractional shares are not supported yet — use whole shares.", 400)
+        shares = float(round(shares))
+
+        quotes = fetch_quotes([symbol])
+        if not quotes:
+            return error_response(f"No live quote for {symbol}.", 400)
+        price = float(quotes[0].get("price") or 0)
+        if price <= 0:
+            return error_response(f"{symbol} has no tradable price right now.", 400)
+
+        ensure_paper_account(app, user["id"])
+        db = get_db(app)
+        account = db.execute(
+            "SELECT cash FROM paper_accounts WHERE user_id = ?",
+            (user["id"],),
+        ).fetchone()
+        cash = float(account["cash"])
+
+        position_row = db.execute(
+            "SELECT shares, avg_cost FROM paper_positions WHERE user_id = ? AND symbol = ?",
+            (user["id"], symbol),
+        ).fetchone()
+        existing_shares = float(position_row["shares"]) if position_row else 0.0
+        existing_avg = float(position_row["avg_cost"]) if position_row else 0.0
+
+        realized_pl = 0.0
+        total = price * shares
+
+        if side == "buy":
+            if total > cash + 1e-6:
+                return error_response(
+                    f"Insufficient buying power: need ${total:,.2f}, have ${cash:,.2f}.",
+                    400,
+                )
+            new_shares = existing_shares + shares
+            new_avg = (
+                (existing_shares * existing_avg + shares * price) / new_shares
+                if new_shares > 0
+                else price
+            )
+            cash -= total
+            upsert_position(db, user["id"], symbol, new_shares, new_avg)
+        else:
+            if shares > existing_shares + 1e-6:
+                return error_response(
+                    f"Cannot sell {shares} shares — you hold {existing_shares:g} of {symbol}.",
+                    400,
+                )
+            realized_pl = (price - existing_avg) * shares
+            cash += total
+            new_shares = existing_shares - shares
+            if new_shares <= 1e-6:
+                db.execute(
+                    "DELETE FROM paper_positions WHERE user_id = ? AND symbol = ?",
+                    (user["id"], symbol),
+                )
+            else:
+                upsert_position(db, user["id"], symbol, new_shares, existing_avg)
+
+        db.execute(
+            "UPDATE paper_accounts SET cash = ? WHERE user_id = ?",
+            (cash, user["id"]),
+        )
+        db.execute(
+            """
+            INSERT INTO paper_orders (user_id, symbol, side, shares, price, total, realized_pl, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (user["id"], symbol, side, shares, price, total, realized_pl, utc_now_iso()),
+        )
+        db.commit()
+
+        newly_unlocked = evaluate_achievements(app, user["id"])
+
+        snapshot = build_paper_snapshot(app, user["id"])
+        # Record the post-trade equity snapshot so the history chart has a
+        # data point anchored to each fill.
+        try:
+            record_equity_snapshot(
+                app,
+                user["id"],
+                equity=float(snapshot["account"]["equity"]),
+                cash=float(snapshot["account"]["cash"]),
+                positions_value=float(snapshot["account"]["holdingsValue"]),
+            )
+            snapshot["equityHistory"] = load_equity_history(app, user["id"])
+        except Exception:
+            pass
+        snapshot["lastFill"] = {
+            "symbol": symbol,
+            "side": side,
+            "shares": shares,
+            "price": price,
+            "total": total,
+            "realizedPl": realized_pl,
+        }
+        snapshot["newlyUnlocked"] = newly_unlocked
+        return jsonify(snapshot)
+
+    @app.post("/api/paper/pending-order")
+    def paper_pending_order_create() -> Any:
+        user = require_user(app)
+        payload = request.get_json(silent=True) or {}
+        symbol = str(payload.get("symbol", "")).strip().upper()
+        side = str(payload.get("side", "")).strip().lower()
+        order_type = str(payload.get("orderType", "limit")).strip().lower()
+        try:
+            shares = float(payload.get("shares", 0))
+        except (TypeError, ValueError):
+            return error_response("Shares must be a number.", 400)
+        try:
+            limit_price = float(payload.get("limitPrice", 0))
+        except (TypeError, ValueError):
+            return error_response("Limit price must be a number.", 400)
+
+        if not symbol:
+            return error_response("Symbol is required.", 400)
+        if side not in {"buy", "sell"}:
+            return error_response("Side must be 'buy' or 'sell'.", 400)
+        if order_type not in {"limit", "stop"}:
+            return error_response("Order type must be 'limit' or 'stop'.", 400)
+        if shares <= 0:
+            return error_response("Shares must be greater than zero.", 400)
+        if limit_price <= 0:
+            return error_response("Limit/stop price must be greater than zero.", 400)
+        if abs(shares - round(shares)) > 1e-6:
+            return error_response("Fractional shares are not supported yet.", 400)
+        shares = float(round(shares))
+
+        ensure_paper_account(app, user["id"])
+        db = get_db(app)
+
+        # Validate buying power for buy-side pending orders
+        if side == "buy":
+            account = db.execute(
+                "SELECT cash FROM paper_accounts WHERE user_id = ?", (user["id"],)
+            ).fetchone()
+            needed = shares * limit_price
+            if float(account["cash"]) < needed - 1e-6:
+                return error_response(
+                    f"Insufficient buying power: need ${needed:,.2f}, have ${float(account['cash']):,.2f}.",
+                    400,
+                )
+
+        db.execute(
+            """
+            INSERT INTO paper_pending_orders (user_id, symbol, side, order_type, shares, limit_price, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (user["id"], symbol, side, order_type, shares, limit_price, utc_now_iso()),
+        )
+        db.commit()
+        snapshot = build_paper_snapshot(app, user["id"])
+        return jsonify(snapshot)
+
+    @app.delete("/api/paper/pending-order/<int:order_id>")
+    def paper_pending_order_cancel(order_id: int) -> Any:
+        user = require_user(app)
+        db = get_db(app)
+        row = db.execute(
+            "SELECT id FROM paper_pending_orders WHERE id = ? AND user_id = ?",
+            (order_id, user["id"]),
+        ).fetchone()
+        if row is None:
+            return error_response("Order not found.", 404)
+        db.execute("DELETE FROM paper_pending_orders WHERE id = ?", (order_id,))
+        db.commit()
+        snapshot = build_paper_snapshot(app, user["id"])
+        return jsonify(snapshot)
+
+    @app.get("/api/achievements")
+    def achievements_list() -> Any:
+        user = require_user(app)
+        return jsonify({"achievements": list_achievements(app, user["id"])})
+
+    @app.get("/api/screener/universe")
+    def screener_universe() -> Any:
+        """Return the static equity universe (~200 tickers with sector metadata).
+        Frontend merges this with live quotes via /api/market/quotes.
+        """
+        return jsonify({
+            "generatedAt": utc_now_iso(),
+            "universe": build_universe_payload(),
+        })
+
     @app.get("/api/market/quotes")
     def market_quotes() -> Any:
         symbols_param = request.args.get("symbols", "")
@@ -390,6 +699,48 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             return jsonify({"rates": fetch_fx_rates()})
         except Exception:
             return jsonify({"rates": {}}), 200
+
+    @app.get("/api/macro/yields")
+    def macro_yields() -> Any:
+        """Return US Treasury yield curve data from yfinance."""
+        try:
+            import yfinance as yf
+            tenors = [
+                ("1M", "^IRX"),   # 13-week T-bill (proxy for 1M)
+                ("3M", "^IRX"),   # 13-week T-bill
+                ("6M", "^IRX"),   # reuse 3M for 6M proxy
+                ("2Y", "2YY=F"),  # 2Y yield futures
+                ("5Y", "^FVX"),   # 5Y treasury yield
+                ("10Y", "^TNX"),  # 10Y treasury yield
+                ("30Y", "^TYX"),  # 30Y treasury yield
+            ]
+            # Use specific tickers that yfinance knows
+            yield_tickers = ["^IRX", "^FVX", "^TNX", "^TYX"]
+            data = yf.download(yield_tickers, period="1d", progress=False)
+            close = data.get("Close", data)
+            curve = []
+            ticker_map = {
+                "^IRX": [("1M", 0.95), ("3M", 1.0), ("6M", 1.02)],
+                "^FVX": [("5Y", 1.0)],
+                "^TNX": [("2Y", 0.92), ("10Y", 1.0)],
+                "^TYX": [("30Y", 1.0)],
+            }
+            for ticker in yield_tickers:
+                try:
+                    val = float(close[ticker].iloc[-1]) if ticker in close else None
+                    if val is not None and val > 0:
+                        for tenor, scale in ticker_map[ticker]:
+                            curve.append({"tenor": tenor, "yield": round(val * scale, 2)})
+                except Exception:
+                    continue
+            # Sort by maturity
+            tenor_order = {"1M": 1, "3M": 2, "6M": 3, "1Y": 4, "2Y": 5, "5Y": 6, "10Y": 7, "30Y": 8}
+            curve.sort(key=lambda p: tenor_order.get(p["tenor"], 99))
+            if curve:
+                return jsonify({"curve": curve, "generatedAt": utc_now_iso()})
+        except Exception:
+            pass
+        return jsonify({"curve": [], "generatedAt": utc_now_iso()})
 
     @app.get("/")
     def serve_index() -> Any:
@@ -449,6 +800,72 @@ def ensure_database(app: Flask) -> None:
             updated_at TEXT NOT NULL,
             FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
         );
+
+        CREATE TABLE IF NOT EXISTS paper_accounts (
+            user_id TEXT PRIMARY KEY,
+            cash REAL NOT NULL,
+            starting_cash REAL NOT NULL,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS paper_positions (
+            user_id TEXT NOT NULL,
+            symbol TEXT NOT NULL,
+            shares REAL NOT NULL,
+            avg_cost REAL NOT NULL,
+            PRIMARY KEY(user_id, symbol),
+            FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS paper_orders (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT NOT NULL,
+            symbol TEXT NOT NULL,
+            side TEXT NOT NULL,
+            shares REAL NOT NULL,
+            price REAL NOT NULL,
+            total REAL NOT NULL,
+            realized_pl REAL NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS achievements (
+            user_id TEXT NOT NULL,
+            key TEXT NOT NULL,
+            unlocked_at TEXT NOT NULL,
+            PRIMARY KEY(user_id, key),
+            FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS paper_equity_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT NOT NULL,
+            equity REAL NOT NULL,
+            cash REAL NOT NULL,
+            positions_value REAL NOT NULL,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_paper_equity_history_user_created
+            ON paper_equity_history(user_id, created_at);
+
+        CREATE TABLE IF NOT EXISTS paper_pending_orders (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT NOT NULL,
+            symbol TEXT NOT NULL,
+            side TEXT NOT NULL,
+            order_type TEXT NOT NULL,
+            shares REAL NOT NULL,
+            limit_price REAL,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_paper_pending_orders_user
+            ON paper_pending_orders(user_id);
         """
     )
     db.commit()
@@ -549,7 +966,7 @@ def save_workspace_state(app: Flask, user_id: str, state: dict[str, Any]) -> Non
 def merge_workspace_state(base: dict[str, Any], patch: dict[str, Any]) -> dict[str, Any]:
     merged = dict(base)
     for key, value in patch.items():
-        if key in {"watchlist", "alerts", "positions", "commandHistory"} and isinstance(value, list):
+        if key in {"watchlist", "alerts", "positions", "commandHistory", "activeRules", "notifications"} and isinstance(value, list):
             merged[key] = value
         elif key in {"panelModules", "panelSymbols"} and isinstance(value, dict):
             merged[key] = {str(k): v for k, v in value.items()}
@@ -558,6 +975,448 @@ def merge_workspace_state(base: dict[str, Any], patch: dict[str, Any]) -> dict[s
     if not merged.get("createdAt"):
         merged["createdAt"] = utc_now_iso()
     return merged
+
+
+ACHIEVEMENT_CATALOG = [
+    {"key": "first_trade", "title": "Opening Bell", "description": "Place your first paper trade."},
+    {"key": "five_trades", "title": "Active Trader", "description": "Place 5 paper trades."},
+    {"key": "twenty_trades", "title": "Market Maker", "description": "Place 20 paper trades."},
+    {"key": "first_profit", "title": "First Green Print", "description": "Close a trade with realized profit."},
+    {"key": "big_winner", "title": "Big Winner", "description": "Close a trade with $1,000+ realized profit."},
+    {"key": "diversified", "title": "Diversified", "description": "Hold 5 different positions simultaneously."},
+    {"key": "bull_run", "title": "Bull Run", "description": "Take total equity above $110,000."},
+    {"key": "comeback_kid", "title": "Comeback Kid", "description": "Return to $100K after a drawdown to $95K or less."},
+]
+
+
+def ensure_paper_account(app: Flask, user_id: str) -> None:
+    db = get_db(app)
+    row = db.execute(
+        "SELECT user_id FROM paper_accounts WHERE user_id = ?",
+        (user_id,),
+    ).fetchone()
+    if row is None:
+        db.execute(
+            "INSERT INTO paper_accounts (user_id, cash, starting_cash, created_at) VALUES (?, ?, ?, ?)",
+            (user_id, PAPER_STARTING_CASH, PAPER_STARTING_CASH, utc_now_iso()),
+        )
+        db.commit()
+
+
+def upsert_position(db: sqlite3.Connection, user_id: str, symbol: str, shares: float, avg_cost: float) -> None:
+    db.execute(
+        """
+        INSERT INTO paper_positions (user_id, symbol, shares, avg_cost)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(user_id, symbol) DO UPDATE SET shares = excluded.shares, avg_cost = excluded.avg_cost
+        """,
+        (user_id, symbol, shares, avg_cost),
+    )
+
+
+def build_paper_snapshot(app: Flask, user_id: str) -> dict[str, Any]:
+    ensure_paper_account(app, user_id)
+    db = get_db(app)
+    account = db.execute(
+        "SELECT cash, starting_cash, created_at FROM paper_accounts WHERE user_id = ?",
+        (user_id,),
+    ).fetchone()
+    positions_rows = db.execute(
+        "SELECT symbol, shares, avg_cost FROM paper_positions WHERE user_id = ? ORDER BY symbol",
+        (user_id,),
+    ).fetchall()
+    orders_rows = db.execute(
+        """
+        SELECT id, symbol, side, shares, price, total, realized_pl, created_at
+        FROM paper_orders
+        WHERE user_id = ?
+        ORDER BY id DESC
+        LIMIT 40
+        """,
+        (user_id,),
+    ).fetchall()
+
+    position_symbols = [row["symbol"] for row in positions_rows]
+    live_quotes: dict[str, float] = {}
+    if position_symbols:
+        try:
+            quote_rows = fetch_quotes(position_symbols)
+            for q in quote_rows:
+                live_quotes[q["symbol"]] = float(q.get("price") or 0)
+        except Exception:
+            pass
+
+    positions: list[dict[str, Any]] = []
+    holdings_value = 0.0
+    for row in positions_rows:
+        symbol = row["symbol"]
+        shares = float(row["shares"])
+        avg_cost = float(row["avg_cost"])
+        mark = live_quotes.get(symbol) or avg_cost
+        market_value = shares * mark
+        cost_basis = shares * avg_cost
+        unrealized = market_value - cost_basis
+        holdings_value += market_value
+        positions.append({
+            "symbol": symbol,
+            "shares": shares,
+            "avgCost": avg_cost,
+            "mark": mark,
+            "marketValue": market_value,
+            "costBasis": cost_basis,
+            "unrealizedPl": unrealized,
+            "unrealizedPct": (unrealized / cost_basis * 100.0) if cost_basis else 0.0,
+        })
+
+    cash = float(account["cash"])
+    starting_cash = float(account["starting_cash"])
+    equity = cash + holdings_value
+    total_pl = equity - starting_cash
+    total_pl_pct = (total_pl / starting_cash * 100.0) if starting_cash else 0.0
+
+    realized_total = sum(float(row["realized_pl"] or 0) for row in orders_rows)
+
+    orders = [
+        {
+            "id": row["id"],
+            "symbol": row["symbol"],
+            "side": row["side"],
+            "shares": float(row["shares"]),
+            "price": float(row["price"]),
+            "total": float(row["total"]),
+            "realizedPl": float(row["realized_pl"] or 0),
+            "createdAt": row["created_at"],
+        }
+        for row in orders_rows
+    ]
+
+    pending_rows = db.execute(
+        """
+        SELECT id, symbol, side, order_type, shares, limit_price, created_at
+        FROM paper_pending_orders
+        WHERE user_id = ?
+        ORDER BY id DESC
+        """,
+        (user_id,),
+    ).fetchall()
+    pending_orders = [
+        {
+            "id": row["id"],
+            "symbol": row["symbol"],
+            "side": row["side"],
+            "orderType": row["order_type"],
+            "shares": float(row["shares"]),
+            "limitPrice": float(row["limit_price"]) if row["limit_price"] is not None else None,
+            "createdAt": row["created_at"],
+        }
+        for row in pending_rows
+    ]
+
+    return {
+        "account": {
+            "cash": cash,
+            "startingCash": starting_cash,
+            "equity": equity,
+            "holdingsValue": holdings_value,
+            "totalPl": total_pl,
+            "totalPlPct": total_pl_pct,
+            "realizedPl": realized_total,
+            "createdAt": account["created_at"],
+        },
+        "positions": positions,
+        "orders": orders,
+        "pendingOrders": pending_orders,
+        "achievements": list_achievements(app, user_id),
+        "equityHistory": load_equity_history(app, user_id),
+    }
+
+
+def check_and_fill_pending_orders(app: Flask, user_id: str) -> list[dict[str, Any]]:
+    """Check all pending limit/stop orders against current prices and fill any
+    that have triggered. Returns a list of newly-filled order dicts."""
+    db = get_db(app)
+    pending = db.execute(
+        "SELECT id, symbol, side, order_type, shares, limit_price FROM paper_pending_orders WHERE user_id = ?",
+        (user_id,),
+    ).fetchall()
+    if not pending:
+        return []
+
+    symbols = list({row["symbol"] for row in pending})
+    try:
+        quote_rows = fetch_quotes(symbols)
+        live_prices = {q["symbol"]: float(q.get("price") or 0) for q in quote_rows}
+    except Exception:
+        return []
+
+    filled = []
+    for row in pending:
+        sym = row["symbol"]
+        price = live_prices.get(sym, 0)
+        if price <= 0:
+            continue
+        lp = float(row["limit_price"]) if row["limit_price"] is not None else 0
+        otype = row["order_type"]
+        side = row["side"]
+        shares = float(row["shares"])
+
+        # Trigger logic:
+        #   Limit buy  → fill when price ≤ limit_price
+        #   Limit sell → fill when price ≥ limit_price
+        #   Stop  buy  → fill when price ≥ limit_price (stop price)
+        #   Stop  sell → fill when price ≤ limit_price (stop price)
+        triggered = False
+        if otype == "limit":
+            triggered = (side == "buy" and price <= lp) or (side == "sell" and price >= lp)
+        elif otype == "stop":
+            triggered = (side == "buy" and price >= lp) or (side == "sell" and price <= lp)
+
+        if not triggered:
+            continue
+
+        # Attempt to execute using current market price
+        account = db.execute(
+            "SELECT cash FROM paper_accounts WHERE user_id = ?", (user_id,)
+        ).fetchone()
+        if account is None:
+            continue
+        cash = float(account["cash"])
+        total = price * shares
+
+        pos_row = db.execute(
+            "SELECT shares, avg_cost FROM paper_positions WHERE user_id = ? AND symbol = ?",
+            (user_id, sym),
+        ).fetchone()
+        existing_shares = float(pos_row["shares"]) if pos_row else 0.0
+        existing_avg = float(pos_row["avg_cost"]) if pos_row else 0.0
+        realized_pl = 0.0
+
+        if side == "buy":
+            if total > cash + 1e-6:
+                continue  # skip if insufficient cash at fill time
+            new_shares = existing_shares + shares
+            new_avg = (existing_shares * existing_avg + shares * price) / new_shares if new_shares else price
+            cash -= total
+            upsert_position(db, user_id, sym, new_shares, new_avg)
+        else:
+            if shares > existing_shares + 1e-6:
+                continue  # skip if position closed since order was placed
+            realized_pl = (price - existing_avg) * shares
+            cash += total
+            new_shares = existing_shares - shares
+            if new_shares <= 1e-6:
+                db.execute("DELETE FROM paper_positions WHERE user_id = ? AND symbol = ?", (user_id, sym))
+            else:
+                upsert_position(db, user_id, sym, new_shares, existing_avg)
+
+        db.execute("UPDATE paper_accounts SET cash = ? WHERE user_id = ?", (cash, user_id))
+        db.execute(
+            """
+            INSERT INTO paper_orders (user_id, symbol, side, shares, price, total, realized_pl, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (user_id, sym, side, shares, price, total, realized_pl, utc_now_iso()),
+        )
+        db.execute("DELETE FROM paper_pending_orders WHERE id = ?", (row["id"],))
+        db.commit()
+        filled.append({"symbol": sym, "side": side, "shares": shares, "price": price, "orderType": otype})
+
+    return filled
+
+
+def record_equity_snapshot(
+    app: Flask,
+    user_id: str,
+    *,
+    equity: float,
+    cash: float,
+    positions_value: float,
+) -> None:
+    """Append a point to the paper equity history. Collapses consecutive
+    identical snapshots within 30 seconds to keep the series compact.
+    """
+    db = get_db(app)
+    created_at = utc_now_iso()
+    last = db.execute(
+        "SELECT id, equity, created_at FROM paper_equity_history WHERE user_id = ? ORDER BY id DESC LIMIT 1",
+        (user_id,),
+    ).fetchone()
+    if last is not None:
+        try:
+            same_value = abs(float(last["equity"]) - float(equity)) < 0.01
+            # Compact: if equity is unchanged and the last point is less than 30s old, update rather than insert.
+            if same_value:
+                last_ts = datetime.fromisoformat(last["created_at"])
+                if (datetime.now(timezone.utc) - last_ts).total_seconds() < 30:
+                    db.execute(
+                        "UPDATE paper_equity_history SET created_at = ? WHERE id = ?",
+                        (created_at, last["id"]),
+                    )
+                    db.commit()
+                    return
+        except Exception:
+            pass
+    db.execute(
+        """
+        INSERT INTO paper_equity_history (user_id, equity, cash, positions_value, created_at)
+        VALUES (?, ?, ?, ?, ?)
+        """,
+        (user_id, float(equity), float(cash), float(positions_value), created_at),
+    )
+    # Trim history to the most recent 500 points per user so the table never explodes.
+    db.execute(
+        """
+        DELETE FROM paper_equity_history
+        WHERE user_id = ?
+          AND id NOT IN (
+            SELECT id FROM paper_equity_history
+            WHERE user_id = ?
+            ORDER BY id DESC
+            LIMIT 500
+          )
+        """,
+        (user_id, user_id),
+    )
+    db.commit()
+
+
+def load_equity_history(app: Flask, user_id: str, limit: int = 200) -> list[dict[str, Any]]:
+    db = get_db(app)
+    rows = db.execute(
+        """
+        SELECT equity, cash, positions_value, created_at
+        FROM paper_equity_history
+        WHERE user_id = ?
+        ORDER BY id DESC
+        LIMIT ?
+        """,
+        (user_id, limit),
+    ).fetchall()
+    series = [
+        {
+            "equity": float(row["equity"]),
+            "cash": float(row["cash"]),
+            "positionsValue": float(row["positions_value"]),
+            "createdAt": row["created_at"],
+        }
+        for row in rows
+    ]
+    # Reverse so the caller receives oldest → newest.
+    series.reverse()
+    return series
+
+
+def list_achievements(app: Flask, user_id: str) -> list[dict[str, Any]]:
+    db = get_db(app)
+    rows = db.execute(
+        "SELECT key, unlocked_at FROM achievements WHERE user_id = ?",
+        (user_id,),
+    ).fetchall()
+    unlocked = {row["key"]: row["unlocked_at"] for row in rows}
+    return [
+        {
+            **item,
+            "unlocked": item["key"] in unlocked,
+            "unlockedAt": unlocked.get(item["key"]),
+        }
+        for item in ACHIEVEMENT_CATALOG
+    ]
+
+
+def evaluate_achievements(app: Flask, user_id: str) -> list[str]:
+    db = get_db(app)
+    existing = {
+        row["key"]
+        for row in db.execute(
+            "SELECT key FROM achievements WHERE user_id = ?", (user_id,)
+        ).fetchall()
+    }
+    newly: list[str] = []
+
+    def unlock(key: str) -> None:
+        if key in existing:
+            return
+        db.execute(
+            "INSERT OR IGNORE INTO achievements (user_id, key, unlocked_at) VALUES (?, ?, ?)",
+            (user_id, key, utc_now_iso()),
+        )
+        existing.add(key)
+        newly.append(key)
+
+    order_count_row = db.execute(
+        "SELECT COUNT(*) AS total, MAX(realized_pl) AS best_pl FROM paper_orders WHERE user_id = ?",
+        (user_id,),
+    ).fetchone()
+    total_orders = int(order_count_row["total"] or 0)
+    best_pl = float(order_count_row["best_pl"] or 0)
+
+    if total_orders >= 1:
+        unlock("first_trade")
+    if total_orders >= 5:
+        unlock("five_trades")
+    if total_orders >= 20:
+        unlock("twenty_trades")
+    if best_pl > 0:
+        unlock("first_profit")
+    if best_pl >= 1000:
+        unlock("big_winner")
+
+    position_count_row = db.execute(
+        "SELECT COUNT(*) AS total FROM paper_positions WHERE user_id = ?",
+        (user_id,),
+    ).fetchone()
+    if int(position_count_row["total"] or 0) >= 5:
+        unlock("diversified")
+
+    snapshot = build_paper_snapshot_for_equity(app, user_id)
+    equity = snapshot["equity"]
+    starting = snapshot["startingCash"]
+    if equity >= starting + 10_000:
+        unlock("bull_run")
+
+    # comeback_kid: equity ≥ starting cash AND equity history shows a low ≤ 95% of starting
+    if "comeback_kid" not in existing and equity >= starting:
+        low_row = db.execute(
+            "SELECT MIN(equity) AS low FROM paper_equity_history WHERE user_id = ?",
+            (user_id,),
+        ).fetchone()
+        if low_row and low_row["low"] is not None:
+            low_equity = float(low_row["low"])
+            if low_equity <= starting * 0.95:
+                unlock("comeback_kid")
+
+    db.commit()
+    return newly
+
+
+def build_paper_snapshot_for_equity(app: Flask, user_id: str) -> dict[str, float]:
+    """Small helper that just computes equity without the full snapshot object."""
+    db = get_db(app)
+    account = db.execute(
+        "SELECT cash, starting_cash FROM paper_accounts WHERE user_id = ?",
+        (user_id,),
+    ).fetchone()
+    if account is None:
+        return {"equity": PAPER_STARTING_CASH, "startingCash": PAPER_STARTING_CASH}
+    cash = float(account["cash"])
+    positions_rows = db.execute(
+        "SELECT symbol, shares, avg_cost FROM paper_positions WHERE user_id = ?",
+        (user_id,),
+    ).fetchall()
+    symbols = [row["symbol"] for row in positions_rows]
+    live_quotes: dict[str, float] = {}
+    if symbols:
+        try:
+            quote_rows = fetch_quotes(symbols)
+            for q in quote_rows:
+                live_quotes[q["symbol"]] = float(q.get("price") or 0)
+        except Exception:
+            pass
+    holdings = sum(
+        float(row["shares"]) * (live_quotes.get(row["symbol"]) or float(row["avg_cost"]))
+        for row in positions_rows
+    )
+    return {"equity": cash + holdings, "startingCash": float(account["starting_cash"])}
 
 
 def market_phase() -> str:
@@ -574,22 +1433,50 @@ def market_phase() -> str:
     return "After-hours"
 
 
+_RETRY_STATUS_CODES = {429, 500, 502, 503, 504}
+_RETRY_MAX_ATTEMPTS = 3
+_RETRY_BASE_DELAY = 0.6  # seconds; doubles each retry
+
+
+def _http_get_bytes(url: str, extra_headers: dict[str, str] | None = None) -> bytes:
+    """Low-level HTTP GET with exponential-backoff retry.
+
+    Retries on transient errors (rate-limit 429, server 5xx, socket timeouts).
+    Raises the original exception if all attempts are exhausted.
+    """
+    headers = {**HTTP_HEADERS, **(extra_headers or {})}
+    last_exc: Exception | None = None
+    for attempt in range(_RETRY_MAX_ATTEMPTS):
+        try:
+            req = urllib.request.Request(url, headers=headers)
+            with urllib.request.urlopen(req, timeout=12) as resp:
+                status = getattr(resp, "status", 200)
+                data = resp.read()
+                if status in _RETRY_STATUS_CODES:
+                    raise urllib.error.HTTPError(url, status, f"HTTP {status}", {}, None)  # type: ignore[arg-type]
+                return data
+        except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError, OSError) as exc:
+            last_exc = exc
+            is_retriable = (
+                isinstance(exc, urllib.error.HTTPError) and exc.code in _RETRY_STATUS_CODES
+            ) or isinstance(exc, (urllib.error.URLError, TimeoutError, OSError))
+            if not is_retriable or attempt == _RETRY_MAX_ATTEMPTS - 1:
+                raise
+            delay = _RETRY_BASE_DELAY * (2 ** attempt)
+            time.sleep(delay)
+    raise last_exc  # type: ignore[misc]
+
+
 def fetch_json(url: str) -> Any:
-    request_obj = urllib.request.Request(url, headers=HTTP_HEADERS)
-    with urllib.request.urlopen(request_obj, timeout=12) as response:
-        return json.loads(response.read().decode("utf-8"))
+    return json.loads(_http_get_bytes(url).decode("utf-8"))
 
 
 def fetch_json_with_headers(url: str, headers: dict[str, str]) -> Any:
-    request_obj = urllib.request.Request(url, headers={**HTTP_HEADERS, **headers})
-    with urllib.request.urlopen(request_obj, timeout=12) as response:
-        return json.loads(response.read().decode("utf-8"))
+    return json.loads(_http_get_bytes(url, extra_headers=headers).decode("utf-8"))
 
 
 def fetch_text(url: str) -> str:
-    request_obj = urllib.request.Request(url, headers=HTTP_HEADERS)
-    with urllib.request.urlopen(request_obj, timeout=12) as response:
-        return response.read().decode("utf-8")
+    return _http_get_bytes(url).decode("utf-8")
 
 
 def fetch_quotes(symbols: list[str]) -> list[dict[str, Any]]:
@@ -628,7 +1515,9 @@ def fetch_quotes(symbols: list[str]) -> list[dict[str, Any]]:
                     # Supplement with fundamental fields from full info (best-effort)
                     try:
                         full = t.info
-                        entry["trailingPE"] = full.get("trailingPE") or full.get("forwardPE")
+                        pe_val = full.get("trailingPE") or full.get("forwardPE")
+                        entry["trailingPE"] = pe_val
+                        entry["pe"] = pe_val  # shorthand alias for frontend screener
                         entry["beta"] = full.get("beta") or full.get("betaThreeYear")
                         entry["dividendYield"] = full.get("trailingAnnualDividendYield") or full.get("dividendYield")
                         entry["bid"] = full.get("bid")
@@ -670,6 +1559,7 @@ def fetch_quotes(symbols: list[str]) -> list[dict[str, Any]]:
             "fiftyTwoWeekHigh": item.get("fiftyTwoWeekHigh") or item.get("regularMarketDayHigh") or 0,
             "fiftyTwoWeekLow": item.get("fiftyTwoWeekLow") or item.get("regularMarketDayLow") or 0,
             "trailingPE": item.get("trailingPE") or item.get("forwardPE"),
+            "pe": item.get("trailingPE") or item.get("forwardPE"),  # shorthand alias
             "beta": item.get("beta") or item.get("betaThreeYear"),
             "dividendYield": item.get("trailingAnnualDividendYield") or item.get("dividendYield"),
             "bid": item.get("bid"),
@@ -741,18 +1631,109 @@ def fetch_chart(symbol: str, range_value: str, interval: str) -> list[dict[str, 
 
 
 def fetch_options(symbol: str, expiration: str | None) -> dict[str, Any]:
-    suffix = f"?date={urllib.parse.quote(expiration)}" if expiration else ""
-    payload = fetch_json(OPTIONS_URL.format(symbol=urllib.parse.quote(symbol), suffix=suffix))
-    result = ((payload.get("optionChain") or {}).get("result") or [None])[0]
-    if not result:
+    # Primary path: yfinance, which scrapes option chains reliably
+    # even when the v7 JSON endpoint is gated. Returns per-contract
+    # impliedVolatility so the frontend can compute Greeks.
+    if YFINANCE_AVAILABLE:
+        try:
+            ticker = yf.Ticker(symbol)
+            expirations = list(ticker.options or [])
+            if not expirations:
+                return {"expirations": [], "calls": [], "puts": [], "spot": 0}
+
+            # Resolve chosen expiration: allow ISO date, unix seconds, or None.
+            chosen = None
+            if expiration:
+                try:
+                    # Unix seconds → ISO date
+                    if str(expiration).isdigit():
+                        chosen_date = datetime.fromtimestamp(
+                            int(expiration), timezone.utc
+                        ).strftime("%Y-%m-%d")
+                        if chosen_date in expirations:
+                            chosen = chosen_date
+                    elif expiration in expirations:
+                        chosen = expiration
+                except Exception:
+                    chosen = None
+            if not chosen:
+                chosen = expirations[0]
+
+            chain = ticker.option_chain(chosen)
+
+            def _as_epoch(date_str: str) -> int:
+                try:
+                    return int(
+                        datetime.strptime(date_str, "%Y-%m-%d")
+                        .replace(tzinfo=timezone.utc)
+                        .timestamp()
+                    )
+                except Exception:
+                    return 0
+
+            def _row_to_dict(row: dict) -> dict:
+                return {
+                    "contractSymbol": row.get("contractSymbol"),
+                    "strike": row.get("strike"),
+                    "lastPrice": row.get("lastPrice"),
+                    "bid": row.get("bid"),
+                    "ask": row.get("ask"),
+                    "change": row.get("change"),
+                    "percentChange": row.get("percentChange"),
+                    "volume": row.get("volume"),
+                    "openInterest": row.get("openInterest"),
+                    "impliedVolatility": row.get("impliedVolatility"),
+                    "inTheMoney": row.get("inTheMoney"),
+                    "expiration": _as_epoch(chosen),
+                }
+
+            calls_df = chain.calls.fillna(0).head(20)
+            puts_df = chain.puts.fillna(0).head(20)
+            calls = [_row_to_dict(r) for r in calls_df.to_dict(orient="records")]
+            puts = [_row_to_dict(r) for r in puts_df.to_dict(orient="records")]
+
+            # Current spot from info/fast_info
+            spot = 0.0
+            try:
+                fast = getattr(ticker, "fast_info", None)
+                if fast and getattr(fast, "last_price", None):
+                    spot = float(fast.last_price) or 0.0
+            except Exception:
+                spot = 0.0
+            if not spot:
+                try:
+                    info = ticker.history(period="1d")
+                    if not info.empty:
+                        spot = float(info["Close"].iloc[-1])
+                except Exception:
+                    spot = 0.0
+
+            return {
+                "expirations": [_as_epoch(d) for d in expirations],
+                "expiration": _as_epoch(chosen),
+                "calls": calls,
+                "puts": puts,
+                "spot": spot,
+            }
+        except Exception:
+            pass
+
+    # Fallback: legacy v7 JSON endpoint (often 401/429 these days).
+    try:
+        suffix = f"?date={urllib.parse.quote(expiration)}" if expiration else ""
+        payload = fetch_json(OPTIONS_URL.format(symbol=urllib.parse.quote(symbol), suffix=suffix))
+        result = ((payload.get("optionChain") or {}).get("result") or [None])[0]
+        if not result:
+            return {"expirations": [], "calls": [], "puts": [], "spot": 0}
+        option_set = (result.get("options") or [{}])[0]
+        return {
+            "expirations": result.get("expirationDates") or [],
+            "calls": (option_set.get("calls") or [])[:20],
+            "puts": (option_set.get("puts") or [])[:20],
+            "spot": ((result.get("quote") or {}).get("regularMarketPrice") or 0),
+        }
+    except Exception:
         return {"expirations": [], "calls": [], "puts": [], "spot": 0}
-    option_set = (result.get("options") or [{}])[0]
-    return {
-        "expirations": result.get("expirationDates") or [],
-        "calls": (option_set.get("calls") or [])[:20],
-        "puts": (option_set.get("puts") or [])[:20],
-        "spot": ((result.get("quote") or {}).get("regularMarketPrice") or 0),
-    }
 
 
 def fetch_news_items() -> list[dict[str, Any]]:
@@ -778,15 +1759,129 @@ def fetch_news_items() -> list[dict[str, Any]]:
     return items[:18]
 
 
-def score_sentiment(text: str) -> str:
-    content = text.lower()
-    positive_terms = ["beat", "upgrade", "growth", "record", "surge", "gain", "bull", "strong"]
-    negative_terms = ["miss", "downgrade", "fall", "drop", "cut", "bear", "weak", "risk"]
-    positive_hits = sum(1 for term in positive_terms if term in content)
-    negative_hits = sum(1 for term in negative_terms if term in content)
-    if positive_hits > negative_hits:
+def score_sentiment(text: str) -> str:  # noqa: PLR0912
+    """
+    Lightweight VADER-style sentiment scorer designed for financial headlines.
+
+    Approach
+    --------
+    1.  Tokenise the headline into lower-case words.
+    2.  Score each token against a 140-term financial lexicon.
+    3.  Apply a negation window: if a negator word (not, no, never …) appears
+        within 3 tokens before a sentiment term, flip its sign.
+    4.  Apply a booster window: if an intensifier (very, extremely, massively …)
+        appears within 2 tokens before a sentiment term, multiply by 1.5.
+    5.  Normalise the raw score by text length to avoid headline-length bias.
+    6.  Classify as Positive / Negative / Neutral with a ±0.15 deadband.
+    """
+    # ── lexicon ──────────────────────────────────────────────────────────────
+    _POSITIVE: dict[str, float] = {
+        # earnings / guidance
+        "beat": 1.5, "beats": 1.5, "exceed": 1.4, "exceeds": 1.4, "exceeded": 1.4,
+        "outperform": 1.3, "surpass": 1.4, "raised": 1.2, "raises": 1.2,
+        "record": 1.3, "records": 1.3, "milestone": 1.1, "breakout": 1.2,
+        # growth
+        "growth": 1.2, "grow": 1.0, "growing": 1.1, "accelerate": 1.2,
+        "expansion": 1.1, "expand": 1.0, "booming": 1.3, "boom": 1.1,
+        "surge": 1.4, "surged": 1.4, "surges": 1.4,
+        "soar": 1.4, "soared": 1.4, "soars": 1.4,
+        "rally": 1.3, "rallied": 1.3, "rallies": 1.3,
+        "jump": 1.2, "jumped": 1.2, "jumps": 1.2,
+        "gain": 1.2, "gains": 1.2, "gained": 1.2,
+        "rise": 1.1, "rises": 1.1, "rose": 1.1, "rising": 1.1,
+        "climb": 1.1, "climbed": 1.1, "climbs": 1.1,
+        "spike": 1.2, "spiked": 1.2,
+        # analyst/ratings
+        "upgrade": 1.4, "upgraded": 1.4, "upgrades": 1.4,
+        "buy": 0.9, "overweight": 1.0, "outperformer": 1.2, "top pick": 1.3,
+        "strong buy": 1.5, "initiates": 0.6, "raises target": 1.3,
+        # macro / deal
+        "profit": 1.2, "profitable": 1.2, "profitability": 1.2,
+        "dividend": 0.8, "buyback": 0.9, "repurchase": 0.8,
+        "merger": 0.7, "acquisition": 0.7, "deal": 0.7,
+        "partnership": 0.7, "contract": 0.6, "wins": 1.1, "won": 0.9,
+        "approval": 1.0, "approved": 1.0, "approves": 1.0,
+        "innovation": 0.8, "breakthrough": 1.3, "launch": 0.7, "launches": 0.7,
+        # sentiment words
+        "bull": 1.0, "bullish": 1.2, "optimistic": 1.0, "confidence": 0.8,
+        "strong": 1.0, "strength": 1.0, "robust": 0.9, "solid": 0.8,
+        "recovery": 0.9, "rebound": 1.0, "bounces": 0.9, "stabilise": 0.6,
+        "stabilize": 0.6, "stabilises": 0.6, "stabilizes": 0.6,
+    }
+    _NEGATIVE: dict[str, float] = {
+        # earnings / guidance
+        "miss": 1.5, "misses": 1.5, "missed": 1.5,
+        "disappoint": 1.3, "disappoints": 1.3, "disappointing": 1.4,
+        "shortfall": 1.2, "shortfalls": 1.2, "below": 0.8,
+        "cut": 1.2, "cuts": 1.2, "slashed": 1.4, "slash": 1.3,
+        "lowered": 1.1, "lowers": 1.1, "warns": 1.2, "warning": 1.2,
+        "caution": 0.9, "concern": 0.8, "concerns": 0.8,
+        # decline
+        "fall": 1.1, "falls": 1.1, "fell": 1.1, "falling": 1.1,
+        "drop": 1.2, "drops": 1.2, "dropped": 1.2,
+        "decline": 1.1, "declines": 1.1, "declined": 1.1,
+        "slide": 1.2, "slides": 1.2, "slid": 1.2,
+        "plunge": 1.4, "plunges": 1.4, "plunged": 1.4,
+        "tumble": 1.3, "tumbles": 1.3, "tumbled": 1.3,
+        "sink": 1.2, "sinks": 1.2, "sank": 1.2,
+        "crash": 1.5, "crashing": 1.4, "collapsed": 1.4, "collapse": 1.3,
+        "tank": 1.2, "tanks": 1.2, "tanked": 1.2,
+        "slump": 1.2, "slumps": 1.2, "slumped": 1.2,
+        # analyst/ratings
+        "downgrade": 1.4, "downgraded": 1.4, "downgrades": 1.4,
+        "sell": 0.9, "underweight": 1.0, "underperform": 1.1,
+        "lowers target": 1.3, "cuts target": 1.3,
+        # macro / risk
+        "loss": 1.2, "losses": 1.2, "losing": 1.1,
+        "debt": 0.7, "default": 1.3, "bankruptcy": 1.5, "bankrupt": 1.5,
+        "layoff": 1.2, "layoffs": 1.2, "layoffs": 1.2, "firing": 1.1,
+        "lawsuit": 0.8, "fine": 0.7, "penalty": 0.9, "penalties": 0.9,
+        "recall": 0.8, "delay": 0.7, "delays": 0.7, "delayed": 0.7,
+        "investigation": 0.9, "probe": 0.8, "fraud": 1.4, "scandal": 1.3,
+        "inflation": 0.6, "recession": 1.2, "slowdown": 1.0,
+        "rate hike": 0.8, "tariff": 0.7, "tariffs": 0.7,
+        # sentiment
+        "bear": 1.0, "bearish": 1.2, "pessimistic": 1.0,
+        "weak": 0.9, "weakness": 1.0, "volatile": 0.7, "volatility": 0.6,
+        "uncertain": 0.8, "uncertainty": 0.8, "risk": 0.6, "risks": 0.6,
+        "pressure": 0.8, "headwind": 0.9, "headwinds": 0.9,
+        "struggle": 1.0, "struggles": 1.0, "struggling": 1.1,
+    }
+    _NEGATORS = {"not", "no", "never", "neither", "nor", "without", "lack",
+                 "lacking", "fails", "failed", "fail", "unable", "despite",
+                 "n't", "cannot", "can't", "won't", "doesn't", "don't", "didn't"}
+    _BOOSTERS = {"very", "extremely", "highly", "massively", "significantly",
+                 "sharply", "dramatically", "substantially", "largely"}
+
+    # ── tokenise ─────────────────────────────────────────────────────────────
+    import re as _re
+    tokens = _re.sub(r"[^a-z0-9'\- ]", " ", text.lower()).split()
+    if not tokens:
+        return "Neutral"
+
+    score = 0.0
+    for idx, token in enumerate(tokens):
+        weight_pos = _POSITIVE.get(token, 0.0)
+        weight_neg = _NEGATIVE.get(token, 0.0)
+        if not weight_pos and not weight_neg:
+            continue
+
+        # negation window: look back up to 3 tokens
+        negated = any(tokens[j] in _NEGATORS for j in range(max(0, idx - 3), idx))
+        # booster window: look back up to 2 tokens
+        boost = 1.5 if any(tokens[j] in _BOOSTERS for j in range(max(0, idx - 2), idx)) else 1.0
+
+        local = (weight_pos - weight_neg) * boost
+        if negated:
+            local = -local
+        score += local
+
+    # normalise by token count so longer headlines don't dominate
+    normalised = score / max(len(tokens), 1)
+
+    if normalised >= 0.15:
         return "Positive"
-    if negative_hits > positive_hits:
+    if normalised <= -0.15:
         return "Negative"
     return "Neutral"
 

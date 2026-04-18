@@ -74,14 +74,8 @@ export class AppCore {
 
     switch (action) {
       case "HELP":
-        this.store.state.newsItems = this.dependencies.commandCatalog.map((item) => ({
-          source: "Command",
-          headline: `${item.cmd} — ${item.desc}`,
-          time: this.dependencies.currentTimeShort(),
-          link: "#",
-        }));
-        this.store.state.newsFilter = "ALL";
-        this.loadModule("news", this.store.state.activePanel, { reveal: true });
+        // Open the keyboard shortcuts/command reference overlay
+        this.dependencies.openShortcutsOverlay?.();
         break;
       case "REFRESH":
         this.dependencies.refreshAllData?.();
@@ -149,6 +143,9 @@ export class AppCore {
 
         try {
           const rule = this.logicEngine.parseRule(payload.statement);
+          // Free-tier rule limit — checkFreeTierLimit lives in AppBootstrap but
+          // we call it via an injected dependency so AppCore stays framework-free.
+          if (this.dependencies.checkRuleLimit?.()) break;
           this.store.state.activeRules.unshift(rule);
           this.store.state.activeRules = this.store.state.activeRules.slice(0, 100);
           this.dependencies.queueWorkspaceSave?.();
@@ -168,6 +165,17 @@ export class AppCore {
       case "ADD_POSITION":
         this.dependencies.addPosition?.(payload);
         break;
+      case "REMOVE_POSITION":
+        this.dependencies.removePosition?.(payload.symbol);
+        break;
+      case "REMOVE_ALERT":
+        this.dependencies.removeAlert?.(payload.symbol);
+        break;
+      case "CLEAR_RULES":
+        this.store.state.activeRules = [];
+        this.dependencies.queueWorkspaceSave?.();
+        this.dependencies.showToast?.("All rules cleared.", "neutral");
+        break;
       case "OPEN_QUOTE":
         if (payload.symbol) {
           this.store.state.panelSymbols[this.store.state.activePanel] = payload.symbol;
@@ -177,14 +185,48 @@ export class AppCore {
         break;
       case "OPEN_CHART":
         if (payload.symbol) {
-          this.store.state.panelSymbols[this.store.state.activePanel] = payload.symbol;
-          this.loadModule("chart", this.store.state.activePanel, { reveal: true });
-          this.dependencies.refreshChart?.(payload.symbol, this.store.state.chartRanges[this.store.state.activePanel] || "1mo");
+          const chartPanel = this.store.state.activePanel;
+          this.store.state.panelSymbols[chartPanel] = payload.symbol;
+          // Honour optional inline range ("CHART AAPL 2Y")
+          if (payload.range) {
+            const normalizedRange = this.dependencies.normalizeChartRange(payload.range);
+            this.store.state.chartRanges[chartPanel] = normalizedRange;
+          }
+          this.loadModule("chart", chartPanel, { reveal: true });
+          this.dependencies.refreshChart?.(payload.symbol, this.store.state.chartRanges[chartPanel] || "1mo");
         }
         break;
-      default:
-        this.dependencies.showToast?.(`I couldn't find “${payload.value || parsed.normalized}”. Try HELP.`, "error");
+      case "PAPER_ORDER": {
+        const panel = this.store.state.activePanel;
+        // Pre-fill the symbol on the active panel and reveal the Trade module
+        // so the user sees the ticket populate + the new fill animate in.
+        if (payload.symbol) this.store.state.panelSymbols[panel] = payload.symbol;
+        this.loadModule("trade", panel, { reveal: true });
+        this.dependencies.submitPaperOrder?.({
+          symbol: payload.symbol,
+          side: payload.side,
+          shares: payload.shares || 1,
+          panel,
+        });
         break;
+      }
+      default: {
+        const unknown = String(payload.value || parsed.normalized || “”).toUpperCase();
+        // Look for a close command match from the catalog
+        const catalog = this.dependencies.commandCatalog || [];
+        const closeMatch = catalog.find((item) =>
+          item.cmd.startsWith(unknown.slice(0, 3)) || item.cmd.includes(unknown.slice(0, 4))
+        );
+        const hint = closeMatch
+          ? ` Did you mean: ${closeMatch.cmd}?`
+          : “ Press ? for the command reference.”;
+        this.dependencies.showToast?.(
+          `Unknown: “${unknown}”.${hint}`,
+          “error”,
+          4000,
+        );
+        break;
+      }
     }
 
     this.dependencies.afterCommand?.();

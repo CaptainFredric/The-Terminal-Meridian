@@ -1,6 +1,8 @@
 const COMPARATORS = {
   ">": (left, right) => left > right,
   "<": (left, right) => left < right,
+  ">=": (left, right) => left >= right,
+  "<=": (left, right) => left <= right,
   "==": (left, right) => left === right,
 };
 
@@ -11,7 +13,7 @@ export class LogicEngine {
 
   parseRule(input) {
     const source = String(input || "").trim();
-    const match = source.match(/^IF\s+([A-Z0-9.-]+)\s*(>|<|==)\s*([0-9]+(?:\.[0-9]+)?)\s+THEN\s+(.+)$/i);
+    const match = source.match(/^IF\s+([A-Z0-9.-]+)\s*(>=|<=|>|<|==)\s*([0-9]+(?:\.[0-9]+)?)\s+THEN\s+(.+)$/i);
     if (!match) {
       throw new Error("Invalid rule syntax. Use: IF [ticker] [operator] [value] THEN [message]");
     }
@@ -22,7 +24,7 @@ export class LogicEngine {
     const msg = String(match[4] || "").trim();
 
     if (!COMPARATORS[op]) {
-      throw new Error("Unsupported operator. Use >, <, or ==.");
+      throw new Error("Unsupported operator. Use >, <, >=, <=, or ==.");
     }
 
     if (!Number.isFinite(limit)) {

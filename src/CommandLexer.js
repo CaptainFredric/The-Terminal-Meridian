@@ -29,7 +29,12 @@ export function lexCommand(raw, context = {}) {
   if (first === "SYNC" && second) return { raw: source, normalized, tokens, action: "SYNC_TICKER", payload: { symbol: second } };
   if (first === "PORT") return { raw: source, normalized, tokens, action: "MODULE", payload: { module: "portfolio" } };
   if (first === "MACRO") return { raw: source, normalized, tokens, action: "MODULE", payload: { module: "macro" } };
-  if (first === "SCREENER" || first === "EQS") return { raw: source, normalized, tokens, action: "MODULE", payload: { module: "screener" } };
+  if (first === "TRADE" || first === "PAPER") return { raw: source, normalized, tokens, action: "MODULE", payload: { module: "trade" } };
+  if ((first === "BUY" || first === "SELL") && second) {
+    return { raw: source, normalized, tokens, action: "PAPER_ORDER", payload: { side: first.toLowerCase(), symbol: second, shares: Number(third || 1) } };
+  }
+  if (first === "SCREENER" || first === "EQS" || first === "SCREEN") return { raw: source, normalized, tokens, action: "MODULE", payload: { module: "screener" } };
+  if (first === "CALC" || first === "CALCULATOR") return { raw: source, normalized, tokens, action: "MODULE", payload: { module: "calculator" } };
   if (first === "HEAT" || first === "HEATMAP") return { raw: source, normalized, tokens, action: "MODULE", payload: { module: "heatmap" } };
   if (first === "OPTIONS" && second) return { raw: source, normalized, tokens, action: "OPEN_OPTIONS", payload: { symbol: second } };
   if (first === "RULES") return { raw: source, normalized, tokens, action: "MODULE", payload: { module: "rules" } };
@@ -43,13 +48,24 @@ export function lexCommand(raw, context = {}) {
   if (first === "ADDPOS" && second && third && fourth) {
     return { raw: source, normalized, tokens, action: "ADD_POSITION", payload: { symbol: second, shares: Number(third), cost: Number(fourth) } };
   }
+  if ((first === "REMOVEPOS" || first === "RMPOS" || first === "DELPOS") && second) {
+    return { raw: source, normalized, tokens, action: "REMOVE_POSITION", payload: { symbol: second } };
+  }
+  if ((first === "REMOVEALERT" || first === "RMALERT") && second) {
+    return { raw: source, normalized, tokens, action: "REMOVE_ALERT", payload: { symbol: second } };
+  }
+  if (first === "CLEARRULES") {
+    return { raw: source, normalized, tokens, action: "CLEAR_RULES", payload: {} };
+  }
   if (second === "Q" || first === "QUOTE") {
     const symbol = first === "QUOTE" ? second : first;
     return { raw: source, normalized, tokens, action: "OPEN_QUOTE", payload: { symbol } };
   }
   if (second === "CHART" || first === "CHART") {
     const symbol = first === "CHART" ? second : first;
-    return { raw: source, normalized, tokens, action: "OPEN_CHART", payload: { symbol } };
+    // Optional inline range: "CHART AAPL 1Y" or "AAPL CHART 1Y"
+    const inlineRange = first === "CHART" ? third : third === "CHART" ? fourth : null;
+    return { raw: source, normalized, tokens, action: "OPEN_CHART", payload: { symbol, range: inlineRange || null } };
   }
   if (universeMap.has(first)) return { raw: source, normalized, tokens, action: "OPEN_QUOTE", payload: { symbol: first } };
 

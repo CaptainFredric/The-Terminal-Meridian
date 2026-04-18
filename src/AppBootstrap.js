@@ -694,16 +694,16 @@ function scheduleUiRefresh() {
   uiRefreshQueued = true;
   requestAnimationFrame(() => {
     uiRefreshQueued = false;
-    applyWorkspaceModes();
-    renderFunctionRow();
-    renderOverviewStrip();
-    renderTickerTape();
-    renderRails();
-    renderAllPanels();
-    updateFocusLayout();
-    updateAuthControls();
-    updateAutoJumpButton();
-    updateStatusBar();
+    try { applyWorkspaceModes(); } catch {}
+    try { renderFunctionRow(); } catch {}
+    try { renderOverviewStrip(); } catch {}
+    try { renderTickerTape(); } catch {}
+    try { renderRails(); } catch {}
+    renderAllPanels(); // panels each have their own try-catch
+    try { updateFocusLayout(); } catch {}
+    try { updateAuthControls(); } catch {}
+    try { updateAutoJumpButton(); } catch {}
+    try { updateStatusBar(); } catch {}
     pendingPriceChanges.clear();
   });
 }
@@ -2122,13 +2122,15 @@ async function renderPanel(panel) {
   const panelNode = document.querySelector(`[data-panel="${panel}"]`);
   const title = document.querySelector(`#panelTitle${panel}`);
   const content = document.querySelector(`#panelContent${panel}`);
-  const moduleName = state.panelModules[panel];
   if (!panelNode || !title || !content) return;
+  const moduleName = state.panelModules[panel] || "home";
 
-  const symbolLabel = ["quote", "chart", "options"].includes(moduleName) && state.panelSymbols[panel]
-    ? ` · ${state.panelSymbols[panel]}`
-    : "";
-  title.textContent = `${moduleTitles[moduleName] || moduleName}${symbolLabel}`;
+  try {
+    const symbolLabel = ["quote", "chart", "options"].includes(moduleName) && state.panelSymbols[panel]
+      ? ` · ${state.panelSymbols[panel]}`
+      : "";
+    title.textContent = `${moduleTitles[moduleName] || moduleName}${symbolLabel}`;
+  } catch {}
 
   // For chart panels: if chart is already mounted for this symbol+range, update data in-place
   // without touching innerHTML (avoids destroying and re-creating the canvas on every tick)
@@ -2154,10 +2156,11 @@ async function renderPanel(panel) {
     }
   }
 
-  const renderer = moduleRegistry.get(moduleName) || moduleRegistry.get("home");
+  const renderer = moduleRegistry?.get(moduleName) || moduleRegistry?.get("home");
   panelNode.dataset.moduleKey = String(moduleName || "").toUpperCase();
   let html = "";
   try {
+    if (!renderer) throw new Error(`No renderer for module: ${moduleName}`);
     html = await Promise.resolve(renderer(panel));
   } catch (renderError) {
     console.error(`[Meridian] Panel ${panel} render error (${moduleName}):`, renderError);

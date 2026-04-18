@@ -211,7 +211,7 @@ export class AppCore {
         break;
       }
       default: {
-        const unknown = String(payload.value || parsed.normalized || “”).toUpperCase();
+        const unknown = String(payload.value || parsed.normalized || "").toUpperCase();
         // Look for a close command match from the catalog
         const catalog = this.dependencies.commandCatalog || [];
         const closeMatch = catalog.find((item) =>
@@ -219,10 +219,10 @@ export class AppCore {
         );
         const hint = closeMatch
           ? ` Did you mean: ${closeMatch.cmd}?`
-          : “ Press ? for the command reference.”;
+          : " Press ? for the command reference.";
         this.dependencies.showToast?.(
-          `Unknown: “${unknown}”.${hint}`,
-          “error”,
+          `Unknown: "${unknown}".${hint}`,
+          "error",
           4000,
         );
         break;

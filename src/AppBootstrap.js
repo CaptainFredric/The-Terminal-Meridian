@@ -132,12 +132,61 @@ if ((persistedMeridianState?.layoutVersion || 1) < WORKSPACE_LAYOUT_VERSION && l
   delete legacyUiSnapshot.guestWorkspace.panelModules;
   delete legacyUiSnapshot.guestWorkspace.panelSymbols;
 }
+// ── Shareable view URLs ────────────────────────────────────────────────────
+// Decode a `?v=<base64url-json>` query param into a partial workspace
+// override. Used for "Share this view" links — friend opens the URL and
+// lands on the same panel layout / symbols / chart ranges as the sender.
+//
+// Payload shape (kept tiny so URLs stay shareable):
+//   { m: {1:"chart",...}, s: {1:"AAPL",...}, r: {1:"1y",...}, w?: ["A","B"] }
+function base64UrlDecode(s) {
+  try {
+    const pad = s.length % 4 === 0 ? "" : "=".repeat(4 - (s.length % 4));
+    const b64 = s.replace(/-/g, "+").replace(/_/g, "/") + pad;
+    return decodeURIComponent(escape(window.atob(b64)));
+  } catch { return null; }
+}
+function base64UrlEncode(s) {
+  return window.btoa(unescape(encodeURIComponent(s)))
+    .replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+function parseSharedView() {
+  if (typeof window === "undefined" || !window.location?.search) return null;
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const raw = params.get("v");
+    if (!raw) return null;
+    const decoded = base64UrlDecode(raw);
+    if (!decoded) return null;
+    const parsed = JSON.parse(decoded);
+    // Light validation — bail on anything unexpected so a bad URL never
+    // blocks the app from booting.
+    if (!parsed || typeof parsed !== "object") return null;
+    return {
+      panelModules: parsed.m && typeof parsed.m === "object" ? parsed.m : null,
+      panelSymbols: parsed.s && typeof parsed.s === "object" ? parsed.s : null,
+      chartRanges: parsed.r && typeof parsed.r === "object" ? parsed.r : null,
+      watchlist: Array.isArray(parsed.w) ? parsed.w.slice(0, 50).map(String) : null,
+    };
+  } catch { return null; }
+}
+const sharedView = parseSharedView();
+
 const uiSnapshot = {
   ...legacyUiSnapshot,
   ...persistedUi,
+  // A `?v=` URL takes precedence over persisted ranges so the receiver sees
+  // exactly what the sender meant to share.
+  ...(sharedView?.chartRanges ? { chartRanges: sharedView.chartRanges } : {}),
   guestWorkspace: {
     ...(legacyUiSnapshot.guestWorkspace || {}),
     ...persistedWorkspace,
+    // Same precedence for layout + symbols. Watchlist override is opt-in
+    // (only applied when sender included it) so we don't clobber the
+    // recipient's existing watchlist by accident.
+    ...(sharedView?.panelModules ? { panelModules: sharedView.panelModules } : {}),
+    ...(sharedView?.panelSymbols ? { panelSymbols: sharedView.panelSymbols } : {}),
+    ...(sharedView?.watchlist ? { watchlist: sharedView.watchlist } : {}),
   },
 };
 const guestWorkspace = uiSnapshot.guestWorkspace || {};
@@ -1109,6 +1158,68 @@ function bindEvents() {
     goToWizardStep(1);
     showOnboarding();
   });
+
+  // ── Share View button (header) ─────────────────────────────────────────────
+  // Encodes current panel layout + symbols + chart ranges into a base64url
+  // payload and copies a shareable URL to clipboard. The recipient lands on
+  // the exact same view. Watchlist is included so the receiver sees the
+  // sender's tracked symbols (we don't clobber their *saved* watchlist —
+  // they'll see the URL list until they make their own change).
+  document.querySelector("#shareViewBtn")?.addEventListener("click", async () => {
+    try {
+      const payload = {
+        m: state.panelModules,
+        s: state.panelSymbols,
+        r: state.chartRanges,
+        w: state.watchlist?.slice(0, 25), // cap so URLs stay reasonable
+      };
+      const encoded = base64UrlEncode(JSON.stringify(payload));
+      const url = new URL(window.location.href);
+      url.search = `?v=${encoded}`;
+      const shareUrl = url.toString();
+      // Try modern clipboard API; fall back to legacy execCommand for older
+      // browsers / non-secure contexts.
+      let copied = false;
+      if (navigator.clipboard?.writeText) {
+        try { await navigator.clipboard.writeText(shareUrl); copied = true; } catch {}
+      }
+      if (!copied) {
+        const ta = document.createElement("textarea");
+        ta.value = shareUrl;
+        ta.style.position = "fixed";
+        ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.select();
+        try { copied = document.execCommand("copy"); } catch {}
+        document.body.removeChild(ta);
+      }
+      if (copied) {
+        showToast(`🔗 Share link copied — ${shareUrl.length} chars`, "success", 4000);
+      } else {
+        // Surface the URL so user can copy it manually
+        window.prompt("Copy this share link:", shareUrl);
+      }
+    } catch (err) {
+      showToast("Couldn't build a share link — try again.", "error");
+      console.error("[Meridian] share view failed:", err);
+    }
+  });
+
+  // If the page was opened with `?v=...`, sharedView was applied to the
+  // initial state above. Surface a toast so the user knows their layout
+  // came from a link, then strip the param so subsequent saves don't keep
+  // re-applying it on reload.
+  if (sharedView && (sharedView.panelModules || sharedView.panelSymbols)) {
+    const panelCount = sharedView.panelModules ? Object.keys(sharedView.panelModules).length : 0;
+    setTimeout(() => {
+      showToast(`📍 Loaded shared view (${panelCount} panels). Edit anything to make it yours.`, "neutral", 5500);
+    }, 400);
+    try {
+      const cleanUrl = new URL(window.location.href);
+      cleanUrl.search = "";
+      window.history.replaceState({}, "", cleanUrl.toString());
+    } catch {}
+  }
 
   // ── Onboarding Wizard Interactivity ────────────────────────────────────────
   document.querySelector("#onboardingSkip")?.addEventListener("click", () => {

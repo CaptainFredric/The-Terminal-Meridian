@@ -60,6 +60,10 @@ def _webhook_secret() -> str | None:
     return os.environ.get("STRIPE_WEBHOOK_SECRET") or None
 
 
+def _webhook_secret_thin() -> str | None:
+    return os.environ.get("STRIPE_WEBHOOK_SECRET_THIN") or None
+
+
 def _trial_days() -> int:
     try:
         return int(os.environ.get("STRIPE_TRIAL_DAYS", "7"))
@@ -450,11 +454,23 @@ def register_billing_routes(
         secret = _webhook_secret()
 
         # Parse + verify (or just parse if no secret configured — dev only)
+        # Two secrets exist because snapshot and thin payload destinations
+        # each get their own signing secret from Stripe, even if they share
+        # the same URL.  We try snapshot first, then thin.
+        thin_secret = _webhook_secret_thin()
         try:
             if secret:
-                event = stripe.Webhook.construct_event(  # type: ignore[union-attr]
-                    payload, sig_header, secret
-                )
+                try:
+                    event = stripe.Webhook.construct_event(  # type: ignore[union-attr]
+                        payload, sig_header, secret
+                    )
+                except Exception:
+                    if thin_secret:
+                        event = stripe.Webhook.construct_event(  # type: ignore[union-attr]
+                            payload, sig_header, thin_secret
+                        )
+                    else:
+                        raise
             else:
                 # Dev fallback — skip signature check. NEVER do this in prod.
                 import json as _json

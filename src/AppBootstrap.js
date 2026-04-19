@@ -875,7 +875,7 @@ function bindEvents() {
       workspaceController?.hydrateSession(payload.user, payload.workspace, payload.subscription);
       closeAuthModal();
       showToast(`Welcome back, ${payload.user.firstName}.`, "success");
-      void refreshPaperAccount().then(() => renderAllPanels());
+      void refreshPaperAccount().then(() => renderAllPanels()).catch((err) => { console.warn("[Meridian] paper refresh (login):", err); renderAllPanels(); });
     } catch (error) {
       setAuthMessage(error.message || "Sign in failed.", "error");
     } finally {
@@ -929,7 +929,7 @@ function bindEvents() {
       workspaceController?.hydrateSession(payload.user, payload.workspace, payload.subscription);
       closeAuthModal();
       showToast(`Account created. Welcome, ${payload.user.firstName}.`, "success");
-      void refreshPaperAccount().then(() => renderAllPanels());
+      void refreshPaperAccount().then(() => renderAllPanels()).catch((err) => { console.warn("[Meridian] paper refresh (signup):", err); renderAllPanels(); });
     } catch (error) {
       setAuthMessage(error.message || "Signup failed.", "error");
     } finally {
@@ -2537,7 +2537,7 @@ function syncPanelData(panel) {
   if (moduleName === "news") refreshNews();
   if (moduleName === "macro") refreshFx();
   if (moduleName === "trade") {
-    void refreshPaperAccount().then(() => renderPanel(panel));
+    void refreshPaperAccount().then(() => renderPanel(panel)).catch((err) => { console.warn("[Meridian] paper refresh (trade panel):", err); renderPanel(panel); });
   }
 }
 

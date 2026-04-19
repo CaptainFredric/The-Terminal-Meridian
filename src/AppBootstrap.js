@@ -30,7 +30,7 @@ import { LogicEngine } from "./LogicEngine.js";
 import { createDefaultModuleRegistry } from "./Registry.js";
 import { applyPriceTone, emptyState, formatPrice, formatSignedPct, tabularValue } from "./Renderers/Common.js";
 import { createStateStore } from "./StateStore.js";
-import { authApi, marketApi, paperApi, uiCache, workspaceApi } from "./api.js";
+import { authApi, billingApi, marketApi, paperApi, uiCache, workspaceApi } from "./api.js";
 import { ActionEngine } from "./ActionEngine.js";
 import { getStockDeepDive } from "./marketService.js";
 import { fetchQuotes, fetchChart, fetchOptions, fetchNews, fetchFxRates } from "./services.js";
@@ -46,8 +46,14 @@ const FREE_ALERT_LIMIT = 3;
 const FREE_RULES_LIMIT = 5;
 
 function isProUser() {
-  // All signed-in users get Pro behaviour for now (pre-launch).
-  // Flip to `state.user?.tier === "pro"` once billing is live.
+  // Active paid subscriber? Check explicitly so we honour the gate as soon
+  // as Stripe is wired up. Until billing is live for an account, signed-in
+  // users still get Pro behaviour as a "soft launch" preview.
+  const tier = state.subscription?.tier;
+  const status = state.subscription?.status;
+  if ((tier === "pro" || tier === "pro_plus") && status !== "canceled" && status !== "unpaid") {
+    return true;
+  }
   return Boolean(state.user);
 }
 
@@ -302,6 +308,7 @@ const pendingPriceChanges = new Map();
 
 const initialState = {
   user: null,
+  subscription: { tier: "free", status: null },
   activePanel: Number(uiSnapshot.activePanel || 1),
   focusedPanel: Number(uiSnapshot.focusedPanel || 0) || null,
   panelModules: normalizePanelModules(guestWorkspace.panelModules, BIG_FOUR_DEFAULT_MODULES, moduleTitles),
@@ -852,7 +859,7 @@ function bindEvents() {
         identifier: String(data.get("identifier") || ""),
         password: String(data.get("password") || ""),
       });
-      workspaceController?.hydrateSession(payload.user, payload.workspace);
+      workspaceController?.hydrateSession(payload.user, payload.workspace, payload.subscription);
       closeAuthModal();
       showToast(`Welcome back, ${payload.user.firstName}.`, "success");
       void refreshPaperAccount().then(() => renderAllPanels());
@@ -906,7 +913,7 @@ function bindEvents() {
         password,
         role: String(data.get("role") || "Other"),
       });
-      workspaceController?.hydrateSession(payload.user, payload.workspace);
+      workspaceController?.hydrateSession(payload.user, payload.workspace, payload.subscription);
       closeAuthModal();
       showToast(`Account created. Welcome, ${payload.user.firstName}.`, "success");
       void refreshPaperAccount().then(() => renderAllPanels());
@@ -1012,6 +1019,103 @@ function bindEvents() {
     showToast("🚀 You're on the Pro waitlist!", "success");
     // Store locally so we don't spam
     try { window.localStorage.setItem("meridian_waitlist_email", email); } catch {}
+  });
+
+  // ── Stripe Checkout: upgrade buttons ──────────────────────────────────────
+  // Buttons with [data-waitlist="pro"|"pro-plus"] kick off a hosted Stripe
+  // Checkout session. If the backend isn't configured (no Stripe key, 503),
+  // we fall back to scrolling the user to the waitlist email capture below.
+  // If they aren't logged in (401), we open the auth modal first.
+  document.querySelectorAll("[data-waitlist]").forEach((btn) => {
+    btn.addEventListener("click", async (event) => {
+      const target = event.currentTarget;
+      const plan = target.dataset.waitlist === "pro-plus" ? "pro_plus" : "pro";
+      const interval = _pricingBilling === "annual" ? "annual" : "monthly";
+
+      if (!state.user) {
+        showToast("Sign in first so we can sync your subscription.", "neutral");
+        closePricingModal();
+        openAuthModal("signup");
+        return;
+      }
+
+      const originalLabel = target.textContent;
+      target.disabled = true;
+      target.textContent = "Opening checkout…";
+      try {
+        const result = await billingApi.createCheckoutSession({ plan, interval });
+        if (result?.url) {
+          window.location.assign(result.url);
+          return;
+        }
+        throw new Error("No checkout URL returned.");
+      } catch (error) {
+        const msg = String(error?.message || "");
+        if (msg.includes("503") || /not configured/i.test(msg)) {
+          // Stripe isn't live yet — gracefully fall back to waitlist signup.
+          showToast("💌 Billing isn't live yet — drop your email and we'll notify you.", "neutral", 5000);
+          document.querySelector("#pricingWaitlist")?.scrollIntoView({ behavior: "smooth", block: "center" });
+          document.querySelector("#pricingWaitlistForm input[type=email]")?.focus();
+        } else if (msg.includes("401") || /sign in/i.test(msg)) {
+          closePricingModal();
+          openAuthModal("login");
+          showToast("Sign in to start your trial.", "neutral");
+        } else {
+          showToast(`Checkout failed: ${msg || "unknown error"}`, "error", 5000);
+        }
+      } finally {
+        target.disabled = false;
+        target.textContent = originalLabel;
+      }
+    });
+  });
+
+  // ── Stripe Checkout: redirect-back handlers ───────────────────────────────
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const billingFlag = params.get("billing");
+    if (billingFlag === "success") {
+      setTimeout(() => {
+        showToast("🎉 Welcome to Pro! Your subscription is active.", "success", 6000);
+      }, 600);
+      // Re-fetch session so the new tier shows up immediately.
+      void authApi.session().then((payload) => {
+        workspaceController?.hydrateSession(payload.user, payload.workspace, payload.subscription);
+        renderAllPanels();
+      }).catch(() => {});
+    } else if (billingFlag === "canceled") {
+      setTimeout(() => {
+        showToast("Checkout canceled — you can try again any time from Pricing.", "neutral", 5000);
+      }, 600);
+    }
+    if (billingFlag) {
+      params.delete("billing");
+      params.delete("session_id");
+      const newUrl = window.location.pathname + (params.toString() ? `?${params.toString()}` : "") + window.location.hash;
+      window.history.replaceState({}, "", newUrl);
+    }
+  } catch {}
+
+  // ── Manage subscription (opens Stripe Customer Portal) ────────────────────
+  document.querySelector("#manageSubscriptionBtn")?.addEventListener("click", async () => {
+    if (!state.user) { openAuthModal("login"); return; }
+    try {
+      const result = await billingApi.createPortalSession();
+      if (result?.url) window.location.assign(result.url);
+    } catch (error) {
+      const msg = String(error?.message || "");
+      if (msg.includes("503") || /not configured/i.test(msg)) {
+        showToast("Billing portal isn't live yet — check back soon.", "neutral");
+      } else {
+        showToast(`Couldn't open billing portal: ${msg || "error"}`, "error");
+      }
+    }
+  });
+
+  // ── Upgrade from Settings → opens pricing modal ───────────────────────────
+  document.querySelector("#upgradeFromSettingsBtn")?.addEventListener("click", () => {
+    closeSettingsModal();
+    openPricingModal();
   });
 
   document.addEventListener("click", handleDocumentClick);
@@ -1707,8 +1811,37 @@ function openSettingsModal() {
     return;
   }
   populateSettingsForm();
+  refreshSubscriptionSection();
   setSettingsMessage("Update your account details securely.", "neutral");
   el.settingsModalBackdrop?.classList.remove("hidden");
+}
+
+function refreshSubscriptionSection() {
+  const line = document.querySelector("#subscriptionStatusLine");
+  const upgrade = document.querySelector("#upgradeFromSettingsBtn");
+  const manage = document.querySelector("#manageSubscriptionBtn");
+  const tier = state.subscription?.tier || "free";
+  const status = state.subscription?.status;
+  const tierLabel = tier === "pro_plus" ? "Pro+" : tier === "pro" ? "Pro" : "Free";
+  if (line) {
+    if (tier === "free") {
+      line.textContent = "You're on the Free tier. Unlock advanced indicators, alerts, and AI commentary with Pro.";
+    } else {
+      const statusText = status ? ` · status: ${status}` : "";
+      line.textContent = `Current plan: ${tierLabel}${statusText}.`;
+    }
+  }
+  if (upgrade) {
+    if (tier === "free") {
+      upgrade.classList.remove("hidden");
+      upgrade.textContent = "Upgrade to Pro";
+    } else {
+      upgrade.classList.add("hidden");
+    }
+  }
+  if (manage) {
+    manage.classList.toggle("hidden", tier === "free");
+  }
 }
 
 function closeSettingsModal() {
@@ -1717,12 +1850,15 @@ function closeSettingsModal() {
 }
 
 function updateAuthControls() {
+  const tierBadge = document.querySelector("#userTierBadge");
+
   if (!AUTH_ENABLED) {
     el.logoutButton?.classList.add("hidden");
     el.openSettingsBtn?.classList.add("hidden");
     el.openAuthBtn?.classList.add("hidden");
     el.authModalBackdrop?.classList.add("hidden");
     el.settingsModalBackdrop?.classList.add("hidden");
+    tierBadge?.classList.add("hidden");
     return;
   }
 
@@ -1733,11 +1869,23 @@ function updateAuthControls() {
       el.openAuthBtn.textContent = "Switch";
       el.openAuthBtn.title = "Switch account";
     }
+    if (tierBadge) {
+      const tier = state.subscription?.tier || "free";
+      const status = state.subscription?.status;
+      const label =
+        tier === "pro_plus" ? "PRO+" :
+        tier === "pro" ? "PRO" :
+        "FREE";
+      tierBadge.textContent = status === "trialing" ? `${label} · TRIAL` : label;
+      tierBadge.dataset.tier = tier;
+      tierBadge.classList.remove("hidden");
+    }
     return;
   }
 
   el.logoutButton?.classList.add("hidden");
   el.openSettingsBtn?.classList.add("hidden");
+  tierBadge?.classList.add("hidden");
   if (el.openAuthBtn) {
     el.openAuthBtn.textContent = "Sync";
     el.openAuthBtn.title = "Sign in and sync workspace";
@@ -1834,6 +1982,7 @@ async function handleLogout() {
   }
   closeSettingsModal();
   state.user = null;
+  state.subscription = { tier: "free", status: null };
   state.paperAccount = null;
   updateAuthControls();
   setNetworkStatus(state.health.ok ? "Guest · Live" : "Guest · Local");

@@ -133,6 +133,21 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
     DATABASE_DIR.mkdir(parents=True, exist_ok=True)
     app.register_error_handler(UnauthorizedResponse, handle_unauthorized)
 
+    # Stripe billing tables + routes — split into backend/billing.py to keep
+    # this file focused. Loaded lazily so the app still boots if the import
+    # fails (defensive against partial deploys).
+    try:
+        from .billing import (
+            ensure_subscription_tables,
+            register_billing_routes,
+            get_subscription,
+        )
+        ensure_subscription_tables(app)
+        _billing_get_subscription = get_subscription
+    except Exception as exc:  # noqa: BLE001
+        app.logger.warning("Billing module not loaded: %s", exc)
+        _billing_get_subscription = None  # type: ignore[assignment]
+
     @app.before_request
     def before_request() -> None:
         ensure_database(app)
@@ -253,7 +268,11 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         session_token = create_session(app, user_id)
         db.commit()
         user = serialize_user(app, user_id)
-        response = jsonify({"user": user, "workspace": get_workspace_state(app, user_id)})
+        response = jsonify({
+            "user": user,
+            "workspace": get_workspace_state(app, user_id),
+            "subscription": _subscription_for(user_id),
+        })
         set_session_cookie(app, response, session_token)
         return response, 201
 
@@ -275,7 +294,11 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
 
         session_token = create_session(app, user["id"])
         db.commit()
-        response = jsonify({"user": row_to_user(user), "workspace": get_workspace_state(app, user["id"])})
+        response = jsonify({
+            "user": row_to_user(user),
+            "workspace": get_workspace_state(app, user["id"]),
+            "subscription": _subscription_for(user["id"]),
+        })
         set_session_cookie(app, response, session_token)
         return response
 
@@ -290,11 +313,24 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         response.delete_cookie(SESSION_COOKIE)
         return response
 
+    def _subscription_for(user_id: int) -> dict[str, Any]:
+        """Return the user's subscription tier/status, defaulting to free."""
+        if _billing_get_subscription is None:
+            return {"tier": "free", "status": None}
+        try:
+            return _billing_get_subscription(get_db(app), user_id)
+        except Exception:  # noqa: BLE001
+            return {"tier": "free", "status": None}
+
     @app.get("/api/auth/session")
     def session_info() -> Any:
         user = require_user(app)
         workspace = get_workspace_state(app, user["id"])
-        return jsonify({"user": row_to_user(user), "workspace": workspace})
+        return jsonify({
+            "user": row_to_user(user),
+            "workspace": workspace,
+            "subscription": _subscription_for(user["id"]),
+        })
 
     @app.patch("/api/auth/profile")
     def update_profile() -> Any:
@@ -741,6 +777,15 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         except Exception:
             pass
         return jsonify({"curve": [], "generatedAt": utc_now_iso()})
+
+    # Register Stripe billing routes (status / checkout / portal / webhook).
+    # require_user and get_db are passed in so billing.py doesn't have to
+    # import from app.py (avoids circular import).
+    try:
+        register_billing_routes(app, require_user_fn=require_user, get_db_fn=get_db)
+    except NameError:
+        # billing module failed to import — endpoints just won't exist
+        pass
 
     @app.get("/")
     def serve_index() -> Any:

@@ -8916,3 +8916,30 @@ button[data-toggle-pos-edit]:hover { opacity: 1; }
   font-size: 0.68rem;
   font-family: "IBM Plex Mono", monospace;
 }
+
+/* ── Subscription tier badge (header) ─────────────────────────────────── */
+.tier-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  border-radius: 4px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.12);
+  color: var(--muted);
+  user-select: none;
+  white-space: nowrap;
+}
+.tier-badge[data-tier="pro"] {
+  background: linear-gradient(135deg, rgba(111,143,255,0.25), rgba(111,143,255,0.10));
+  border-color: rgba(111,143,255,0.55);
+  color: #cfdbff;
+}
+.tier-badge[data-tier="pro_plus"] {
+  background: linear-gradient(135deg, rgba(255,196,80,0.25), rgba(255,140,80,0.12));
+  border-color: rgba(255,196,80,0.6);
+  color: #ffe6a8;
+}

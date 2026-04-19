@@ -161,8 +161,9 @@ export class WorkspaceController {
     });
   }
 
-  hydrateSession(user, workspace = {}) {
+  hydrateSession(user, workspace = {}, subscription = null) {
     this.state.user = user;
+    this.state.subscription = subscription || { tier: "free", status: null };
     this.state.watchlist = [...(workspace.watchlist || this.defaults.watchlist)];
     this.state.alerts = structuredClone(workspace.alerts || this.defaults.alerts);
     this.state.positions = structuredClone(workspace.positions || this.defaults.positions);
@@ -189,7 +190,7 @@ export class WorkspaceController {
     if (!this.authEnabled) return;
     try {
       const payload = await this.authApi.session();
-      this.hydrateSession(payload.user, payload.workspace);
+      this.hydrateSession(payload.user, payload.workspace, payload.subscription);
     } catch {
       this.setNetworkStatus(healthOk ? "Guest · Live" : "Guest · Local");
     }

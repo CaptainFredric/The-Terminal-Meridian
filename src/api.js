@@ -172,6 +172,24 @@ export const paperApi = {
   },
 };
 
+export const billingApi = {
+  status() {
+    return apiRequest("/api/billing/status");
+  },
+  createCheckoutSession({ plan, interval = "monthly" } = {}) {
+    return apiRequest("/api/billing/create-checkout-session", {
+      method: "POST",
+      body: JSON.stringify({ plan, interval }),
+    });
+  },
+  createPortalSession() {
+    return apiRequest("/api/billing/create-portal-session", {
+      method: "POST",
+      body: JSON.stringify({}),
+    });
+  },
+};
+
 export const uiCache = {
   key: "the-terminal.ui-cache.v2",
   read() {

@@ -87,6 +87,7 @@
         <button class="btn btn-ghost" id="themePickerBtn" type="button" title="Switch theme (T)">🎨 Theme</button>
         <button class="btn btn-ghost" id="autoJumpButton" type="button" title="Auto-scroll to active panel">Auto-jump: On</button>
         <button class="btn btn-ghost" id="resetFocusButton" type="button">Grid</button>
+        <span class="tier-badge hidden" id="userTierBadge" title="Your subscription tier">FREE</span>
         <button class="btn btn-ghost hidden" id="openSettingsBtn" type="button">Account</button>
         <button class="btn btn-ghost hidden" id="logoutButton" type="button">Sign out</button>
         <button class="btn btn-primary hidden" id="openAuthBtn" type="button">Sync</button>
@@ -341,6 +342,15 @@
         </label>
         <button class="btn btn-primary" id="changePasswordBtn" type="submit">Change password</button>
       </form>
+
+      <div class="auth-form" id="subscriptionSection">
+        <h3 style="margin: 0 0 6px; font-size: 0.95rem;">Subscription</h3>
+        <p style="margin: 0 0 10px; color: var(--muted); font-size: 0.85rem;" id="subscriptionStatusLine">Free tier</p>
+        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+          <button class="btn btn-primary" id="upgradeFromSettingsBtn" type="button">Upgrade to Pro</button>
+          <button class="btn btn-ghost hidden" id="manageSubscriptionBtn" type="button">Manage billing</button>
+        </div>
+      </div>
 
       <form id="deleteAccountForm" class="auth-form">
         <label>

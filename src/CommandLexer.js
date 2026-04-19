@@ -38,6 +38,8 @@ export function lexCommand(raw, context = {}) {
   if (first === "HEAT" || first === "HEATMAP") return { raw: source, normalized, tokens, action: "MODULE", payload: { module: "heatmap" } };
   if (first === "OPTIONS" && second) return { raw: source, normalized, tokens, action: "OPEN_OPTIONS", payload: { symbol: second } };
   if (first === "RULES") return { raw: source, normalized, tokens, action: "MODULE", payload: { module: "rules" } };
+  if (first === "AI" && second) return { raw: source, normalized, tokens, action: "AI_INSIGHT", payload: { symbol: second } };
+  if (first === "AI") return { raw: source, normalized, tokens, action: "MODULE", payload: { module: "ai" } };
   if (first === "IF") return { raw: source, normalized, tokens, action: "ADD_RULE", payload: { statement: source } };
   if (first === "WATCH" && second) return { raw: source, normalized, tokens, action: "WATCH", payload: { symbol: second } };
   if (first === "ALERT" && second && third) {

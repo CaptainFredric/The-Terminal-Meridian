@@ -183,6 +183,14 @@ export class AppCore {
           this.dependencies.refreshQuotes?.([payload.symbol]);
         }
         break;
+      case "AI_INSIGHT":
+        if (payload.symbol) {
+          const aiPanel = this.store.state.activePanel;
+          this.store.state.panelSymbols[aiPanel] = payload.symbol;
+          this.loadModule("ai", aiPanel, { reveal: true });
+          this.dependencies.triggerAICommentary?.(payload.symbol, aiPanel);
+        }
+        break;
       case "OPEN_CHART":
         if (payload.symbol) {
           const chartPanel = this.store.state.activePanel;

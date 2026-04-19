@@ -172,6 +172,18 @@ export const paperApi = {
   },
 };
 
+export const aiApi = {
+  status() {
+    return apiRequest("/api/ai/status");
+  },
+  commentary(symbol) {
+    return apiRequest(`/api/ai/commentary?symbol=${encodeURIComponent(symbol)}`);
+  },
+  marketPulse() {
+    return apiRequest("/api/ai/market-pulse");
+  },
+};
+
 export const billingApi = {
   status() {
     return apiRequest("/api/billing/status");

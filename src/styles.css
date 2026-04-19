@@ -8943,3 +8943,309 @@ button[data-toggle-pos-edit]:hover { opacity: 1; }
   border-color: rgba(255,196,80,0.6);
   color: #ffe6a8;
 }
+
+/* ── Mobile responsive layout ────────────────────────────────────── */
+/*  All rules in this section layer on top of the existing desktop CSS.
+    Desktop (>=901px) is left untouched. Tablet ≤900px stacks the four
+    panels and surfaces the bottom nav; phone ≤600px goes full-screen
+    for modals and tightens typography. JS toggles `body.is-mobile`
+    when the 900px media-query matches. */
+
+/* The "⋯ More" header button + dropdown — desktop hides them via .mobile-only */
+.mobile-only { display: none !important; }
+.mobile-more-menu {
+  position: fixed;
+  top: 56px;
+  right: 8px;
+  z-index: 250;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 180px;
+  padding: 8px;
+  background: var(--bg, rgba(8, 12, 24, 0.98));
+  border: 1px solid var(--border, rgba(120, 140, 180, 0.22));
+  border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+.mobile-more-menu.hidden { display: none; }
+.mobile-more-menu .btn {
+  width: 100%;
+  justify-content: flex-start;
+  text-align: left;
+  min-height: 44px;
+  font-size: 0.85rem;
+}
+
+/* ── Tablet ≤900px ─────────────────────────────────────────────── */
+@media (max-width: 900px) {
+  body.is-mobile .mobile-only { display: inline-flex !important; }
+
+  /* Header: title shrinks; secondary buttons collapse into the More menu */
+  .topbar { gap: 6px; padding: 0 10px; }
+  #appTitle { font-size: 1rem; }
+  .brand-block .chip-row { display: none !important; }
+
+  /* Critical buttons stay; secondary ones hide (the JS dropdown re-exposes them) */
+  body.is-mobile #autoJumpButton,
+  body.is-mobile #resetFocusButton,
+  body.is-mobile #replayTourBtn,
+  body.is-mobile #shareViewBtn,
+  body.is-mobile #themePickerBtn,
+  body.is-mobile #openCommandPalette {
+    display: none !important;
+  }
+  /* When cloned into the dropdown, force them visible again */
+  body.is-mobile .mobile-more-menu #autoJumpButton,
+  body.is-mobile .mobile-more-menu #resetFocusButton,
+  body.is-mobile .mobile-more-menu #replayTourBtn,
+  body.is-mobile .mobile-more-menu #shareViewBtn,
+  body.is-mobile .mobile-more-menu #themePickerBtn,
+  body.is-mobile .mobile-more-menu #openCommandPalette {
+    display: inline-flex !important;
+  }
+
+  /* Ticker tape: smaller font + faster animation feel */
+  .ticker-tape { font-size: 0.7rem; }
+  .ticker-tape .ticker-track,
+  .ticker-tape [class*="ticker-track"] {
+    animation-duration: 28s !important;
+  }
+
+  /* Stack the 4 panels vertically with smooth horizontal slide animation */
+  .workspace-grid {
+    grid-template-columns: 1fr !important;
+    grid-template-rows: 1fr !important;
+  }
+  .panel {
+    transition: transform 240ms ease;
+    will-change: transform;
+  }
+  .panel.is-mobile-hidden {
+    transform: translateX(100%);
+  }
+
+  /* Tables get a horizontal scroll container so they never break layout */
+  .panel-content table,
+  .panel-content .data-table,
+  .panel-content .options-table,
+  .panel-content .screener-table,
+  .panel-content .financial-data-table {
+    display: block;
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    white-space: nowrap;
+  }
+
+  /* Touch targets: Apple HIG min 44x44 */
+  .btn, .panel-btn, .icon-btn,
+  .mobile-panel-tab,
+  .auth-tab,
+  .pricing-billing-btn {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* Charts auto-resize to viewport width */
+  .panel-content canvas,
+  .panel-content svg.chart-svg,
+  .chart-canvas-wrap canvas {
+    max-width: 100% !important;
+    height: auto !important;
+  }
+}
+
+/* ── Phone ≤600px ──────────────────────────────────────────────── */
+@media (max-width: 600px) {
+  /* Title shrinks further; ticker even smaller */
+  #appTitle { font-size: 0.85rem; }
+  .ticker-tape { font-size: 0.65rem; }
+  .ticker-tape .ticker-track,
+  .ticker-tape [class*="ticker-track"] {
+    animation-duration: 22s !important;
+  }
+
+  /* Modals go full-screen with sticky close button */
+  .modal-backdrop > .auth-modal,
+  .modal-backdrop > .settings-modal,
+  .modal-backdrop > .pricing-modal,
+  .palette-backdrop > .command-shell {
+    width: 100vw !important;
+    max-width: 100vw !important;
+    height: 100dvh !important;
+    max-height: 100dvh !important;
+    border-radius: 0 !important;
+    margin: 0 !important;
+    overflow-y: auto;
+  }
+  .auth-head,
+  .pricing-modal-head {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    background: var(--bg, rgba(8, 12, 24, 0.98));
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+  }
+  .auth-head .icon-btn,
+  .pricing-modal-head .icon-btn {
+    position: sticky;
+    right: 0;
+    top: 0;
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  /* Command palette compresses to one line */
+  .command-shell .cmd-kbd-hint { display: none; }
+}
+
+
+/* ── AI Insights panel ────────────────────────────────────────────── */
+.ai-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 4px 2px;
+}
+.ai-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border, rgba(255,255,255,0.08));
+}
+.ai-symbol {
+  margin: 0;
+  font-size: 1.6rem;
+  font-family: "IBM Plex Mono", monospace;
+  letter-spacing: 0.04em;
+  color: var(--text);
+}
+.ai-symbol-meta {
+  margin: 4px 0 0;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.85rem;
+  color: var(--muted);
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+}
+.ai-symbol-meta .positive { color: var(--success, #2fcf84); }
+.ai-symbol-meta .negative { color: var(--danger, #ff5f7f); }
+.ai-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.ai-loading,
+.ai-empty {
+  text-align: center;
+  padding: 32px 20px;
+  color: var(--muted);
+}
+.ai-empty h3 {
+  color: var(--text);
+  margin: 0 0 10px;
+  font-size: 1.05rem;
+}
+.ai-empty p {
+  margin: 0 0 12px;
+  line-height: 1.5;
+  font-size: 0.88rem;
+}
+.ai-spinner {
+  width: 28px;
+  height: 28px;
+  margin: 0 auto 14px;
+  border: 2px solid rgba(111,143,255,0.2);
+  border-top-color: var(--accent, #6f8fff);
+  border-radius: 50%;
+  animation: ai-spin 800ms linear infinite;
+}
+@keyframes ai-spin {
+  to { transform: rotate(360deg); }
+}
+
+.ai-card {
+  background: linear-gradient(180deg, rgba(111,143,255,0.05), rgba(111,143,255,0.01));
+  border: 1px solid rgba(111,143,255,0.18);
+  border-radius: 10px;
+  padding: 16px 18px;
+}
+.ai-card-tone {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  margin-bottom: 8px;
+}
+.ai-tone-icon { font-size: 0.85rem; }
+.ai-headline {
+  margin: 0 0 12px;
+  font-size: 1.05rem;
+  line-height: 1.4;
+  color: var(--text);
+}
+.ai-bullets {
+  margin: 0 0 14px;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ai-bullets li {
+  line-height: 1.55;
+  font-size: 0.9rem;
+  color: var(--text);
+}
+.ai-summary {
+  margin: 12px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255,255,255,0.06);
+  font-size: 0.88rem;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.ai-summary strong { color: var(--text); }
+
+.ai-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.7rem;
+  color: var(--muted);
+  font-family: "IBM Plex Mono", monospace;
+  letter-spacing: 0.04em;
+}
+.ai-source-badge {
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+}
+.ai-source-badge[data-source="openai"],
+.ai-source-badge[data-source="anthropic"] {
+  background: linear-gradient(135deg, rgba(111,143,255,0.18), rgba(111,143,255,0.06));
+  border-color: rgba(111,143,255,0.4);
+  color: #cfdbff;
+}
+
+.ai-disclaimer {
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  font-size: 0.72rem;
+  color: var(--muted);
+  background: rgba(255,184,77,0.06);
+  border-left: 2px solid rgba(255,184,77,0.5);
+  border-radius: 3px;
+}

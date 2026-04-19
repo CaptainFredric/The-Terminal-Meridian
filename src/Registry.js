@@ -1,3 +1,4 @@
+import { createAIRenderer } from "./Renderers/AIRenderer.js";
 import { createBriefingRenderer } from "./Renderers/BriefingRenderer.js";
 import { createCalculatorRenderer } from "./Renderers/CalculatorRenderer.js";
 import { createChartRenderer } from "./Renderers/ChartRenderer.js";
@@ -55,5 +56,6 @@ export function createDefaultModuleRegistry(context) {
     ["options", createOptionsRenderer(context)],
     ["calculator", createCalculatorRenderer(context)],
     ["rules", createRulesRenderer(context)],
+    ["ai", createAIRenderer(context)],
   ]);
 }

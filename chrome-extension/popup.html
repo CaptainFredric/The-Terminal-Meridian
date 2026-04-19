@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Meridian Quick Quotes</title>
+    <!--
+      Inline styles keep the extension build-step free. The token values mirror
+      src/styles.css in the main Meridian repo so the popup feels like a natural
+      extension of the terminal UI.
+    -->
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #0a0e1a;
+        --bg-panel: #121829;
+        --surface: #161f3d;
+        --border: #2a355e;
+        --text: #e8eeff;
+        --muted: #98a6cf;
+        --accent: #6f8fff;
+        --success: #2fcf84;
+        --danger: #ff5f7f;
+        --warning: #f6b34b;
+        --mono: "IBM Plex Mono", "JetBrains Mono", ui-monospace, monospace;
+        --sans: "Inter", system-ui, sans-serif;
+      }
+
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        width: 360px;
+        min-height: 480px;
+        max-height: 560px;
+        background: var(--bg);
+        color: var(--text);
+        font-family: var(--sans);
+        font-size: 13px;
+        display: flex;
+        flex-direction: column;
+      }
+
+      header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 12px 14px;
+        border-bottom: 1px solid var(--border);
+        background: linear-gradient(
+          180deg,
+          rgba(20, 30, 60, 0.94) 0%,
+          rgba(14, 21, 46, 0.95) 100%
+        );
+      }
+
+      header .brand {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        font-size: 11px;
+        color: var(--accent);
+      }
+
+      header .brand::before {
+        content: "";
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--accent);
+        box-shadow: 0 0 10px var(--accent);
+      }
+
+      .header-actions {
+        display: flex;
+        gap: 6px;
+      }
+
+      .icon-btn {
+        background: transparent;
+        border: 1px solid var(--border);
+        color: var(--muted);
+        padding: 4px 8px;
+        font-size: 12px;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: all 0.12s ease;
+      }
+      .icon-btn:hover {
+        color: var(--text);
+        border-color: var(--accent);
+      }
+
+      .status-bar {
+        font-family: var(--mono);
+        font-size: 10px;
+        color: var(--muted);
+        padding: 6px 14px;
+        border-bottom: 1px solid var(--border);
+        background: rgba(17, 24, 49, 0.6);
+        display: flex;
+        justify-content: space-between;
+      }
+      .status-bar.error {
+        color: var(--danger);
+      }
+
+      main {
+        flex: 1;
+        overflow-y: auto;
+      }
+
+      table.watchlist {
+        width: 100%;
+        border-collapse: collapse;
+        font-family: var(--mono);
+      }
+      table.watchlist th {
+        font-family: var(--sans);
+        text-align: left;
+        font-size: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--muted);
+        padding: 8px 14px;
+        border-bottom: 1px solid var(--border);
+        font-weight: 500;
+      }
+      table.watchlist th.num {
+        text-align: right;
+      }
+      table.watchlist td {
+        padding: 10px 14px;
+        border-bottom: 1px solid rgba(42, 53, 94, 0.4);
+        font-size: 13px;
+      }
+      table.watchlist td.sym {
+        font-weight: 600;
+        color: var(--text);
+        cursor: pointer;
+      }
+      table.watchlist td.sym:hover {
+        color: var(--accent);
+      }
+      table.watchlist td.num {
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+      }
+      .pos {
+        color: var(--success);
+      }
+      .neg {
+        color: var(--danger);
+      }
+      .flat {
+        color: var(--muted);
+      }
+
+      .empty {
+        padding: 24px 14px;
+        text-align: center;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      footer {
+        display: flex;
+        gap: 8px;
+        padding: 10px 14px;
+        border-top: 1px solid var(--border);
+        background: var(--bg-panel);
+      }
+      .btn {
+        flex: 1;
+        padding: 8px 10px;
+        background: var(--surface);
+        color: var(--text);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 12px;
+        font-family: var(--sans);
+        transition: all 0.12s ease;
+      }
+      .btn:hover {
+        border-color: var(--accent);
+      }
+      .btn.primary {
+        background: var(--accent);
+        color: #fff;
+        border-color: var(--accent);
+        font-weight: 600;
+      }
+      .btn.primary:hover {
+        filter: brightness(1.1);
+      }
+
+      /* Settings panel — toggled visible by JS */
+      .settings {
+        display: none;
+        padding: 14px;
+        border-top: 1px solid var(--border);
+        background: var(--bg-panel);
+      }
+      .settings.open {
+        display: block;
+      }
+      .settings label {
+        display: block;
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--muted);
+        margin-bottom: 6px;
+      }
+      .settings textarea {
+        width: 100%;
+        box-sizing: border-box;
+        background: var(--bg);
+        color: var(--text);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 8px;
+        font-family: var(--mono);
+        font-size: 12px;
+        resize: vertical;
+        min-height: 64px;
+      }
+      .settings .row {
+        display: flex;
+        gap: 8px;
+        margin-top: 8px;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="brand">Meridian</div>
+      <div class="header-actions">
+        <button class="icon-btn" id="refreshBtn" title="Refresh">&#x21bb;</button>
+        <button class="icon-btn" id="settingsBtn" title="Edit watchlist">&#x2699;</button>
+      </div>
+    </header>
+
+    <div class="status-bar" id="statusBar">
+      <span id="statusText">Loading...</span>
+      <span id="statusTime"></span>
+    </div>
+
+    <main>
+      <table class="watchlist" id="watchlistTable">
+        <thead>
+          <tr>
+            <th>Symbol</th>
+            <th class="num">Price</th>
+            <th class="num">Chg %</th>
+          </tr>
+        </thead>
+        <tbody id="watchlistBody">
+          <tr>
+            <td colspan="3" class="empty">Loading quotes...</td>
+          </tr>
+        </tbody>
+      </table>
+    </main>
+
+    <section class="settings" id="settingsPanel">
+      <label for="symbolsInput">Watchlist (comma-separated)</label>
+      <textarea id="symbolsInput" placeholder="AAPL, MSFT, NVDA"></textarea>
+      <div class="row">
+        <button class="btn" id="cancelSettingsBtn">Cancel</button>
+        <button class="btn primary" id="saveSettingsBtn">Save</button>
+      </div>
+    </section>
+
+    <footer>
+      <button class="btn primary" id="openMeridianBtn">Open Meridian &#x2197;</button>
+    </footer>
+
+    <script src="popup.js"></script>
+  </body>
+</html>

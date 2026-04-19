@@ -30,7 +30,7 @@ import { LogicEngine } from "./LogicEngine.js";
 import { createDefaultModuleRegistry } from "./Registry.js";
 import { applyPriceTone, emptyState, formatPrice, formatSignedPct, tabularValue } from "./Renderers/Common.js";
 import { createStateStore } from "./StateStore.js";
-import { authApi, billingApi, marketApi, paperApi, uiCache, workspaceApi } from "./api.js";
+import { aiApi, authApi, billingApi, marketApi, paperApi, uiCache, workspaceApi } from "./api.js";
 import { ActionEngine } from "./ActionEngine.js";
 import { getStockDeepDive } from "./marketService.js";
 import { fetchQuotes, fetchChart, fetchOptions, fetchNews, fetchFxRates } from "./services.js";
@@ -362,6 +362,9 @@ const initialState = {
   macroYields: null, // fetched from /api/macro/yields on each full refresh
   heatmapFilter: { sector: "ALL", sort: "changePct" },
   chartIndicators: { sma20: true, ema9: false, bollinger: false, vwap: false, rsi: true, volume: true, macd: false },
+  aiCommentary: new Map(), // symbol -> {headline, bullets, summary, tone, source, generatedAt, model}
+  aiLoading: new Set(),    // symbols currently being fetched
+  aiSource: null,          // {source, model} from /api/ai/status
 };
 
 const stateStore = createStateStore(initialState);
@@ -520,6 +523,7 @@ function init() {
         loadDeepDive,
         syncTicker,
         showToast,
+        triggerAICommentary,
         checkRuleLimit: () => checkFreeTierLimit(state.activeRules.length, FREE_RULES_LIMIT, "rules"),
         openSettingsModal,
         openShortcutsOverlay: () => {
@@ -633,6 +637,9 @@ function init() {
   }, 5000);
   window.addEventListener("resize", fitAllCharts);
   window.addEventListener("resize", syncMobilePanelNav);
+
+  // Mobile responsive wiring (bottom-nav, More menu, body.is-mobile flag)
+  initMobileResponsive();
 
   // Show onboarding for first-time users
   if (shouldShowOnboarding()) {
@@ -2077,6 +2084,80 @@ function syncMobilePanelNav() {
   });
 }
 
+// ── Mobile responsive: body.is-mobile flag, bottom-nav binding, More menu ──
+function initMobileResponsive() {
+  const mq = window.matchMedia("(max-width: 900px)");
+  const applyMobileFlag = (matches) => {
+    document.body.classList.toggle("is-mobile", Boolean(matches));
+  };
+  applyMobileFlag(mq.matches);
+  // Safari <14 lacks addEventListener on MediaQueryList — fall back to addListener
+  if (typeof mq.addEventListener === "function") {
+    mq.addEventListener("change", (event) => applyMobileFlag(event.matches));
+  } else if (typeof mq.addListener === "function") {
+    mq.addListener((event) => applyMobileFlag(event.matches));
+  }
+
+  // Bottom-nav buttons: an existing document-click delegate already calls
+  // setActivePanel for [data-mobile-panel]; we just make sure the buttons
+  // exist (the markup ships them) and re-sync nav state on body-flag change.
+  syncMobilePanelNav();
+
+  // ⋯ More menu — clones secondary header buttons into a small dropdown
+  const moreBtn = document.querySelector("#mobileMoreMenuBtn");
+  const moreMenu = document.querySelector("#mobileMoreMenu");
+  if (moreBtn && moreMenu) {
+    const secondaryIds = [
+      "themePickerBtn",
+      "replayTourBtn",
+      "shareViewBtn",
+      "autoJumpButton",
+      "resetFocusButton",
+      "openCommandPalette",
+    ];
+
+    const populate = () => {
+      moreMenu.innerHTML = "";
+      secondaryIds.forEach((id) => {
+        const original = document.getElementById(id);
+        if (!original) return;
+        // Move (don't clone) so click handlers keep working
+        moreMenu.appendChild(original);
+      });
+    };
+
+    const closeMenu = () => {
+      moreMenu.classList.add("hidden");
+      moreBtn.setAttribute("aria-expanded", "false");
+    };
+
+    const openMenu = () => {
+      populate();
+      moreMenu.classList.remove("hidden");
+      moreBtn.setAttribute("aria-expanded", "true");
+    };
+
+    moreBtn.addEventListener("click", (event) => {
+      event.stopPropagation();
+      moreMenu.classList.contains("hidden") ? openMenu() : closeMenu();
+    });
+
+    // Click anywhere else to close
+    document.addEventListener("click", (event) => {
+      if (!moreMenu.classList.contains("hidden")
+          && !moreMenu.contains(event.target)
+          && event.target !== moreBtn) {
+        closeMenu();
+      }
+    });
+
+    // Close on Escape
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") closeMenu();
+    });
+  }
+}
+
 function isSplitLaptopViewport() {
   const width = window.innerWidth || document.documentElement.clientWidth;
   const height = window.innerHeight || document.documentElement.clientHeight;
@@ -2458,6 +2539,49 @@ function renderAllPanels() {
   [1, 2, 3, 4].forEach((panel) => void renderPanel(panel));
 }
 
+/**
+ * Fetch AI commentary for a symbol and re-render the panel.
+ *
+ * Cache-aware: respects an in-flight request (no double-fetch) and
+ * stores the result on `state.aiCommentary[symbol]` so the renderer
+ * can show it on subsequent re-renders without re-hitting the LLM.
+ * Surfaces errors via the toast system; the renderer falls back to
+ * the empty state if no commentary lands.
+ */
+async function triggerAICommentary(symbol, panel) {
+  const sym = String(symbol || "").trim().toUpperCase();
+  if (!sym) return;
+  if (!state.aiLoading) state.aiLoading = new Set();
+  if (!state.aiCommentary) state.aiCommentary = new Map();
+
+  if (state.aiLoading.has(sym)) return; // de-dupe in-flight requests
+
+  state.aiLoading.add(sym);
+  renderPanel(panel);
+
+  try {
+    const result = await aiApi.commentary(sym);
+    state.aiCommentary.set(sym, result);
+    // Toast is intentionally subtle — we don't want to spam the user
+    // when they just wanted to read the panel. Only celebrate the
+    // first time we wire up real LLM commentary.
+    if (result?.source && result.source !== "template" && !state.aiSource) {
+      state.aiSource = { source: result.source, model: result.model };
+      try { showToast(`AI insights powered by ${result.source}`, "success", 3500); } catch {}
+    }
+  } catch (error) {
+    const msg = String(error?.message || "");
+    if (msg.includes("429")) {
+      try { showToast("AI insights: rate-limited (1 per 5s) — try again in a moment.", "neutral", 4000); } catch {}
+    } else {
+      try { showToast(`AI insights failed: ${msg || "unknown error"}`, "error", 4000); } catch {}
+    }
+  } finally {
+    state.aiLoading.delete(sym);
+    renderPanel(panel);
+  }
+}
+
 async function renderPanel(panel) {
   const panelNode = document.querySelector(`[data-panel="${panel}"]`);
   const title = document.querySelector(`#panelTitle${panel}`);
@@ -2648,6 +2772,28 @@ function renderOverviewSparkline(symbol, changePct = 0) {
 }
 
 function handleDocumentClick(event) {
+  // AI Insights: "Generate insight" button — fetch commentary and re-render.
+  const aiGenerateBtn = event.target.closest("[data-ai-generate]");
+  if (aiGenerateBtn) {
+    const symbol = aiGenerateBtn.dataset.aiGenerate;
+    const panel = Number(aiGenerateBtn.dataset.panel) || state.activePanel || 1;
+    void triggerAICommentary(symbol, panel);
+    return;
+  }
+  // AI Insights: "Change symbol" button — prompt for a new ticker.
+  const aiSymbolEditBtn = event.target.closest("[data-ai-symbol-edit]");
+  if (aiSymbolEditBtn) {
+    const panel = Number(aiSymbolEditBtn.dataset.aiSymbolEdit);
+    const current = state.panelSymbols?.[panel] || "AAPL";
+    const raw = window.prompt(`Analyze which symbol on panel ${panel}?`, current);
+    const next = String(raw || "").trim().toUpperCase();
+    if (next && next !== current) {
+      state.panelSymbols[panel] = next;
+      renderPanel(panel);
+    }
+    return;
+  }
+
   // Mobile bottom tab nav: switch active panel without losing module state
   const mobileTabBtn = event.target.closest("[data-mobile-panel]");
   if (mobileTabBtn) {

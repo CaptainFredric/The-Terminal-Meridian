@@ -3,16 +3,27 @@ const DEFAULT_HEADERS = {
   Accept: "application/json",
 };
 
+// Production backend hosted on Render.
+const RENDER_BACKEND = "https://the-terminal-meridian.onrender.com";
+
 function resolveApiBase() {
   if (typeof window === "undefined") return "";
 
+  // 1. Explicit override (DevTools: localStorage.setItem("meridian.api-base", "..."))
   const override = window.MERIDIAN_API_BASE || window.localStorage.getItem("meridian.api-base") || "";
   if (override) return String(override).replace(/\/$/, "");
 
   const { protocol, hostname, port } = window.location;
   const isLocal = hostname === "127.0.0.1" || hostname === "localhost";
+
+  // 2. Local dev — backend on 4173
   if (isLocal && port && port !== "4173") {
     return `${protocol}//${hostname}:4173`;
+  }
+
+  // 3. GitHub Pages (or any non-local origin) → use Render backend
+  if (!isLocal) {
+    return RENDER_BACKEND;
   }
 
   return "";

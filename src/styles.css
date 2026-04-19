@@ -1104,10 +1104,21 @@ html {
 .modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(5, 7, 14, 0.72);
+  /* Slightly heavier dim + an explicit z-index so chart tooltips, ticker
+     labels, and other absolutely-positioned overlays sit BEHIND modals.
+     Sits above onboarding (z 9000) and command palette (z 8500). */
+  background: rgba(5, 7, 14, 0.85);
+  -webkit-backdrop-filter: blur(3px);
+          backdrop-filter: blur(3px);
   display: grid;
   place-items: center;
   padding: 16px;
+  z-index: 9500;
+}
+/* Modal contents sit above the backdrop's blur so they look crisp. */
+.modal-backdrop > * {
+  position: relative;
+  z-index: 1;
 }
 
 .auth-modal {

@@ -787,6 +787,15 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         # billing module failed to import — endpoints just won't exist
         pass
 
+    # AI commentary endpoints. fetch_quotes is injected so ai_commentary.py
+    # doesn't need to know about yfinance or any data source — same
+    # dependency-injection pattern as the billing module above.
+    try:
+        from .ai_commentary import register_ai_routes
+        register_ai_routes(app, fetch_quotes_fn=fetch_quotes, overview_symbols=OVERVIEW_SYMBOLS)
+    except Exception as ai_exc:  # noqa: BLE001
+        app.logger.warning("AI commentary routes not loaded: %s", ai_exc)
+
     @app.get("/")
     def serve_index() -> Any:
         return send_from_directory(ROOT, "index.html")

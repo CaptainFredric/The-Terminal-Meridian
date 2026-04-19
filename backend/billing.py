@@ -467,6 +467,26 @@ def register_billing_routes(
         data_object = (event.get("data") or {}).get("object") or {}
         db = get_db_fn(app)
 
+        # ── Thin payload expansion ────────────────────────────────────────
+        # Stripe's newer "thin payload" destinations omit data.object.
+        # When we detect an empty object on an event type we care about,
+        # fetch the full event from Stripe's API so handlers work normally.
+        _HANDLED_TYPES = {
+            "customer.subscription.created",
+            "customer.subscription.updated",
+            "customer.subscription.deleted",
+            "checkout.session.completed",
+            "invoice.payment_succeeded",
+            "invoice.payment_failed",
+        }
+        if not data_object and event_type in _HANDLED_TYPES and event_id:
+            try:
+                full_event = stripe.Event.retrieve(event_id)  # type: ignore[union-attr]
+                data_object = (full_event.get("data") or {}).get("object") or {}
+                _log.info("stripe thin payload expanded event_id=%s", event_id)
+            except Exception as exc:  # noqa: BLE001
+                _log.warning("stripe thin payload expand failed event_id=%s: %s", event_id, exc)
+
         _log.info("stripe webhook received event_id=%s type=%s", event_id, event_type)
 
         # ── Idempotency check ─────────────────────────────────────────────

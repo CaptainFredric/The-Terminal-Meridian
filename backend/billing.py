@@ -27,10 +27,13 @@ Environment variables consumed:
 
 from __future__ import annotations
 
+import logging
 import os
 import sqlite3
 from datetime import datetime, timezone
 from typing import Any, Callable
+
+_log = logging.getLogger("meridian.billing")
 
 from flask import Flask, jsonify, request
 
@@ -108,7 +111,7 @@ def _stripe_configured() -> tuple[bool, str | None]:
 
 
 def ensure_subscription_tables(app: Flask) -> None:
-    """Create the subscriptions table if it doesn't exist.
+    """Create the subscriptions and webhook_events tables if they don't exist.
 
     Idempotent — safe to call on every app start. Designed to live alongside
     `ensure_database()` in app.py.
@@ -131,6 +134,14 @@ def ensure_subscription_tables(app: Flask) -> None:
                 ON subscriptions(stripe_customer_id);
             CREATE INDEX IF NOT EXISTS idx_subscriptions_stripe_subscription
                 ON subscriptions(stripe_subscription_id);
+
+            -- Idempotency table: stores processed Stripe event IDs so that
+            -- retried webhooks are silently ignored rather than double-applied.
+            CREATE TABLE IF NOT EXISTS stripe_webhook_events (
+                stripe_event_id TEXT PRIMARY KEY,
+                event_type TEXT NOT NULL,
+                processed_at TEXT NOT NULL
+            );
             """
         )
         db.commit()
@@ -452,8 +463,24 @@ def register_billing_routes(
             return jsonify({"error": f"Invalid webhook: {exc}"}), 400
 
         event_type = event.get("type", "")
+        event_id = event.get("id", "")
         data_object = (event.get("data") or {}).get("object") or {}
         db = get_db_fn(app)
+
+        _log.info("stripe webhook received event_id=%s type=%s", event_id, event_type)
+
+        # ── Idempotency check ─────────────────────────────────────────────
+        # Stripe retries webhooks on non-2xx responses and also when a
+        # test re-sends an event. If we've already processed this event
+        # ID, return 200 immediately without re-applying side-effects.
+        if event_id:
+            already = db.execute(
+                "SELECT stripe_event_id FROM stripe_webhook_events WHERE stripe_event_id = ?",
+                (event_id,),
+            ).fetchone()
+            if already:
+                _log.info("stripe webhook duplicate event_id=%s — skipping", event_id)
+                return jsonify({"received": True, "duplicate": True})
 
         if event_type in (
             "customer.subscription.created",
@@ -475,6 +502,19 @@ def register_billing_routes(
                     stripe_customer_id=customer_id,
                     status="trialing" if _trial_days() > 0 else "active",
                 )
+        else:
+            _log.debug("stripe webhook unhandled event type=%s id=%s", event_type, event_id)
+
+        # Mark this event as processed
+        if event_id:
+            try:
+                db.execute(
+                    "INSERT OR IGNORE INTO stripe_webhook_events (stripe_event_id, event_type, processed_at) VALUES (?, ?, ?)",
+                    (event_id, event_type, _utc_now_iso()),
+                )
+                db.commit()
+            except Exception as exc:
+                _log.warning("failed to record webhook event %s: %s", event_id, exc)
 
         # Always 200 so Stripe doesn't retry on no-op events
         return jsonify({"received": True})

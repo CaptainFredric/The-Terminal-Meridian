@@ -365,6 +365,7 @@ const initialState = {
   aiCommentary: new Map(), // symbol -> {headline, bullets, summary, tone, source, generatedAt, model}
   aiLoading: new Set(),    // symbols currently being fetched
   aiSource: null,          // {source, model} from /api/ai/status
+  fetchErrors: new Map(),  // key (e.g. "chart:AAPL:1mo" / "news" / "quote:AAPL") -> {message, ts}
 };
 
 const stateStore = createStateStore(initialState);
@@ -753,7 +754,12 @@ function snapshotMeridianState() {
 
 function persistMeridianState() {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(MERIDIAN_STATE_KEY, JSON.stringify(snapshotMeridianState()));
+  try {
+    window.localStorage.setItem(MERIDIAN_STATE_KEY, JSON.stringify(snapshotMeridianState()));
+  } catch {
+    // Private browsing, quota exceeded, or storage disabled — ignore.
+    // The app remains fully functional; saved state just won't survive a reload.
+  }
 }
 
 function queueMeridianStatePersist() {
@@ -1477,7 +1483,7 @@ let wizardSpeed = 30;
 
 function shouldShowOnboarding() {
   if (typeof window === "undefined") return false;
-  return !window.localStorage.getItem(ONBOARDING_KEY);
+  try { return !window.localStorage.getItem(ONBOARDING_KEY); } catch { return false; }
 }
 
 function showOnboarding() {
@@ -1488,7 +1494,7 @@ function showOnboarding() {
 function dismissOnboarding() {
   const backdrop = document.querySelector("#onboardingBackdrop");
   if (backdrop) backdrop.classList.add("hidden");
-  window.localStorage.setItem(ONBOARDING_KEY, "1");
+  try { window.localStorage.setItem(ONBOARDING_KEY, "1"); } catch { /* ignore */ }
 }
 
 function goToWizardStep(step) {
@@ -3092,6 +3098,24 @@ function handleDocumentClick(event) {
     return;
   }
 
+  // ── Error-state retry buttons ────────────────────────────────────────
+  const retryAction = event.target.closest("[data-action]");
+  if (retryAction) {
+    const action = retryAction.dataset.action;
+    if (action === "refresh-chart") {
+      try {
+        const payload = JSON.parse(retryAction.dataset.payload || "{}");
+        const { panel, symbol, range } = payload;
+        if (symbol) refreshChart(symbol, range || state.chartRanges[Number(panel)] || "1mo");
+      } catch { /* malformed payload */ }
+      return;
+    }
+    if (action === "refresh-news") {
+      void refreshNews().then(renderAllPanels);
+      return;
+    }
+  }
+
   const refreshOptionsTrigger = event.target.closest("[data-refresh-options]");
   if (refreshOptionsTrigger) {
     const [, symbol] = refreshOptionsTrigger.dataset.refreshOptions.split(":");
@@ -4165,7 +4189,10 @@ async function refreshQuotes(symbols) {
   // Try backend first; fall back to direct Yahoo fetch
   try {
     const payload = await marketApi.quotes(symbols);
-    (payload.quotes || []).forEach((quote) => state.quotes.set(quote.symbol, quote));
+    (payload.quotes || []).forEach((q) => {
+      state.quotes.set(q.symbol, q);
+      state.fetchErrors.delete(`quote:${q.symbol}`);
+    });
     evaluateAlerts();
     return;
   } catch {
@@ -4173,10 +4200,18 @@ async function refreshQuotes(symbols) {
   }
   try {
     const results = await fetchQuotes(symbols);
-    results.forEach((quote) => state.quotes.set(quote.symbol, quote));
+    results.forEach((q) => {
+      state.quotes.set(q.symbol, q);
+      state.fetchErrors.delete(`quote:${q.symbol}`);
+    });
     evaluateAlerts();
-  } catch {
-    // noop
+  } catch (err) {
+    const msg = err?.message || "Quote fetch failed";
+    symbols.forEach((sym) => {
+      if (!state.quotes.has(sym)) {
+        state.fetchErrors.set(`quote:${sym}`, { message: msg, ts: Date.now() });
+      }
+    });
   }
 }
 
@@ -4201,11 +4236,13 @@ async function refreshChart(symbol, range = "1mo") {
   const interval = chartIntervalForRange(range);
   const key = chartKey(symbol, range, interval);
   state.chartLoading.add(key);
+  state.fetchErrors.delete(`chart:${key}`);
   renderAllPanels();
   // Try backend first
   try {
     const payload = await marketApi.chart(symbol, range, interval);
     state.chartCache.set(key, payload.points || []);
+    state.fetchErrors.delete(`chart:${key}`);
     state.chartLoading.delete(key);
     renderAllPanels();
     return;
@@ -4216,9 +4253,10 @@ async function refreshChart(symbol, range = "1mo") {
     const points = await fetchChart(symbol, range, interval);
     if (points.length) {
       state.chartCache.set(key, points);
+      state.fetchErrors.delete(`chart:${key}`);
     }
-  } catch {
-    // noop
+  } catch (err) {
+    state.fetchErrors.set(`chart:${key}`, { message: err?.message || "Chart data unavailable", ts: Date.now() });
   } finally {
     state.chartLoading.delete(key);
     renderAllPanels();
@@ -4259,6 +4297,7 @@ async function refreshNews() {
     const payload = await marketApi.news();
     if ((payload.items || []).length) {
       state.newsItems = payload.items;
+      state.fetchErrors.delete("news");
       return;
     }
   } catch {
@@ -4268,8 +4307,11 @@ async function refreshNews() {
   try {
     const items = await fetchNews();
     state.newsItems = items;
-  } catch {
-    // noop
+    if (items.length) state.fetchErrors.delete("news");
+  } catch (err) {
+    if (!state.newsItems.length) {
+      state.fetchErrors.set("news", { message: err?.message || "News feed unavailable", ts: Date.now() });
+    }
   }
 }
 

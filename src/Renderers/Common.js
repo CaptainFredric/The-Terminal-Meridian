@@ -53,6 +53,26 @@ export function emptyState(message) {
   return `<div class="empty-state">${message}</div>`;
 }
 
+/**
+ * Render a standardised error card with an optional retry button.
+ *
+ * @param {string} message  Human-readable error description.
+ * @param {object} [opts]
+ * @param {string} [opts.retryAction]   data-action value on the retry button.
+ * @param {string} [opts.retryLabel]    Button label (default: "Try again").
+ * @param {string} [opts.retryPayload]  JSON payload encoded onto data-payload.
+ */
+export function errorState(message, { retryAction, retryLabel = "Try again", retryPayload } = {}) {
+  const btn = retryAction
+    ? `<button class="btn btn-sm mt-2" data-action="${retryAction}"${retryPayload ? ` data-payload='${retryPayload}'` : ""}>${retryLabel}</button>`
+    : "";
+  return `<div class="empty-state error-state">
+  <span class="error-icon" aria-hidden="true">⚠</span>
+  <span>${message}</span>
+  ${btn}
+</div>`;
+}
+
 export function tabularValue(content, { currentPrice, previousPrice, flashKey, className = "" } = {}) {
   const attributes = [];
   if (currentPrice != null) attributes.push(`data-price-current="${Number(currentPrice)}"`);

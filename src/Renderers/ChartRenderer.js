@@ -1,4 +1,4 @@
-import { formatPrice, formatSignedPct, loadingSkeleton, tabularValue } from "./Common.js";
+import { errorState, formatPrice, formatSignedPct, loadingSkeleton, tabularValue } from "./Common.js";
 
 export function observeChartResize(container, chart) {
   if (!container || !chart) return () => {};
@@ -32,8 +32,9 @@ export function createChartRenderer(context) {
     const points = state.chartCache.get(cacheKey) || [];
     const stats = calculateChartStats(points);
     const chartIsLoading = state.chartLoading?.has(cacheKey);
+    const fetchErr = state.fetchErrors?.get(`chart:${cacheKey}`);
     const chartUnavailable = !points.length && !state.health?.ok;
-    const waitingForData = chartIsLoading || (!points.length && state.health?.ok);
+    const waitingForData = chartIsLoading || (!points.length && state.health?.ok && !fetchErr);
     const freshnessLabel = state.health?.ok
       ? `Live feed · ${currentTimeShort(state.lastDataFetchedAt || Date.now())}`
       : `Stale snapshot · ${currentTimeShort(state.lastDataFetchedAt || Date.now())}`;
@@ -84,6 +85,7 @@ export function createChartRenderer(context) {
           <div class="chart-canvas-wrap">
             <div class="chart-canvas" id="chartCanvas${panel}" data-chart-panel="${panel}"></div>
             ${chartUnavailable ? `<div class="chart-loading chart-fallback">${loadingSkeleton(4)}<p class="empty-inline">Offline: ${symbol} chart feed unavailable. Last requested window ${range.toUpperCase()}.</p></div>` : ""}
+            ${fetchErr && !points.length ? `<div class="chart-loading chart-fallback">${errorState(`${symbol} chart unavailable. ${fetchErr.message}`, { retryAction: "refresh-chart", retryLabel: "Retry", retryPayload: JSON.stringify({ panel, symbol, range }) })}</div>` : ""}
             ${waitingForData ? `<div class="chart-loading"><div class="chart-skeleton"><span class="chart-skeleton-line a"></span><span class="chart-skeleton-line b"></span><span class="chart-skeleton-line c"></span><span class="chart-skeleton-line d"></span><span class="chart-skeleton-grid"></span></div></div>` : ""}
           </div>
         </article>

@@ -70,10 +70,30 @@ def _check_rate_limit(ip: str) -> bool:
 
 
 def _client_ip() -> str:
-    # Honour X-Forwarded-For when behind a proxy, otherwise remote_addr.
-    fwd = request.headers.get("X-Forwarded-For", "")
+    """Extract the real client IP, resistant to X-Forwarded-For spoofing.
+
+    Behind a single reverse-proxy (Render, nginx, etc.) the header looks like:
+        X-Forwarded-For: <real-client-ip>, <proxy-ip>
+
+    An attacker can prepend arbitrary IPs by sending:
+        X-Forwarded-For: 1.2.3.4, 5.6.7.8, <real-ip>
+
+    Taking the *rightmost* IP that was added by the proxy we trust is the
+    safest default for a single-hop deployment. If we're behind two trusted
+    hops we take the second-from-last, etc. Here we default to rightmost
+    unless the env var TRUSTED_PROXY_DEPTH is set (integer ≥ 1).
+    """
+    fwd = request.headers.get("X-Forwarded-For", "").strip()
     if fwd:
-        return fwd.split(",")[0].strip()
+        parts = [p.strip() for p in fwd.split(",") if p.strip()]
+        if parts:
+            try:
+                depth = max(1, int(os.environ.get("TRUSTED_PROXY_DEPTH", "1")))
+            except ValueError:
+                depth = 1
+            # Rightmost IP is the one added by the innermost trusted proxy.
+            idx = max(len(parts) - depth, 0)
+            return parts[idx]
     return request.remote_addr or "unknown"
 
 

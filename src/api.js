@@ -213,6 +213,11 @@ export const uiCache = {
     }
   },
   write(value) {
-    window.localStorage.setItem(this.key, JSON.stringify(value));
+    try {
+      window.localStorage.setItem(this.key, JSON.stringify(value));
+    } catch {
+      // Private browsing, storage quota exceeded, or Safari ITP — degrade
+      // gracefully. The app still works; state just won't survive a reload.
+    }
   },
 };

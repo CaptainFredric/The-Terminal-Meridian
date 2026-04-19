@@ -22,8 +22,18 @@ try:
 except ImportError:
     YFINANCE_AVAILABLE = False
 
-from flask import Flask, g, jsonify, make_response, request, send_from_directory
+from flask import Flask, current_app, g, jsonify, make_response, request, send_from_directory
 from werkzeug.security import check_password_hash, generate_password_hash
+
+try:
+    from flask_cors import CORS
+    FLASK_CORS_AVAILABLE = True
+except ImportError:
+    # CORS is required when the API is hosted on a different origin than the
+    # frontend (e.g. GitHub Pages frontend → Render backend). For pure local
+    # dev where everything is served from 127.0.0.1:4173 the import is
+    # optional, so we degrade gracefully instead of hard-failing the import.
+    FLASK_CORS_AVAILABLE = False
 
 try:
     from .universe import build_universe_payload, universe_symbols
@@ -50,8 +60,16 @@ def load_env_file(path: Path) -> None:
 
 load_env_file(ROOT / ".env")
 
-DATABASE_DIR = ROOT / "data"
-DATABASE_PATH = DATABASE_DIR / "terminal.db"
+# DB location is overridable so production deployments can point at a
+# persistent disk (e.g. Render's `/opt/render/data/terminal.db`) without
+# touching code. Falls back to the repo-local `data/` dir for local dev.
+_DB_OVERRIDE = os.environ.get("TERMINAL_DB_PATH", "").strip()
+if _DB_OVERRIDE:
+    DATABASE_PATH = Path(_DB_OVERRIDE).expanduser().resolve()
+    DATABASE_DIR = DATABASE_PATH.parent
+else:
+    DATABASE_DIR = ROOT / "data"
+    DATABASE_PATH = DATABASE_DIR / "terminal.db"
 SESSION_COOKIE = "terminal_session"
 DEFAULT_SYMBOLS = ["AAPL", "MSFT", "NVDA", "PLTR", "QQQ", "BTC-USD", "XOM", "TSLA"]
 DEFAULT_POSITIONS = [
@@ -88,6 +106,49 @@ USERNAME_PATTERN = re.compile(r"^[A-Za-z0-9._-]{3,24}$")
 RAPIDAPI_KEY = os.environ.get("RAPIDAPI_KEY", "").strip()
 RAPIDAPI_HOST = os.environ.get("RAPIDAPI_HOST", "yahoo-finance15.p.rapidapi.com").strip() or "yahoo-finance15.p.rapidapi.com"
 RAPIDAPI_BASE = f"https://{RAPIDAPI_HOST}"
+
+# ── Simple per-IP rate limiter (in-memory) ───────────────────────────────────
+# Covers sensitive unauthenticated endpoints: signup, login, availability.
+# Key → list of timestamps of recent calls.  Rolls a sliding window so bursty
+# traffic is treated more fairly than a fixed-bucket approach.
+import logging as _logging
+_log = _logging.getLogger("meridian.backend")
+
+_rl_store: dict[str, list[float]] = {}
+
+def _rate_limited(key: str, max_calls: int, window_sec: float) -> bool:
+    """Return True if the caller should be throttled.
+
+    Args:
+        key:        Caller identifier (IP, user_id, etc.).
+        max_calls:  Max requests permitted within window_sec.
+        window_sec: Sliding window in seconds.
+    """
+    now = time.time()
+    cutoff = now - window_sec
+    history = _rl_store.get(key, [])
+    # Expire timestamps outside the window
+    history = [t for t in history if t > cutoff]
+    if len(history) >= max_calls:
+        _rl_store[key] = history
+        return True
+    history.append(now)
+    _rl_store[key] = history
+    return False
+
+
+def _request_ip() -> str:
+    """Extract client IP from X-Forwarded-For (rightmost trusted proxy strategy)."""
+    fwd = request.headers.get("X-Forwarded-For", "").strip()
+    if fwd:
+        parts = [p.strip() for p in fwd.split(",") if p.strip()]
+        if parts:
+            try:
+                depth = max(1, int(os.environ.get("TRUSTED_PROXY_DEPTH", "1")))
+            except ValueError:
+                depth = 1
+            return parts[max(len(parts) - depth, 0)]
+    return request.remote_addr or "unknown"
 
 
 def utc_now_iso() -> str:
@@ -133,6 +194,40 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
     DATABASE_DIR.mkdir(parents=True, exist_ok=True)
     app.register_error_handler(UnauthorizedResponse, handle_unauthorized)
 
+    # ── CORS ──────────────────────────────────────────────────────────────
+    # The frontend may be served from a different origin (GitHub Pages,
+    # custom domain, Chrome extension popup, etc.). CORS_ORIGINS is a
+    # comma-separated allowlist. Defaults cover local dev + the public
+    # GitHub Pages URL so a fresh deploy works out of the box.
+    cors_origins_env = os.environ.get(
+        "CORS_ORIGINS",
+        "https://captainfredric.github.io,http://127.0.0.1:4173,http://localhost:4173,http://127.0.0.1:5173,http://localhost:5173",
+    )
+    cors_origins = [o.strip() for o in cors_origins_env.split(",") if o.strip()]
+    if FLASK_CORS_AVAILABLE:
+        CORS(
+            app,
+            resources={r"/api/*": {"origins": cors_origins}},
+            supports_credentials=True,  # cookies must flow on cross-site requests
+            expose_headers=["Content-Type"],
+            max_age=3600,
+        )
+        app.config["CORS_ENABLED"] = True
+    else:
+        app.logger.warning(
+            "flask-cors not installed; cross-origin browsers will block /api/* "
+            "requests. Run `pip install flask-cors` to enable.",
+        )
+        app.config["CORS_ENABLED"] = False
+    app.config["CORS_ORIGINS"] = cors_origins
+
+    # ── Cookie / session config ──────────────────────────────────────────
+    # When the frontend lives on a different origin we need
+    # `SameSite=None; Secure` so the browser actually attaches the session
+    # cookie to cross-site fetches. Toggled via env var so local dev (which
+    # serves over plain http://127.0.0.1) keeps working with `Lax`.
+    app.config["CROSS_SITE_COOKIES"] = os.environ.get("CROSS_SITE_COOKIES", "0") == "1"
+
     # Stripe billing tables + routes — split into backend/billing.py to keep
     # this file focused. Loaded lazily so the app still boots if the import
     # fails (defensive against partial deploys).
@@ -157,6 +252,23 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         connection = g.pop("db", None)
         if connection is not None:
             connection.close()
+
+    @app.get("/api/ready")
+    def readiness() -> Any:
+        """Lightweight readiness probe used by Render's health-check and load
+        balancers. Returns 200 only when the database is reachable so traffic
+        isn't routed to a node that can't serve requests.
+
+        Intentionally cheaper than /api/health (no external URL probe) so it
+        can be called every few seconds without side-effects.
+        """
+        try:
+            db = get_db(app)
+            db.execute("SELECT 1").fetchone()
+            return jsonify({"ok": True, "time": utc_now_iso()})
+        except Exception as exc:
+            app.logger.error("Readiness check failed: %s", exc)
+            return jsonify({"ok": False, "error": str(exc)}), 503
 
     @app.get("/api/health")
     def health() -> Any:
@@ -196,6 +308,10 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
 
     @app.get("/api/auth/availability")
     def auth_availability() -> Any:
+        # 30 calls / 60 s per IP — enough for real-time debounce typing,
+        # too slow for an automated email enumeration scan.
+        if _rate_limited(f"avail:{_request_ip()}", max_calls=30, window_sec=60):
+            return error_response("Too many requests. Please slow down.", 429)
         email = str(request.args.get("email", "")).strip().lower()
         username = str(request.args.get("username", "")).strip().lower()
 
@@ -220,6 +336,9 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
 
     @app.post("/api/auth/signup")
     def signup() -> Any:
+        # 5 signups / 10 min per IP — prevents mass account creation.
+        if _rate_limited(f"signup:{_request_ip()}", max_calls=5, window_sec=600):
+            return error_response("Too many signup attempts. Please try again later.", 429)
         payload = request.get_json(silent=True) or {}
         required_fields = ["firstName", "lastName", "email", "username", "password", "role"]
         missing = [field for field in required_fields if not str(payload.get(field, "")).strip()]
@@ -278,6 +397,10 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
 
     @app.post("/api/auth/login")
     def login() -> Any:
+        # 10 attempts / 5 min per IP — slows brute-force without annoying
+        # legitimate users who mistype a password.
+        if _rate_limited(f"login:{_request_ip()}", max_calls=10, window_sec=300):
+            return error_response("Too many login attempts. Please wait a few minutes.", 429)
         payload = request.get_json(silent=True) or {}
         identifier = str(payload.get("identifier", "")).strip().lower()
         password = str(payload.get("password", ""))
@@ -310,7 +433,7 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             db.execute("DELETE FROM sessions WHERE token = ?", (token,))
             db.commit()
         response = jsonify({"ok": True})
-        response.delete_cookie(SESSION_COOKIE)
+        clear_session_cookie(response)
         return response
 
     def _subscription_for(user_id: int) -> dict[str, Any]:
@@ -319,7 +442,8 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             return {"tier": "free", "status": None}
         try:
             return _billing_get_subscription(get_db(app), user_id)
-        except Exception:  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001
+            _log.warning("get_subscription failed for user %s: %s", user_id, exc)
             return {"tier": "free", "status": None}
 
     @app.get("/api/auth/session")
@@ -409,7 +533,7 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         db.commit()
 
         response = jsonify({"ok": True})
-        response.delete_cookie(SESSION_COOKIE)
+        clear_session_cookie(response)
         return response
 
     @app.get("/api/workspace")
@@ -434,8 +558,8 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         newly_filled = []
         try:
             newly_filled = check_and_fill_pending_orders(app, user["id"])
-        except Exception:
-            pass
+        except Exception as exc:
+            _log.warning("check_and_fill_pending_orders failed for user %s: %s", user["id"], exc)
         snapshot = build_paper_snapshot(app, user["id"])
         # Record a mark-to-market snapshot on each account fetch. The helper
         # compacts consecutive identical points to avoid flooding the DB.
@@ -448,8 +572,8 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
                 positions_value=float(snapshot["account"]["holdingsValue"]),
             )
             snapshot["equityHistory"] = load_equity_history(app, user["id"])
-        except Exception:
-            pass
+        except Exception as exc:
+            _log.warning("record_equity_snapshot failed for user %s: %s", user["id"], exc)
         if newly_filled:
             snapshot["newlyFilled"] = newly_filled
         return jsonify(snapshot)
@@ -475,8 +599,8 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
                 positions_value=float(snapshot["account"]["holdingsValue"]),
             )
             snapshot["equityHistory"] = load_equity_history(app, user["id"])
-        except Exception:
-            pass
+        except Exception as exc:
+            _log.warning("record_equity_snapshot (reset) failed for user %s: %s", user["id"], exc)
         return jsonify(snapshot)
 
     @app.post("/api/paper/order")
@@ -593,8 +717,8 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
                 positions_value=float(snapshot["account"]["holdingsValue"]),
             )
             snapshot["equityHistory"] = load_equity_history(app, user["id"])
-        except Exception:
-            pass
+        except Exception as exc:
+            _log.warning("record_equity_snapshot (order) failed for user %s: %s", user["id"], exc)
         snapshot["lastFill"] = {
             "symbol": symbol,
             "side": side,
@@ -733,7 +857,8 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
     def market_fx() -> Any:
         try:
             return jsonify({"rates": fetch_fx_rates()})
-        except Exception:
+        except Exception as exc:
+            _log.warning("fetch_fx_rates failed: %s", exc)
             return jsonify({"rates": {}}), 200
 
     @app.get("/api/macro/yields")
@@ -774,8 +899,8 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             curve.sort(key=lambda p: tenor_order.get(p["tenor"], 99))
             if curve:
                 return jsonify({"curve": curve, "generatedAt": utc_now_iso()})
-        except Exception:
-            pass
+        except Exception as exc:
+            _log.warning("macro_yields failed: %s", exc)
         return jsonify({"curve": [], "generatedAt": utc_now_iso()})
 
     # Register Stripe billing routes (status / checkout / portal / webhook).
@@ -955,15 +1080,53 @@ def create_session(app: Flask, user_id: str) -> str:
     return token
 
 
+def _cookie_flags(app_or_config: Flask | dict[str, Any]) -> tuple[bool, str]:
+    """Return (secure, samesite) based on the app config."""
+    if isinstance(app_or_config, dict):
+        is_testing = app_or_config.get("TESTING", False)
+        cross_site = app_or_config.get("CROSS_SITE_COOKIES", False)
+    else:
+        is_testing = app_or_config.config.get("TESTING", False)
+        cross_site = app_or_config.config.get("CROSS_SITE_COOKIES", False)
+
+    if cross_site and not is_testing:
+        return True, "None"
+    return not is_testing, "Lax"
+
+
 def set_session_cookie(app: Flask, response: Any, token: str) -> None:
-    secure_cookie = not app.config.get("TESTING", False)
+    # Browsers reject `SameSite=None` cookies that aren't also Secure, so we
+    # always pair them. In test mode we drop Secure (no TLS) and stay on Lax.
+    secure_cookie, same_site = _cookie_flags(app)
     response.set_cookie(
         SESSION_COOKIE,
         token,
         max_age=60 * 60 * 24 * 14,
         httponly=True,
         secure=secure_cookie,
-        samesite="Lax",
+        samesite=same_site,
+    )
+
+
+def clear_session_cookie(response: Any) -> None:
+    """Delete the session cookie with attributes that match how it was set.
+
+    Browsers only delete a cookie when the delete instruction carries the same
+    SameSite/Secure/Path attributes as the original Set-Cookie. We read from
+    `current_app` (works inside any active request context).
+    """
+    try:
+        secure_cookie, same_site = _cookie_flags(current_app._get_current_object())  # type: ignore[attr-defined]
+    except RuntimeError:
+        # Outside of an app context (e.g. tests) — use sensible defaults.
+        secure_cookie, same_site = False, "Lax"
+    response.set_cookie(
+        SESSION_COOKIE,
+        "",
+        max_age=0,
+        httponly=True,
+        secure=secure_cookie,
+        samesite=same_site,
     )
 
 
@@ -988,7 +1151,7 @@ def require_user(app: Flask) -> sqlite3.Row:
 
 def raise_api_unauthorized() -> None:
     response = make_response(jsonify({"error": "Authentication required."}), 401)
-    response.delete_cookie(SESSION_COOKIE)
+    clear_session_cookie(response)
     raise UnauthorizedResponse(response)
 
 

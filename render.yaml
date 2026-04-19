@@ -1,0 +1,52 @@
+# Render blueprint for the Meridian Flask backend.
+# Deploy with: https://render.com/deploy?repo=<your-repo-url>
+#
+# Free tier notes:
+#   - The free Web Service spins down after ~15 min of inactivity (first
+#     request after wake takes ~30s). Upgrade to a Starter plan to keep
+#     it warm.
+#   - SQLite lives on a 1 GB persistent disk mounted at /opt/render/data.
+#     For real production, migrate to Postgres (see DEPLOY.md).
+
+services:
+  - type: web
+    name: meridian-backend
+    runtime: python
+    plan: free
+    region: oregon
+    branch: main
+    rootDir: .
+    buildCommand: pip install --upgrade pip && pip install -r requirements.txt
+    startCommand: gunicorn 'backend.app:create_app()' --bind 0.0.0.0:$PORT --workers 2 --threads 4 --timeout 60 --access-logfile - --error-logfile -
+    # /api/ready is a lightweight probe (DB only, no external calls).
+    # /api/health is the full check including external URLs — use for monitoring.
+    healthCheckPath: /api/ready
+    autoDeploy: true
+    disk:
+      name: meridian-data
+      mountPath: /opt/render/data
+      sizeGB: 1
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.5"
+      - key: TERMINAL_SECRET
+        generateValue: true
+      - key: TERMINAL_DB_PATH
+        value: /opt/render/data/terminal.db
+      - key: CROSS_SITE_COOKIES
+        value: "1"
+      - key: CORS_ORIGINS
+        value: "https://captainfredric.github.io"
+      # ── Optional providers — set in the Render dashboard, not here ──
+      # - key: RAPIDAPI_KEY
+      #   sync: false
+      # - key: STRIPE_SECRET_KEY
+      #   sync: false
+      # - key: STRIPE_WEBHOOK_SECRET
+      #   sync: false
+      # - key: STRIPE_PRICE_PRO_MONTHLY
+      #   sync: false
+      # - key: OPENAI_API_KEY
+      #   sync: false
+      # - key: ANTHROPIC_API_KEY
+      #   sync: false

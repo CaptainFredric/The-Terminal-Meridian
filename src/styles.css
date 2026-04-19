@@ -1101,6 +1101,25 @@ html {
   padding: 20px;
 }
 
+/* ── Error state card (used by renderers for fetch failures) ─────── */
+.error-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  text-align: center;
+  padding: 20px;
+}
+.error-state .error-icon {
+  font-size: 1.25rem;
+  color: var(--negative, #ff5252);
+  line-height: 1;
+}
+.error-state .btn {
+  margin-top: 4px;
+}
+
 .modal-backdrop {
   position: fixed;
   inset: 0;

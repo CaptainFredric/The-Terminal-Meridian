@@ -1,4 +1,4 @@
-import { loadingSkeleton } from "./Common.js";
+import { errorState, loadingSkeleton } from "./Common.js";
 
 const POSITIVE_TERMS = ["BULLISH", "GROWTH", "SURGE", "GAIN", "RALLY", "RECORD", "BEAT", "PROFIT", "UPGRADE", "STRONG", "SOAR", "JUMP", "HIGH"];
 const NEGATIVE_TERMS = ["DROP", "MISS", "RISK", "FALL", "CRASH", "LOSS", "DECLINE", "SLUMP", "PLUNGE", "DOWNGRADE", "WEAK", "WARNING", "SELL", "CUT"];
@@ -234,7 +234,16 @@ export function createNewsRenderer(context) {
                   `;
                 })
                 .join("")
-            : `<div class="empty-inline">${items.length ? `<p>No headlines from <strong>${activeSource}</strong>. Try "All" sources.</p>` : loadingSkeleton(5) + `<p style="margin-top:8px">Loading headlines…</p>`}</div>`}
+            : `<div class="empty-inline">${
+                items.length
+                  ? `<p>No headlines from <strong>${activeSource}</strong>. Try "All" sources.</p>`
+                  : state.fetchErrors?.has("news")
+                    ? errorState(
+                        `News feed unavailable. ${state.fetchErrors.get("news").message}`,
+                        { retryAction: "refresh-news", retryLabel: "Retry" }
+                      )
+                    : loadingSkeleton(5) + `<p style="margin-top:8px">Loading headlines…</p>`
+              }</div>`}
         </article>
 
         ${isGlobalFallback ? `<div class="empty-state">No headlines matched "${state.newsFilter}". Showing global market feed instead.</div>` : ""}

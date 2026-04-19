@@ -7115,6 +7115,18 @@ body[data-theme="light"] .tile {
   .ticker-item { height: 26px; padding: 0 10px; gap: 5px; }
 }
 
+/* Overview card with seed (non-live) data — subtler so user can tell at
+   a glance which prices are live vs static. */
+.overview-card.is-static {
+  opacity: 0.78;
+}
+.overview-card.is-static strong {
+  color: var(--muted);
+}
+.overview-card.is-static:hover {
+  opacity: 1;
+}
+
 
 /* ───────── Position Sizer Card ───────── */
 .position-sizer-card {

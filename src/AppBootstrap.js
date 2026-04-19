@@ -1099,6 +1099,17 @@ function bindEvents() {
     showToast(`Theme → ${next}`, "neutral");
   });
 
+  // ── Replay Tour button (header) ────────────────────────────────────────────
+  // Always-on access to the welcome wizard so users who dismissed it (or
+  // returning visitors who didn't notice it the first time) can replay it.
+  document.querySelector("#replayTourBtn")?.addEventListener("click", () => {
+    // Reset the "already seen" flag so showOnboarding() will display fully,
+    // then immediately re-flag on dismissal via the existing handlers.
+    try { window.localStorage.removeItem(ONBOARDING_KEY); } catch {}
+    goToWizardStep(1);
+    showOnboarding();
+  });
+
   // ── Onboarding Wizard Interactivity ────────────────────────────────────────
   document.querySelector("#onboardingSkip")?.addEventListener("click", () => {
     dismissOnboarding();
@@ -1888,14 +1899,26 @@ function renderFunctionRow() {
 function renderOverviewStrip() {
   if (!el.overviewStrip) return;
 
-  const cards = state.overviewQuotes.length
-    ? state.overviewQuotes
+  // Build a card list backed by live quotes when available, else seed data
+  // from the universe map so the strip is never blank for new visitors.
+  // Symbol order comes from state.overviewSymbols so the strip stays stable.
+  const liveBySymbol = new Map((state.overviewQuotes || []).map((q) => [q.symbol, q]));
+  const cardQuotes = (state.overviewSymbols || []).map((symbol) => {
+    const live = liveBySymbol.get(symbol);
+    if (live) return live;
+    const seed = buildQuote(symbol);
+    if (!seed) return null;
+    return { ...seed, isLive: false };
+  }).filter(Boolean);
+
+  const cards = cardQuotes.length
+    ? cardQuotes
         .map(
           (quote) => `
-            <button class="overview-card" type="button" data-broadcast-symbol="${quote.symbol}">
-              <span>${quote.symbol}<i class="overview-live-dot"></i></span>
+            <button class="overview-card${quote.isLive ? "" : " is-static"}" type="button" data-broadcast-symbol="${quote.symbol}" title="Click to load ${quote.symbol} on the active panel${quote.isLive ? "" : " · seed price (live feed unavailable)"}">
+              <span>${quote.symbol}${quote.isLive ? '<i class="overview-live-dot"></i>' : ''}</span>
               <strong>${tabularValue(formatPrice(quote.price, quote.symbol), { flashKey: `overview:${quote.symbol}:price`, currentPrice: quote.price })}</strong>
-              <small class="${Number(quote.changePct || 0) >= 0 ? "positive" : "negative"}">${quote.isLive ? tabularValue(formatSignedPct(quote.changePct || 0)) : "--"}</small>
+              <small class="${Number(quote.changePct || 0) >= 0 ? "positive" : "negative"}">${quote.isLive ? tabularValue(formatSignedPct(quote.changePct || 0)) : "·"}</small>
               ${renderOverviewSparkline(quote.symbol, Number(quote.changePct || 0))}
             </button>
           `,
@@ -1942,6 +1965,12 @@ function renderOverviewStrip() {
   applyPriceTones(el.overviewStrip);
 }
 
+// Track the currently-rendered ticker symbol set so we can update prices
+// in place without rebuilding the .ticker-track element. Rebuilding on every
+// quote tick was restarting the marquee CSS animation back to translateX(0)
+// — that's the visible "jitter" the user saw.
+let lastTickerSignature = "";
+
 function renderTickerTape() {
   if (!el.tickerTape) return;
 
@@ -1962,10 +1991,35 @@ function renderTickerTape() {
   if (!union.length) {
     el.tickerTape.innerHTML = "";
     el.tickerTape.classList.add("is-empty");
+    lastTickerSignature = "";
     return;
   }
   el.tickerTape.classList.remove("is-empty");
 
+  const signature = union.join("|");
+
+  // Hot path: same symbols as last render → just patch the price/change spans
+  // on the existing DOM. Preserves the marquee animation state.
+  if (signature === lastTickerSignature) {
+    el.tickerTape.querySelectorAll(".ticker-item[data-broadcast-symbol]").forEach((node) => {
+      const sym = node.dataset.broadcastSymbol;
+      const quote = buildQuote(sym) || state.quotes.get(sym);
+      if (!quote || quote.price == null) return;
+      const priceEl = node.querySelector("em");
+      const changeEl = node.querySelector("span");
+      if (priceEl) priceEl.textContent = formatPrice(quote.price, sym);
+      if (changeEl) {
+        const change = Number(quote.changePct || 0);
+        const tone = change >= 0 ? "positive" : "negative";
+        const arrow = change >= 0 ? "▲" : "▼";
+        changeEl.className = tone;
+        changeEl.textContent = `${arrow} ${formatSignedPct(change)}`;
+      }
+    });
+    return;
+  }
+
+  // Cold path: symbol set changed → rebuild and reset signature.
   const buildItem = (sym) => {
     const quote = buildQuote(sym) || state.quotes.get(sym);
     if (!quote || quote.price == null) {
@@ -1989,6 +2043,7 @@ function renderTickerTape() {
       <div class="ticker-segment" aria-hidden="true">${itemsHtml}</div>
     </div>
   `;
+  lastTickerSignature = signature;
 }
 
 function renderRails() {

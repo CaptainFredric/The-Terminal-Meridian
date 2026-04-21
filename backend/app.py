@@ -918,41 +918,62 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
     # expose in any public client code — bearer token is server-side only.
     @app.post("/api/admin/set-tier")
     def admin_set_tier() -> Any:
-        secret = os.environ.get("TERMINAL_SECRET", "")
-        auth = request.headers.get("Authorization", "")
-        if not secret or auth != f"Bearer {secret}":
-            return error_response("Unauthorized", 401)
-        data = request.get_json(silent=True) or {}
-        username = data.get("username")
-        tier = data.get("tier", "free")
-        status = data.get("status", "active")
-        if not username:
-            return error_response("username required", 400)
-        if tier not in ("free", "pro", "pro_plus"):
-            return error_response("invalid tier", 400)
-        db = get_db(app)
-        user = db.execute(
-            "SELECT id FROM users WHERE username = ?", (username,)
-        ).fetchone()
-        if not user:
-            return error_response("user not found", 404)
-        now = datetime.now(timezone.utc).isoformat()
-        existing = db.execute(
-            "SELECT user_id FROM subscriptions WHERE user_id = ?", (user["id"],)
-        ).fetchone()
-        if existing:
-            db.execute(
-                "UPDATE subscriptions SET tier = ?, status = ?, updated_at = ? WHERE user_id = ?",
-                (tier, status if tier != "free" else None, now, user["id"]),
-            )
-        else:
-            db.execute(
-                """INSERT INTO subscriptions (user_id, tier, status, updated_at)
-                   VALUES (?, ?, ?, ?)""",
-                (user["id"], tier, status if tier != "free" else None, now),
-            )
-        db.commit()
-        return jsonify({"ok": True, "username": username, "tier": tier, "status": status})
+        try:
+            secret = os.environ.get("TERMINAL_SECRET", "")
+            auth = request.headers.get("Authorization", "")
+            if not secret or auth != f"Bearer {secret}":
+                return error_response("Unauthorized", 401)
+            data = request.get_json(silent=True) or {}
+            username = data.get("username")
+            tier = data.get("tier", "free")
+            status_val = data.get("status", "active")
+            if not username:
+                return error_response("username required", 400)
+            if tier not in ("free", "pro", "pro_plus"):
+                return error_response("invalid tier", 400)
+            db_path = Path(app.config["DATABASE"])
+            conn = sqlite3.connect(str(db_path))
+            conn.row_factory = sqlite3.Row
+            try:
+                user = conn.execute(
+                    "SELECT id FROM users WHERE username = ?", (username,)
+                ).fetchone()
+                if not user:
+                    return error_response("user not found", 404)
+                uid = user["id"]
+                now = datetime.now(timezone.utc).isoformat()
+                # Ensure subscriptions table exists (may be absent on fresh DB)
+                conn.execute(
+                    """CREATE TABLE IF NOT EXISTS subscriptions (
+                        user_id TEXT PRIMARY KEY,
+                        tier TEXT NOT NULL DEFAULT 'free',
+                        stripe_customer_id TEXT,
+                        stripe_subscription_id TEXT,
+                        status TEXT,
+                        current_period_end TEXT,
+                        updated_at TEXT NOT NULL
+                    )"""
+                )
+                existing = conn.execute(
+                    "SELECT user_id FROM subscriptions WHERE user_id = ?", (uid,)
+                ).fetchone()
+                if existing:
+                    conn.execute(
+                        "UPDATE subscriptions SET tier=?, status=?, updated_at=? WHERE user_id=?",
+                        (tier, status_val if tier != "free" else None, now, uid),
+                    )
+                else:
+                    conn.execute(
+                        "INSERT INTO subscriptions (user_id, tier, status, updated_at) VALUES (?,?,?,?)",
+                        (uid, tier, status_val if tier != "free" else None, now),
+                    )
+                conn.commit()
+                return jsonify({"ok": True, "username": username, "tier": tier, "status": status_val})
+            finally:
+                conn.close()
+        except Exception as exc:  # noqa: BLE001
+            _log.exception("admin_set_tier failed")
+            return error_response(f"Internal error: {exc}", 500)
 
     # AI commentary endpoints. fetch_quotes is injected so ai_commentary.py
     # doesn't need to know about yfinance or any data source — same

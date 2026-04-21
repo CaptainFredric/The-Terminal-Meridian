@@ -1,0 +1,1191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Meridian Market Terminal: The terminal. For everyone.</title>
+  <meta name="description" content="Bloomberg-grade market intelligence in your browser, free. Live quotes, AI analysis, options chains, portfolio tracking, and 9 visual themes.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:           #0f1117;
+      --bg-card:      #141926;
+      --bg-panel:     #1a2236;
+      --bg-panel2:    #1e2840;
+      --accent:       #2fcf84;
+      --accent-dim:   rgba(47,207,132,0.12);
+      --danger:       #ff5f7f;
+      --danger-dim:   rgba(255,95,127,0.12);
+      --warning:      #ffb84d;
+      --blue:         #9cb9ff;
+      --text:         #e8ecf0;
+      --text-muted:   #8a96b3;
+      --text-faint:   #5a6480;
+      --border:       rgba(255,255,255,0.06);
+      --border-card:  rgba(255,255,255,0.08);
+      --border-accent:rgba(47,207,132,0.22);
+      --font-mono:    'IBM Plex Mono', 'Cascadia Code', monospace;
+      --font-sans:    system-ui, -apple-system, 'Segoe UI', sans-serif;
+      --radius:       10px;
+      --radius-lg:    16px;
+      --shadow-card:  0 1px 3px rgba(0,0,0,0.4), 0 8px 24px rgba(0,0,0,0.3);
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-sans);
+      font-size: 16px;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+
+    a { color: inherit; text-decoration: none; }
+
+    /* ── NAV ─────────────────────────────────────────────────── */
+    .nav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: rgba(15,17,23,0.88);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 28px;
+      height: 58px;
+    }
+
+    .nav-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-family: var(--font-mono);
+      font-weight: 600;
+      font-size: 15px;
+      letter-spacing: 0.05em;
+      color: var(--text);
+      transition: opacity 150ms;
+    }
+    .nav-brand:hover { opacity: 0.85; }
+
+    .nav-logo {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      background: linear-gradient(145deg, #0e1930 0%, #172040 100%);
+      border: 1px solid rgba(79,124,255,0.28);
+      display: grid;
+      place-items: center;
+      box-shadow: 0 0 0 1px rgba(79,124,255,0.12), 0 4px 12px rgba(5,12,40,0.5);
+      transition: transform 200ms cubic-bezier(0.2,0.7,0.3,1);
+      flex-shrink: 0;
+    }
+    .nav-logo:hover { transform: rotate(-3deg) scale(1.06); }
+
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .nav-links a {
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 14px;
+      color: var(--text-muted);
+      transition: color 150ms, background 150ms;
+    }
+    .nav-links a:hover { color: var(--text); background: rgba(255,255,255,0.05); }
+
+    .nav-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 16px;
+      border-radius: 7px;
+      font-family: var(--font-mono);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      border: none;
+      transition: transform 120ms, opacity 150ms, box-shadow 150ms;
+    }
+    .btn:active { transform: scale(0.97); }
+
+    .btn-ghost {
+      background: rgba(255,255,255,0.05);
+      color: var(--text-muted);
+      border: 1px solid var(--border-card);
+    }
+    .btn-ghost:hover { background: rgba(255,255,255,0.09); color: var(--text); }
+
+    .btn-primary {
+      background: var(--accent);
+      color: #051a0e;
+      font-weight: 600;
+      box-shadow: 0 2px 12px rgba(47,207,132,0.28);
+    }
+    .btn-primary:hover { opacity: 0.9; box-shadow: 0 2px 18px rgba(47,207,132,0.36); }
+
+    .btn-outline {
+      background: transparent;
+      color: var(--text);
+      border: 1px solid rgba(255,255,255,0.18);
+    }
+    .btn-outline:hover { background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.3); }
+
+    /* ── TICKER ───────────────────────────────────────────────── */
+    .ticker-wrap {
+      width: 100%;
+      overflow: hidden;
+      background: rgba(20,25,38,0.7);
+      border-bottom: 1px solid var(--border);
+      padding: 8px 0;
+      white-space: nowrap;
+      position: relative;
+    }
+    .ticker-wrap::before,
+    .ticker-wrap::after {
+      content: '';
+      position: absolute;
+      top: 0; bottom: 0;
+      width: 60px;
+      z-index: 1;
+      pointer-events: none;
+    }
+    .ticker-wrap::before { left: 0; background: linear-gradient(to right, rgba(20,25,38,0.9), transparent); }
+    .ticker-wrap::after  { right: 0; background: linear-gradient(to left,  rgba(20,25,38,0.9), transparent); }
+
+    .ticker-track {
+      display: inline-flex;
+      gap: 0;
+      animation: tickerScroll 55s linear infinite;
+    }
+    .ticker-wrap:hover .ticker-track { animation-play-state: paused; }
+
+    @keyframes tickerScroll {
+      0%   { transform: translateX(0); }
+      100% { transform: translateX(-50%); }
+    }
+
+    .tick {
+      display: inline-flex;
+      align-items: baseline;
+      gap: 6px;
+      padding: 0 22px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      border-right: 1px solid var(--border);
+    }
+    .tick-sym { color: var(--text); font-weight: 600; letter-spacing: 0.04em; }
+    .tick-price { color: var(--text-muted); }
+    .tick-chg.pos { color: var(--accent); }
+    .tick-chg.neg { color: var(--danger); }
+
+    /* ── HERO ─────────────────────────────────────────────────── */
+    .hero {
+      padding: 96px 28px 80px;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+    .hero::before {
+      content: '';
+      position: absolute;
+      top: -120px; left: 50%;
+      transform: translateX(-50%);
+      width: 800px; height: 600px;
+      background: radial-gradient(ellipse at center, rgba(47,207,132,0.07) 0%, transparent 65%);
+      pointer-events: none;
+    }
+
+    .hero-eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.12em;
+      color: var(--text-faint);
+      text-transform: uppercase;
+      margin-bottom: 28px;
+    }
+    .hero-eyebrow::before,
+    .hero-eyebrow::after {
+      content: '';
+      display: block;
+      width: 36px;
+      height: 1px;
+      background: linear-gradient(to right, transparent, var(--text-faint));
+    }
+    .hero-eyebrow::after { background: linear-gradient(to left, transparent, var(--text-faint)); }
+
+    .hero-headline {
+      font-size: clamp(48px, 9vw, 88px);
+      font-weight: 800;
+      line-height: 1.0;
+      letter-spacing: -0.03em;
+      color: var(--text);
+      margin-bottom: 6px;
+    }
+    .hero-headline .accent { color: var(--accent); }
+
+    .hero-sub {
+      max-width: 580px;
+      margin: 24px auto 40px;
+      font-size: 17px;
+      color: var(--text-muted);
+      line-height: 1.7;
+    }
+    .hero-sub strong { color: var(--text); font-weight: 500; }
+
+    .hero-ctas {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+      flex-wrap: wrap;
+    }
+
+    /* ── STATS STRIP ──────────────────────────────────────────── */
+    .stats {
+      display: flex;
+      justify-content: center;
+      gap: 0;
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+      background: var(--bg-card);
+      overflow-x: auto;
+    }
+    .stat {
+      flex: 1;
+      min-width: 140px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 24px 20px;
+      border-right: 1px solid var(--border);
+      gap: 4px;
+    }
+    .stat:last-child { border-right: none; }
+    .stat-num {
+      font-family: var(--font-mono);
+      font-size: 26px;
+      font-weight: 600;
+      color: var(--accent);
+      line-height: 1;
+    }
+    .stat-label {
+      font-size: 12px;
+      color: var(--text-muted);
+      letter-spacing: 0.02em;
+      text-align: center;
+    }
+
+    /* ── FEATURES ─────────────────────────────────────────────── */
+    .section {
+      padding: 96px 28px;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+    .section-center { text-align: center; }
+
+    .section-eyebrow {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 16px;
+    }
+
+    .section-title {
+      font-size: clamp(28px, 4.5vw, 42px);
+      font-weight: 700;
+      line-height: 1.15;
+      letter-spacing: -0.02em;
+      color: var(--text);
+      margin-bottom: 16px;
+    }
+
+    .section-sub {
+      font-size: 16px;
+      color: var(--text-muted);
+      max-width: 580px;
+      margin: 0 auto 60px;
+      line-height: 1.7;
+    }
+
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+    }
+
+    .feature-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-card);
+      border-radius: var(--radius-lg);
+      padding: 28px 24px;
+      transition: border-color 220ms, transform 200ms, box-shadow 200ms;
+    }
+    .feature-card:hover {
+      border-color: var(--border-accent);
+      transform: translateY(-2px);
+      box-shadow: 0 12px 32px rgba(0,0,0,0.35), 0 0 0 1px var(--border-accent);
+    }
+
+    .feature-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      background: var(--accent-dim);
+      border: 1px solid rgba(47,207,132,0.18);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      margin-bottom: 16px;
+    }
+    .feature-icon.red { background: var(--danger-dim); border-color: rgba(255,95,127,0.18); }
+    .feature-icon.blue { background: rgba(156,185,255,0.1); border-color: rgba(156,185,255,0.18); }
+
+    .feature-title {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 8px;
+    }
+    .feature-desc {
+      font-size: 14px;
+      color: var(--text-muted);
+      line-height: 1.65;
+    }
+
+    /* ── TERMINAL MOCKUP ──────────────────────────────────────── */
+    .mockup-wrap {
+      width: 100%;
+      background: linear-gradient(180deg, transparent, var(--bg-card) 30%, var(--bg-card));
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+      padding: 60px 28px;
+      overflow: hidden;
+    }
+
+    .terminal-mock {
+      max-width: 960px;
+      margin: 0 auto;
+      background: #0a0d14;
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,0.1);
+      box-shadow: 0 32px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.04);
+      overflow: hidden;
+    }
+
+    .mock-topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 16px;
+      background: #0d111b;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      gap: 12px;
+    }
+    .mock-dots { display: flex; gap: 6px; }
+    .mock-dot {
+      width: 11px; height: 11px;
+      border-radius: 50%;
+    }
+    .mock-dot.r { background: #ff5f57; }
+    .mock-dot.y { background: #ffbd2e; }
+    .mock-dot.g { background: #28ca42; }
+    .mock-brand {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-family: var(--font-mono);
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+    }
+    .mock-ticker-strip {
+      flex: 1;
+      display: flex;
+      gap: 16px;
+      overflow: hidden;
+      font-family: var(--font-mono);
+      font-size: 11px;
+    }
+    .mock-tick { display: flex; gap: 4px; }
+    .mock-tick .sym { color: var(--text-muted); }
+    .mock-tick .p   { color: var(--text); }
+    .mock-tick .c.pos { color: var(--accent); }
+    .mock-tick .c.neg { color: var(--danger); }
+
+    .mock-panels {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      grid-template-rows: auto auto;
+      gap: 1px;
+      background: rgba(255,255,255,0.04);
+      min-height: 340px;
+    }
+    .mock-panel {
+      background: #0f1420;
+      padding: 14px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+    }
+    .mock-panel.span2 { grid-column: span 2; }
+    .mp-label {
+      font-size: 10px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-faint);
+      margin-bottom: 10px;
+    }
+    .mp-sym { font-size: 13px; font-weight: 600; color: var(--text); }
+    .mp-price { font-size: 22px; font-weight: 600; color: var(--text); margin: 4px 0; }
+    .mp-chg.pos { color: var(--accent); }
+    .mp-chg.neg { color: var(--danger); }
+    .mp-chart {
+      margin-top: 8px;
+      height: 40px;
+      position: relative;
+    }
+    .mp-chart svg { width: 100%; height: 100%; }
+
+    .wl-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 7px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+      font-size: 12px;
+    }
+    .wl-row:last-child { border-bottom: none; }
+    .wl-name { color: var(--text); font-weight: 500; }
+    .wl-price { color: var(--text-muted); }
+    .wl-chg.pos { color: var(--accent); }
+    .wl-chg.neg { color: var(--danger); }
+
+    .ai-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 8px;
+      border-radius: 4px;
+      background: rgba(47,207,132,0.1);
+      border: 1px solid rgba(47,207,132,0.2);
+      font-size: 10px;
+      color: var(--accent);
+      margin-bottom: 8px;
+    }
+
+    /* ── THEMES ───────────────────────────────────────────────── */
+    .themes-grid {
+      display: grid;
+      grid-template-columns: repeat(9, 1fr);
+      gap: 10px;
+      margin-top: 48px;
+    }
+
+    .theme-swatch {
+      border-radius: 10px;
+      overflow: hidden;
+      border: 1px solid var(--border-card);
+      cursor: pointer;
+      transition: transform 180ms, box-shadow 180ms, border-color 180ms;
+      aspect-ratio: 2/3;
+    }
+    .theme-swatch:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 16px 40px rgba(0,0,0,0.45);
+      border-color: rgba(255,255,255,0.2);
+    }
+    .theme-swatch.active {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 2px var(--accent-dim);
+    }
+
+    .sw-bar { height: 18px; width: 100%; }
+    .sw-body { padding: 6px 4px; display: flex; flex-direction: column; gap: 3px; }
+    .sw-line { height: 3px; border-radius: 2px; width: 80%; }
+    .sw-line.short { width: 55%; }
+    .sw-label {
+      font-family: var(--font-mono);
+      font-size: 9px;
+      text-align: center;
+      padding: 5px 4px;
+      color: var(--text-faint);
+      letter-spacing: 0.06em;
+    }
+
+    /* theme colors */
+    .sw-dark    .sw-bar { background: #0f1117; }
+    .sw-dark    .sw-line { background: #2fcf84; }
+    .sw-dark    .sw-line.short { background: #ff5f7f; }
+
+    .sw-bloomberg .sw-bar { background: #1a0e00; }
+    .sw-bloomberg .sw-line { background: #ff9900; }
+    .sw-bloomberg .sw-line.short { background: #ff4444; }
+
+    .sw-synthwave .sw-bar { background: #140828; }
+    .sw-synthwave .sw-line { background: #c248ff; }
+    .sw-synthwave .sw-line.short { background: #ff5fa0; }
+
+    .sw-emerald .sw-bar { background: #061a10; }
+    .sw-emerald .sw-line { background: #00e676; }
+    .sw-emerald .sw-line.short { background: #ff5252; }
+
+    .sw-paper   .sw-bar { background: #f5f0e8; }
+    .sw-paper   .sw-line { background: #1a6b3c; }
+    .sw-paper   .sw-line.short { background: #c0392b; }
+
+    .sw-midnight .sw-bar { background: #080c1a; }
+    .sw-midnight .sw-line { background: #4a9eff; }
+    .sw-midnight .sw-line.short { background: #ff6b6b; }
+
+    .sw-crimson .sw-bar { background: #1a0808; }
+    .sw-crimson .sw-line { background: #ff5f7f; }
+    .sw-crimson .sw-line.short { background: #ffb84d; }
+
+    .sw-slate   .sw-bar { background: #10141f; }
+    .sw-slate   .sw-line { background: #94a3b8; }
+    .sw-slate   .sw-line.short { background: #fb923c; }
+
+    .sw-amber   .sw-bar { background: #1a1200; }
+    .sw-amber   .sw-line { background: #ffb84d; }
+    .sw-amber   .sw-line.short { background: #ff5f7f; }
+
+    /* ── PRICING ──────────────────────────────────────────────── */
+    .pricing-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin-top: 60px;
+    }
+
+    .price-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-card);
+      border-radius: var(--radius-lg);
+      padding: 32px 28px 36px;
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      position: relative;
+    }
+    .price-card.featured {
+      background: #162035;
+      border-color: var(--border-accent);
+      box-shadow: 0 0 0 1px rgba(47,207,132,0.14), 0 24px 56px rgba(0,0,0,0.4);
+    }
+
+    .price-badge {
+      position: absolute;
+      top: -13px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--accent);
+      color: #051a0e;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      padding: 4px 14px;
+      border-radius: 99px;
+      white-space: nowrap;
+    }
+
+    .price-tier {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 10px;
+    }
+    .price-amount {
+      font-size: 36px;
+      font-weight: 800;
+      color: var(--text);
+      line-height: 1;
+      margin-bottom: 4px;
+    }
+    .price-amount span {
+      font-size: 16px;
+      font-weight: 400;
+      color: var(--text-faint);
+    }
+    .price-tagline {
+      font-size: 14px;
+      color: var(--text-muted);
+      margin-bottom: 28px;
+      padding-bottom: 24px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .price-features {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 11px;
+      flex: 1;
+      margin-bottom: 32px;
+    }
+    .price-features li {
+      display: flex;
+      align-items: flex-start;
+      gap: 9px;
+      font-size: 14px;
+      color: var(--text-muted);
+      line-height: 1.4;
+    }
+    .price-features li .check { color: var(--accent); font-size: 13px; flex-shrink: 0; margin-top: 1px; }
+    .price-features li .plus  { color: var(--accent); font-size: 16px; flex-shrink: 0; line-height: 1; }
+    .price-features li .dash  { color: var(--text-faint); flex-shrink: 0; }
+    .price-features li.muted  { color: var(--text-faint); }
+
+    .price-cta { margin-top: auto; }
+
+    /* ── FOOTER ───────────────────────────────────────────────── */
+    .footer {
+      border-top: 1px solid var(--border);
+      padding: 32px 28px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    .footer-brand {
+      font-family: var(--font-mono);
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      color: var(--accent);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .footer-links {
+      display: flex;
+      gap: 24px;
+      font-size: 13px;
+      color: var(--text-faint);
+    }
+    .footer-links a:hover { color: var(--text-muted); }
+
+    .footer-copy {
+      font-size: 12px;
+      color: var(--text-faint);
+      width: 100%;
+      text-align: center;
+      margin-top: 8px;
+    }
+
+    /* ── DIVIDER ──────────────────────────────────────────────── */
+    .divider {
+      height: 1px;
+      background: linear-gradient(to right, transparent, var(--border), transparent);
+      margin: 0 28px;
+    }
+
+    /* ── RESPONSIVE ───────────────────────────────────────────── */
+    @media (max-width: 900px) {
+      .features-grid { grid-template-columns: repeat(2, 1fr); }
+      .pricing-grid  { grid-template-columns: 1fr; max-width: 420px; margin: 60px auto 0; }
+      .themes-grid   { grid-template-columns: repeat(5, 1fr); }
+      .mock-panels   { grid-template-columns: 1fr 1fr; }
+      .nav-links     { display: none; }
+    }
+    @media (max-width: 600px) {
+      .features-grid { grid-template-columns: 1fr; }
+      .themes-grid   { grid-template-columns: repeat(3, 1fr); }
+      .hero-headline { font-size: 40px; }
+      .stats         { flex-wrap: wrap; }
+      .stat          { min-width: calc(50% - 0px); border-right: none; border-bottom: 1px solid var(--border); }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── NAV ──────────────────────────────────────────────────────── -->
+<nav class="nav">
+  <a href="/" class="nav-brand">
+    <div class="nav-logo">
+      <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" width="28" height="28" aria-label="Meridian">
+        <rect x="2" y="2" width="36" height="36" rx="11" fill="url(#lpBgGlow)"/>
+        <path d="M9.8 14.4L20 20.6" stroke="url(#lpDiagLeft)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M20 20.6L30.2 14.4" stroke="url(#lpDiagRight)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M30.2 14.4L33 12.2" stroke="#2fcf84" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+        <rect x="8.1" y="14.2" width="3.4" height="12.4" rx="1" fill="#2fcf84"/>
+        <line x1="9.8" y1="11.6" x2="9.8" y2="14.2" stroke="#2fcf84" stroke-width="1.5" stroke-linecap="round"/>
+        <line x1="9.8" y1="26.6" x2="9.8" y2="29.2" stroke="#2fcf84" stroke-width="1.5" stroke-linecap="round"/>
+        <rect x="18.3" y="19.8" width="3.4" height="9.6" rx="1" fill="#ff5f7f"/>
+        <line x1="20" y1="17.1" x2="20" y2="19.8" stroke="#ff5f7f" stroke-width="1.5" stroke-linecap="round"/>
+        <line x1="20" y1="29.4" x2="20" y2="32" stroke="#ff5f7f" stroke-width="1.5" stroke-linecap="round"/>
+        <rect x="28.5" y="14.2" width="3.4" height="12.4" rx="1" fill="#2fcf84"/>
+        <line x1="30.2" y1="11.6" x2="30.2" y2="14.2" stroke="#2fcf84" stroke-width="1.5" stroke-linecap="round"/>
+        <line x1="30.2" y1="26.6" x2="30.2" y2="29.2" stroke="#2fcf84" stroke-width="1.5" stroke-linecap="round"/>
+        <circle cx="33" cy="12.2" r="1.8" fill="#9cb9ff"/>
+        <defs>
+          <linearGradient id="lpBgGlow" x1="4" y1="4" x2="36" y2="36" gradientUnits="userSpaceOnUse">
+            <stop stop-color="#172953"/><stop offset="1" stop-color="#0d1529"/>
+          </linearGradient>
+          <linearGradient id="lpDiagLeft" x1="9.8" y1="14.4" x2="20" y2="20.6" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stop-color="#2fcf84"/>
+            <stop offset="100%" stop-color="#ff5f7f"/>
+          </linearGradient>
+          <linearGradient id="lpDiagRight" x1="20" y1="20.6" x2="30.2" y2="14.4" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stop-color="#ff5f7f"/>
+            <stop offset="100%" stop-color="#2fcf84"/>
+          </linearGradient>
+        </defs>
+      </svg>
+    </div>
+    MERIDIAN
+  </a>
+
+  <nav class="nav-links">
+    <a href="#features">Features</a>
+    <a href="#themes">Themes</a>
+    <a href="#pricing">Pricing</a>
+    <a href="/" >Terminal ↗</a>
+  </nav>
+
+  <div class="nav-actions">
+    <a href="/" class="btn btn-ghost">
+      <span>⌘K</span> Command
+    </a>
+    <a href="/" class="btn btn-primary">Open Terminal →</a>
+  </div>
+</nav>
+
+<!-- ── TICKER ────────────────────────────────────────────────────── -->
+<div class="ticker-wrap" aria-hidden="true">
+  <div class="ticker-track" id="tickerTrack">
+    <!-- first copy -->
+    <span class="tick"><span class="tick-sym">BTC-USD</span><span class="tick-price">84,201.00</span><span class="tick-chg pos">+2.41%</span></span>
+    <span class="tick"><span class="tick-sym">ETH-USD</span><span class="tick-price">1,622.40</span><span class="tick-chg neg">-1.03%</span></span>
+    <span class="tick"><span class="tick-sym">NVDA</span><span class="tick-price">112.47</span><span class="tick-chg pos">+1.88%</span></span>
+    <span class="tick"><span class="tick-sym">TSLA</span><span class="tick-price">243.18</span><span class="tick-chg neg">-3.12%</span></span>
+    <span class="tick"><span class="tick-sym">AAPL</span><span class="tick-price">198.62</span><span class="tick-chg neg">-0.43%</span></span>
+    <span class="tick"><span class="tick-sym">SPY</span><span class="tick-price">527.30</span><span class="tick-chg pos">+0.64%</span></span>
+    <span class="tick"><span class="tick-sym">QQQ</span><span class="tick-price">430.12</span><span class="tick-chg pos">+0.91%</span></span>
+    <span class="tick"><span class="tick-sym">META</span><span class="tick-price">571.09</span><span class="tick-chg pos">+1.15%</span></span>
+    <span class="tick"><span class="tick-sym">AMZN</span><span class="tick-price">198.80</span><span class="tick-chg pos">+0.30%</span></span>
+    <span class="tick"><span class="tick-sym">GLD</span><span class="tick-price">303.74</span><span class="tick-chg pos">+1.20%</span></span>
+    <span class="tick"><span class="tick-sym">VIX</span><span class="tick-price">17.82</span><span class="tick-chg pos">+4.10%</span></span>
+    <span class="tick"><span class="tick-sym">DXY</span><span class="tick-price">99.41</span><span class="tick-chg neg">-0.22%</span></span>
+    <span class="tick"><span class="tick-sym">WTI</span><span class="tick-price">63.14</span><span class="tick-chg neg">-0.88%</span></span>
+    <span class="tick"><span class="tick-sym">MSFT</span><span class="tick-price">381.25</span><span class="tick-chg pos">+0.55%</span></span>
+    <span class="tick"><span class="tick-sym">GOOGL</span><span class="tick-price">164.38</span><span class="tick-chg pos">+0.72%</span></span>
+    <!-- duplicate for seamless loop -->
+    <span class="tick"><span class="tick-sym">BTC-USD</span><span class="tick-price">84,201.00</span><span class="tick-chg pos">+2.41%</span></span>
+    <span class="tick"><span class="tick-sym">ETH-USD</span><span class="tick-price">1,622.40</span><span class="tick-chg neg">-1.03%</span></span>
+    <span class="tick"><span class="tick-sym">NVDA</span><span class="tick-price">112.47</span><span class="tick-chg pos">+1.88%</span></span>
+    <span class="tick"><span class="tick-sym">TSLA</span><span class="tick-price">243.18</span><span class="tick-chg neg">-3.12%</span></span>
+    <span class="tick"><span class="tick-sym">AAPL</span><span class="tick-price">198.62</span><span class="tick-chg neg">-0.43%</span></span>
+    <span class="tick"><span class="tick-sym">SPY</span><span class="tick-price">527.30</span><span class="tick-chg pos">+0.64%</span></span>
+    <span class="tick"><span class="tick-sym">QQQ</span><span class="tick-price">430.12</span><span class="tick-chg pos">+0.91%</span></span>
+    <span class="tick"><span class="tick-sym">META</span><span class="tick-price">571.09</span><span class="tick-chg pos">+1.15%</span></span>
+    <span class="tick"><span class="tick-sym">AMZN</span><span class="tick-price">198.80</span><span class="tick-chg pos">+0.30%</span></span>
+    <span class="tick"><span class="tick-sym">GLD</span><span class="tick-price">303.74</span><span class="tick-chg pos">+1.20%</span></span>
+    <span class="tick"><span class="tick-sym">VIX</span><span class="tick-price">17.82</span><span class="tick-chg pos">+4.10%</span></span>
+    <span class="tick"><span class="tick-sym">DXY</span><span class="tick-price">99.41</span><span class="tick-chg neg">-0.22%</span></span>
+    <span class="tick"><span class="tick-sym">WTI</span><span class="tick-price">63.14</span><span class="tick-chg neg">-0.88%</span></span>
+    <span class="tick"><span class="tick-sym">MSFT</span><span class="tick-price">381.25</span><span class="tick-chg pos">+0.55%</span></span>
+    <span class="tick"><span class="tick-sym">GOOGL</span><span class="tick-price">164.38</span><span class="tick-chg pos">+0.72%</span></span>
+  </div>
+</div>
+
+<!-- ── HERO ───────────────────────────────────────────────────────── -->
+<section class="hero">
+  <div class="hero-eyebrow">Meridian Market Terminal</div>
+  <h1 class="hero-headline">
+    The terminal.<br>
+    <span class="accent">For everyone.</span>
+  </h1>
+  <p class="hero-sub">
+    Professional market intelligence, without the professional price tag.
+    <strong>Live quotes, AI analysis, options chains, and portfolio tracking</strong>
+    in any browser, free.
+  </p>
+  <div class="hero-ctas">
+    <a href="/" class="btn btn-primary" style="font-size:14px; padding:12px 24px;">Open Terminal →</a>
+    <a href="/" class="btn btn-outline" style="font-size:14px; padding:12px 24px;">Sign in free</a>
+  </div>
+</section>
+
+<!-- ── STATS ──────────────────────────────────────────────────────── -->
+<div class="stats">
+  <div class="stat">
+    <span class="stat-num">9</span>
+    <span class="stat-label">Visual themes</span>
+  </div>
+  <div class="stat">
+    <span class="stat-num">Live</span>
+    <span class="stat-label">Real-time market data</span>
+  </div>
+  <div class="stat">
+    <span class="stat-num">AI</span>
+    <span class="stat-label">Powered by GPT + Claude</span>
+  </div>
+  <div class="stat">
+    <span class="stat-num">Free</span>
+    <span class="stat-label">No credit card required</span>
+  </div>
+</div>
+
+<!-- ── FEATURES ───────────────────────────────────────────────────── -->
+<section class="section section-center" id="features">
+  <div class="section-eyebrow">Features</div>
+  <h2 class="section-title">Everything the pros use.<br>For the rest of us.</h2>
+  <p class="section-sub">
+    Every panel, every data point, every insight, built for traders and investors
+    who want Bloomberg-grade tools without the $25,000 per year subscription.
+  </p>
+
+  <div class="features-grid">
+    <div class="feature-card">
+      <div class="feature-icon">🤖</div>
+      <div class="feature-title">AI Insights</div>
+      <p class="feature-desc">Analyst-style commentary on any ticker, powered by GPT and Claude. Price action, volume conviction, 52-week positioning, and key levels to watch.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon red">📊</div>
+      <div class="feature-title">Options Chain</div>
+      <p class="feature-desc">Full strike and expiry grid with bid/ask, implied volatility, volume, and open interest. Updated live. Spot unusual flow instantly.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">💼</div>
+      <div class="feature-title">Portfolio Tracker</div>
+      <p class="feature-desc">Track positions, cost basis, and P&L across your entire watchlist. Session summaries keep you oriented at a glance.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon blue">🎨</div>
+      <div class="feature-title">9 Visual Themes</div>
+      <p class="feature-desc">From classic Bloomberg amber to neon Synthwave and clean Paper mode for daytime. Switch your entire workspace aesthetic in one click.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon red">🔔</div>
+      <div class="feature-title">Smart Alerts</div>
+      <p class="feature-desc">Set price targets, RSI thresholds, volume spikes, and custom conditions. Get notified in-browser or by email the moment something triggers.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">📰</div>
+      <div class="feature-title">News with Sentiment</div>
+      <p class="feature-desc">Real-time headlines filtered by your watchlist. Every story scored bullish, bearish, or neutral so you can triage in seconds.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ── TERMINAL MOCKUP ────────────────────────────────────────────── -->
+<div class="mockup-wrap">
+  <div class="terminal-mock">
+    <div class="mock-topbar">
+      <div class="mock-dots">
+        <div class="mock-dot r"></div>
+        <div class="mock-dot y"></div>
+        <div class="mock-dot g"></div>
+      </div>
+      <div class="mock-brand">
+        <svg viewBox="0 0 40 40" fill="none" width="18" height="18">
+          <rect x="2" y="2" width="36" height="36" rx="11" fill="#172953"/>
+          <path d="M9.8 14.4L20 20.6" stroke="url(#mkDL)" stroke-width="2.4" stroke-linecap="round"/>
+          <path d="M20 20.6L30.2 14.4" stroke="url(#mkDR)" stroke-width="2.4" stroke-linecap="round"/>
+          <rect x="8.1" y="14.2" width="3.4" height="12.4" rx="1" fill="#2fcf84"/>
+          <rect x="18.3" y="19.8" width="3.4" height="9.6" rx="1" fill="#ff5f7f"/>
+          <rect x="28.5" y="14.2" width="3.4" height="12.4" rx="1" fill="#2fcf84"/>
+          <circle cx="33" cy="12.2" r="1.8" fill="#9cb9ff"/>
+          <defs>
+            <linearGradient id="mkDL" x1="9.8" y1="14.4" x2="20" y2="20.6" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stop-color="#2fcf84"/><stop offset="100%" stop-color="#ff5f7f"/>
+            </linearGradient>
+            <linearGradient id="mkDR" x1="20" y1="20.6" x2="30.2" y2="14.4" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stop-color="#ff5f7f"/><stop offset="100%" stop-color="#2fcf84"/>
+            </linearGradient>
+          </defs>
+        </svg>
+        MERIDIAN
+      </div>
+      <div class="mock-ticker-strip">
+        <span class="mock-tick"><span class="sym">SPY</span> <span class="p">527.30</span> <span class="c pos">+0.64%</span></span>
+        <span class="mock-tick"><span class="sym">TSLA</span> <span class="p">243.18</span> <span class="c neg">-3.12%</span></span>
+        <span class="mock-tick"><span class="sym">NVDA</span> <span class="p">112.47</span> <span class="c pos">+1.88%</span></span>
+        <span class="mock-tick"><span class="sym">BTC</span> <span class="p">84,201</span> <span class="c pos">+2.41%</span></span>
+      </div>
+    </div>
+    <div class="mock-panels">
+      <div class="mock-panel">
+        <div class="mp-label">Quote · NVDA</div>
+        <div class="mp-sym">NVIDIA</div>
+        <div class="mp-price">$112.47</div>
+        <div class="mp-chg pos">+2.08 +1.88%</div>
+        <div class="mp-chart">
+          <svg viewBox="0 0 140 40" preserveAspectRatio="none">
+            <polyline points="0,35 20,28 40,32 60,20 80,22 100,14 120,10 140,8" fill="none" stroke="#2fcf84" stroke-width="1.8" stroke-linejoin="round"/>
+            <polyline points="0,35 20,28 40,32 60,20 80,22 100,14 120,10 140,8 140,40 0,40" fill="url(#chartFill)" stroke="none"/>
+            <defs>
+              <linearGradient id="chartFill" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#2fcf84" stop-opacity="0.25"/>
+                <stop offset="100%" stop-color="#2fcf84" stop-opacity="0"/>
+              </linearGradient>
+            </defs>
+          </svg>
+        </div>
+      </div>
+      <div class="mock-panel">
+        <div class="mp-label">Watchlist</div>
+        <div class="wl-row"><span class="wl-name">AAPL</span><span class="wl-price">$198.62</span><span class="wl-chg neg">-0.43%</span></div>
+        <div class="wl-row"><span class="wl-name">MSFT</span><span class="wl-price">$381.25</span><span class="wl-chg pos">+0.55%</span></div>
+        <div class="wl-row"><span class="wl-name">NVDA</span><span class="wl-price">$112.47</span><span class="wl-chg pos">+1.88%</span></div>
+        <div class="wl-row"><span class="wl-name">TSLA</span><span class="wl-price">$243.18</span><span class="wl-chg neg">-3.12%</span></div>
+        <div class="wl-row"><span class="wl-name">SPY</span><span class="wl-price">$527.30</span><span class="wl-chg pos">+0.64%</span></div>
+      </div>
+      <div class="mock-panel">
+        <div class="mp-label">AI Insights · NVDA</div>
+        <div class="ai-badge">▲ Bullish</div>
+        <div style="font-size:11px; color:#8a96b3; line-height:1.6; margin-top:6px;">
+          NVDA trading above 50-day MA with expanding volume. Key resistance at $115. Support at $108. IV elevated ahead of earnings.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── THEMES ─────────────────────────────────────────────────────── -->
+<section class="section section-center" id="themes">
+  <div class="section-eyebrow">Themes</div>
+  <h2 class="section-title">Your terminal, your aesthetic.</h2>
+  <p class="section-sub">
+    Nine handcrafted color systems. From the classic Bloomberg amber on black
+    to neon Synthwave to clean Paper mode for daytime sessions.
+  </p>
+
+  <div class="themes-grid">
+    <div class="theme-swatch sw-dark active" onclick="selectTheme(this)">
+      <div class="sw-bar"></div>
+      <div class="sw-body">
+        <div class="sw-line"></div>
+        <div class="sw-line short"></div>
+        <div class="sw-line"></div>
+      </div>
+      <div class="sw-label">DARK</div>
+    </div>
+    <div class="theme-swatch sw-bloomberg" onclick="selectTheme(this)">
+      <div class="sw-bar"></div>
+      <div class="sw-body">
+        <div class="sw-line"></div>
+        <div class="sw-line short"></div>
+        <div class="sw-line"></div>
+      </div>
+      <div class="sw-label">BLOOMBERG</div>
+    </div>
+    <div class="theme-swatch sw-synthwave" onclick="selectTheme(this)">
+      <div class="sw-bar"></div>
+      <div class="sw-body">
+        <div class="sw-line"></div>
+        <div class="sw-line short"></div>
+        <div class="sw-line"></div>
+      </div>
+      <div class="sw-label">SYNTHWAVE</div>
+    </div>
+    <div class="theme-swatch sw-emerald" onclick="selectTheme(this)">
+      <div class="sw-bar"></div>
+      <div class="sw-body">
+        <div class="sw-line"></div>
+        <div class="sw-line short"></div>
+        <div class="sw-line"></div>
+      </div>
+      <div class="sw-label">EMERALD</div>
+    </div>
+    <div class="theme-swatch sw-paper" onclick="selectTheme(this)">
+      <div class="sw-bar"></div>
+      <div class="sw-body">
+        <div class="sw-line"></div>
+        <div class="sw-line short"></div>
+        <div class="sw-line"></div>
+      </div>
+      <div class="sw-label">PAPER</div>
+    </div>
+    <div class="theme-swatch sw-midnight" onclick="selectTheme(this)">
+      <div class="sw-bar"></div>
+      <div class="sw-body">
+        <div class="sw-line"></div>
+        <div class="sw-line short"></div>
+        <div class="sw-line"></div>
+      </div>
+      <div class="sw-label">MIDNIGHT</div>
+    </div>
+    <div class="theme-swatch sw-crimson" onclick="selectTheme(this)">
+      <div class="sw-bar"></div>
+      <div class="sw-body">
+        <div class="sw-line"></div>
+        <div class="sw-line short"></div>
+        <div class="sw-line"></div>
+      </div>
+      <div class="sw-label">CRIMSON</div>
+    </div>
+    <div class="theme-swatch sw-slate" onclick="selectTheme(this)">
+      <div class="sw-bar"></div>
+      <div class="sw-body">
+        <div class="sw-line"></div>
+        <div class="sw-line short"></div>
+        <div class="sw-line"></div>
+      </div>
+      <div class="sw-label">SLATE</div>
+    </div>
+    <div class="theme-swatch sw-amber" onclick="selectTheme(this)">
+      <div class="sw-bar"></div>
+      <div class="sw-body">
+        <div class="sw-line"></div>
+        <div class="sw-line short"></div>
+        <div class="sw-line"></div>
+      </div>
+      <div class="sw-label">AMBER</div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ── PRICING ────────────────────────────────────────────────────── -->
+<section class="section section-center" id="pricing">
+  <div class="section-eyebrow">Pricing</div>
+  <h2 class="section-title">Start free. Upgrade when you're ready.</h2>
+  <p class="section-sub">
+    No trial periods, no credit card required. The free tier is genuinely powerful.
+    Upgrade for live data, AI, and unlimited access.
+  </p>
+
+  <div class="pricing-grid">
+    <!-- FREE -->
+    <div class="price-card">
+      <div class="price-tier">Free</div>
+      <div class="price-amount">$0 <span>/ forever</span></div>
+      <p class="price-tagline">A real terminal, not a watered-down demo.</p>
+      <ul class="price-features">
+        <li><span class="check">✓</span> Quotes with 15-min delay</li>
+        <li><span class="check">✓</span> Watchlist up to 10 symbols</li>
+        <li><span class="check">✓</span> Sparkline charts</li>
+        <li><span class="check">✓</span> News feed (limited)</li>
+        <li><span class="check">✓</span> 3 price alerts</li>
+        <li><span class="check">✓</span> All 9 themes</li>
+        <li class="muted"><span class="dash">–</span> AI Insights</li>
+        <li class="muted"><span class="dash">–</span> Options chain</li>
+        <li class="muted"><span class="dash">–</span> Portfolio tracker</li>
+      </ul>
+      <div class="price-cta">
+        <a href="/" class="btn btn-outline" style="width:100%; justify-content:center; padding:12px;">Open free →</a>
+      </div>
+    </div>
+
+    <!-- PRO -->
+    <div class="price-card featured">
+      <div class="price-badge">Most popular</div>
+      <div class="price-tier">Pro</div>
+      <div class="price-amount">$12 <span>/ month</span></div>
+      <p class="price-tagline">Everything you need to trade with conviction.</p>
+      <ul class="price-features">
+        <li><span class="check">✓</span> Everything in Free</li>
+        <li><span class="plus">+</span> <strong>Real-time quotes (live)</strong></li>
+        <li><span class="plus">+</span> Unlimited watchlist</li>
+        <li><span class="plus">+</span> <strong>AI Insights via GPT + Claude</strong></li>
+        <li><span class="plus">+</span> Full options chain</li>
+        <li><span class="plus">+</span> Portfolio P&amp;L tracker</li>
+        <li><span class="check">✓</span> Unlimited alerts</li>
+        <li><span class="check">✓</span> Full news + sentiment</li>
+      </ul>
+      <div class="price-cta">
+        <a href="/" class="btn btn-primary" style="width:100%; justify-content:center; padding:12px;">Start Pro →</a>
+      </div>
+    </div>
+
+    <!-- PRO+ -->
+    <div class="price-card">
+      <div class="price-tier">Pro+</div>
+      <div class="price-amount">$29 <span>/ month</span></div>
+      <p class="price-tagline">For power users, teams, and builders.</p>
+      <ul class="price-features">
+        <li><span class="check">✓</span> Everything in Pro</li>
+        <li><span class="plus">+</span> Multi-account portfolios</li>
+        <li><span class="plus">+</span> Brokerage sync (coming soon)</li>
+        <li><span class="plus">+</span> Team workspaces</li>
+        <li><span class="plus">+</span> API access</li>
+        <li><span class="plus">+</span> Custom alert webhooks</li>
+        <li><span class="check">✓</span> Priority support</li>
+        <li><span class="check">✓</span> Early feature access</li>
+        <li><span class="check">✓</span> White-label option</li>
+      </ul>
+      <div class="price-cta">
+        <a href="/" class="btn btn-outline" style="width:100%; justify-content:center; padding:12px;">Start Pro+ →</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── FOOTER ─────────────────────────────────────────────────────── -->
+<footer class="footer">
+  <div class="footer-brand">
+    <svg viewBox="0 0 40 40" fill="none" width="20" height="20">
+      <rect x="2" y="2" width="36" height="36" rx="11" fill="#172953"/>
+      <path d="M9.8 14.4L20 20.6" stroke="url(#ftDL)" stroke-width="2.4" stroke-linecap="round"/>
+      <path d="M20 20.6L30.2 14.4" stroke="url(#ftDR)" stroke-width="2.4" stroke-linecap="round"/>
+      <rect x="8.1" y="14.2" width="3.4" height="12.4" rx="1" fill="#2fcf84"/>
+      <rect x="18.3" y="19.8" width="3.4" height="9.6" rx="1" fill="#ff5f7f"/>
+      <rect x="28.5" y="14.2" width="3.4" height="12.4" rx="1" fill="#2fcf84"/>
+      <circle cx="33" cy="12.2" r="1.8" fill="#9cb9ff"/>
+      <defs>
+        <linearGradient id="ftDL" x1="9.8" y1="14.4" x2="20" y2="20.6" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stop-color="#2fcf84"/><stop offset="100%" stop-color="#ff5f7f"/>
+        </linearGradient>
+        <linearGradient id="ftDR" x1="20" y1="20.6" x2="30.2" y2="14.4" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stop-color="#ff5f7f"/><stop offset="100%" stop-color="#2fcf84"/>
+        </linearGradient>
+      </defs>
+    </svg>
+    MERIDIAN
+  </div>
+
+  <div class="footer-links">
+    <a href="#">Privacy</a>
+    <a href="#">Terms</a>
+    <a href="https://github.com/captainfredric/The-Terminal-Meridian" target="_blank" rel="noopener">GitHub</a>
+    <a href="/">Open Terminal ↗</a>
+  </div>
+
+  <p class="footer-copy">© 2026 Meridian Market Terminal. Data for informational purposes only. Not investment advice.</p>
+</footer>
+
+<script>
+  // Theme swatch interaction
+  function selectTheme(el) {
+    document.querySelectorAll('.theme-swatch').forEach(s => s.classList.remove('active'));
+    el.classList.add('active');
+  }
+</script>
+</body>
+</html>

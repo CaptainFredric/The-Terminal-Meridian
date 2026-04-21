@@ -11,6 +11,7 @@ import { createPortfolioRenderer } from "./Renderers/PortfolioRenderer.js";
 import { createQuoteRenderer } from "./Renderers/QuoteRenderer.js";
 import { createRulesRenderer } from "./Renderers/RulesRenderer.js";
 import { createScreenerRenderer } from "./Renderers/ScreenerRenderer.js";
+import { createSettingsRenderer } from "./Renderers/SettingsRenderer.js";
 import { createTradeRenderer } from "./Renderers/TradeRenderer.js";
 
 function normalizeKey(key) {
@@ -57,5 +58,6 @@ export function createDefaultModuleRegistry(context) {
     ["calculator", createCalculatorRenderer(context)],
     ["rules", createRulesRenderer(context)],
     ["ai", createAIRenderer(context)],
+    ["settings", createSettingsRenderer(context)],
   ]);
 }

@@ -1215,7 +1215,7 @@ function bindEvents() {
 
   // ── Theme picker ──────────────────────────────────────────────────────────
   const THEME_KEY = "meridian_theme";
-  const VALID_THEMES = new Set(["dark", "bloomberg", "synthwave", "emerald", "paper"]);
+  const VALID_THEMES = new Set(["dark", "bloomberg", "synthwave", "emerald", "paper", "midnight", "crimson", "slate", "amber"]);
   function applyTheme(theme) {
     const t = VALID_THEMES.has(theme) ? theme : "dark";
     if (t === "dark") {
@@ -1258,11 +1258,75 @@ function bindEvents() {
     const tag = (e.target?.tagName || "").toLowerCase();
     if (tag === "input" || tag === "textarea" || e.target?.isContentEditable) return;
     if (e.metaKey || e.ctrlKey || e.altKey) return;
-    const themes = ["dark", "bloomberg", "synthwave", "emerald", "paper"];
+    const themes = ["dark", "bloomberg", "synthwave", "emerald", "paper", "midnight", "crimson", "slate", "amber"];
     const current = document.documentElement.dataset.theme || "dark";
     const next = themes[(themes.indexOf(current) + 1) % themes.length];
     applyTheme(next);
     showToast(`Theme → ${next}`, "neutral");
+  });
+
+  // ── Settings Panel action delegation ──────────────────────────────────────
+  // Handles clicks on [data-settings-action] buttons rendered inside the
+  // Settings panel module (which lives in the panel grid, not the modal).
+  document.addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-settings-action]");
+    if (!btn) return;
+    const action = btn.dataset.settingsAction;
+    switch (action) {
+      case "edit-profile":
+      case "change-password":
+      case "delete-account":
+        openSettingsModal();
+        break;
+      case "sign-in":
+        openAuthModal("login");
+        break;
+      case "create-account":
+        openAuthModal("signup");
+        break;
+      case "upgrade":
+      case "upgrade-pro":
+      case "upgrade-pro-plus":
+        openPricingModal();
+        break;
+      case "manage-billing": {
+        const tier = state.subscription?.tier || "free";
+        if (tier !== "free") {
+          billingApi.createPortalSession().then((result) => {
+            if (result?.url) window.location.href = result.url;
+          }).catch((err) => {
+            console.warn("[Meridian] portal:", err);
+            showToast("Could not open billing portal. Try again shortly.", "warning");
+          });
+        }
+        break;
+      }
+      case "clear-local":
+        if (confirm("Reset workspace, watchlist, and preferences to defaults? This cannot be undone.")) {
+          try { localStorage.clear(); } catch {}
+          showToast("Local data cleared. Reloading…", "neutral");
+          setTimeout(() => window.location.reload(), 800);
+        }
+        break;
+      default:
+        break;
+    }
+  });
+
+  // ── Settings Panel preference toggle ──────────────────────────────────────
+  document.addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-pref-toggle]");
+    if (!btn) return;
+    const pref = btn.dataset.prefToggle;
+    if (pref === "compactMode") {
+      const next = !state.compactMode;
+      state.compactMode = next;
+      document.querySelector(".terminal-app")?.classList.toggle("is-compact", next);
+      syncUiCache();
+      // Re-render the settings panel so the toggle updates
+      renderAllPanels();
+      showToast(`Compact mode ${next ? "enabled" : "disabled"}.`, "neutral");
+    }
   });
 
   // ── Replay Tour button (header) ────────────────────────────────────────────

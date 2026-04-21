@@ -110,7 +110,8 @@ export class AppCore {
         this.loadModule(payload.module, this.store.state.activePanel, { reveal: true });
         break;
       case "SETTINGS":
-        this.dependencies.openSettingsModal?.();
+        // Load the settings panel module in the active panel
+        this.loadModule("settings", this.store.state.activePanel, { reveal: true });
         break;
       case "SUGGEST":
         this.loadModule("home", this.store.state.activePanel, { reveal: true });

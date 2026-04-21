@@ -23,7 +23,7 @@ export const functionKeys = [
   { key: "F11", module: "macro", label: "Macro" },
 ];
 
-export const moduleOrder = ["briefing", "home", "quote", "chart", "news", "screener", "heatmap", "portfolio", "trade", "macro", "options", "calculator", "rules", "ai"];
+export const moduleOrder = ["briefing", "home", "quote", "chart", "news", "screener", "heatmap", "portfolio", "trade", "macro", "options", "calculator", "rules", "ai", "settings"];
 
 export const moduleTitles = {
   briefing: "Briefing",
@@ -40,6 +40,7 @@ export const moduleTitles = {
   calculator: "Calculator",
   rules: "Rules",
   ai: "AI Insights",
+  settings: "Settings",
 };
 
 export const commandCatalog = [
@@ -83,6 +84,7 @@ export const commandCatalog = [
   { cmd: "AI AAPL", desc: "Get AI commentary on a specific symbol" },
   { cmd: "LOGIN", desc: "Sign in and sync workspace" },
   { cmd: "ACCOUNT", desc: "Open account settings" },
+  { cmd: "SETTINGS", desc: "Open workspace settings panel" },
 ];
 
 export const calculatorDefaults = {

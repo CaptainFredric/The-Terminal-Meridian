@@ -912,6 +912,48 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         # billing module failed to import — endpoints just won't exist
         pass
 
+    # ── Internal admin endpoint ────────────────────────────────────────────────
+    # Protected by the server secret (TERMINAL_SECRET env var).  Used to
+    # manually grant/modify subscription tiers for test accounts.  Do NOT
+    # expose in any public client code — bearer token is server-side only.
+    @app.post("/api/admin/set-tier")
+    def admin_set_tier() -> Any:
+        secret = os.environ.get("TERMINAL_SECRET", "")
+        auth = request.headers.get("Authorization", "")
+        if not secret or auth != f"Bearer {secret}":
+            return error_response("Unauthorized", 401)
+        data = request.get_json(silent=True) or {}
+        username = data.get("username")
+        tier = data.get("tier", "free")
+        status = data.get("status", "active")
+        if not username:
+            return error_response("username required", 400)
+        if tier not in ("free", "pro", "pro_plus"):
+            return error_response("invalid tier", 400)
+        db = get_db(app)
+        user = db.execute(
+            "SELECT id FROM users WHERE username = ?", (username,)
+        ).fetchone()
+        if not user:
+            return error_response("user not found", 404)
+        now = datetime.now(timezone.utc).isoformat()
+        existing = db.execute(
+            "SELECT id FROM subscriptions WHERE user_id = ?", (user["id"],)
+        ).fetchone()
+        if existing:
+            db.execute(
+                "UPDATE subscriptions SET tier = ?, status = ?, updated_at = ? WHERE user_id = ?",
+                (tier, status if tier != "free" else None, now, user["id"]),
+            )
+        else:
+            db.execute(
+                """INSERT INTO subscriptions (user_id, tier, status, updated_at)
+                   VALUES (?, ?, ?, ?)""",
+                (user["id"], tier, status if tier != "free" else None, now),
+            )
+        db.commit()
+        return jsonify({"ok": True, "username": username, "tier": tier, "status": status})
+
     # AI commentary endpoints. fetch_quotes is injected so ai_commentary.py
     # doesn't need to know about yfinance or any data source — same
     # dependency-injection pattern as the billing module above.

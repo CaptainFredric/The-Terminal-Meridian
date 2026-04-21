@@ -938,7 +938,7 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             return error_response("user not found", 404)
         now = datetime.now(timezone.utc).isoformat()
         existing = db.execute(
-            "SELECT id FROM subscriptions WHERE user_id = ?", (user["id"],)
+            "SELECT user_id FROM subscriptions WHERE user_id = ?", (user["id"],)
         ).fetchone()
         if existing:
             db.execute(

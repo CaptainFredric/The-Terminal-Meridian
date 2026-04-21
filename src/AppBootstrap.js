@@ -1776,19 +1776,19 @@ function applyPricingBilling(billing) {
   document.querySelector("#billingMonthly")?.classList.toggle("is-active", !isAnnual);
   document.querySelector("#billingAnnual")?.classList.toggle("is-active", isAnnual);
 
-  // Pro pricing: $19/mo or $152/yr ($12.67/mo)
+  // Pro pricing: $7.99/mo or $71.88/yr ($5.99/mo equiv, save 25%)
   const proAmount = document.querySelector("#priceAmountPro");
   const proPeriod = document.querySelector("#pricePeriodPro");
   const proAnnual = document.querySelector("#priceAnnualPro");
-  if (proAmount) proAmount.textContent = isAnnual ? "$13" : "$19";
+  if (proAmount) proAmount.textContent = isAnnual ? "$5.99" : "$7.99";
   if (proPeriod) proPeriod.textContent = "/mo";
   if (proAnnual) proAnnual.classList.toggle("hidden", !isAnnual);
 
-  // Pro+ pricing: $39/mo or $312/yr ($26/mo)
+  // Pro+ pricing: $14.99/mo or $143.88/yr ($11.99/mo equiv, save 20%)
   const ppAmount = document.querySelector("#priceAmountProPlus");
   const ppPeriod = document.querySelector("#pricePeriodProPlus");
   const ppAnnual = document.querySelector("#priceAnnualProPlus");
-  if (ppAmount) ppAmount.textContent = isAnnual ? "$31" : "$39";
+  if (ppAmount) ppAmount.textContent = isAnnual ? "$11.99" : "$14.99";
   if (ppPeriod) ppPeriod.textContent = "/mo";
   if (ppAnnual) ppAnnual.classList.toggle("hidden", !isAnnual);
 }
@@ -1811,7 +1811,7 @@ function handleAuthEntry() {
 
 function closeAuthModal() {
   el.authModalBackdrop?.classList.add("hidden");
-  setAuthMessage("Sign in only if you want backend sync.", "neutral");
+  setAuthMessage("Your workspace, synced across every device.", "neutral");
 }
 
 function openSettingsModal() {
@@ -1912,6 +1912,8 @@ function setAuthTab(tabName) {
   document.querySelectorAll("[data-auth-panel]").forEach((panel) => {
     panel.classList.toggle("hidden", panel.dataset.authPanel !== tabName);
   });
+  const title = document.querySelector("#authModalTitle");
+  if (title) title.textContent = tabName === "signup" ? "Create your account" : "Welcome back";
 }
 
 function setAuthMessage(message, tone) {

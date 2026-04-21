@@ -246,64 +246,64 @@
   <div class="modal-backdrop hidden" id="authModalBackdrop">
     <section class="auth-modal" id="authModal">
       <header class="auth-head">
-        <h2>Provision workspace</h2>
+        <h2 id="authModalTitle">Welcome back</h2>
         <button class="icon-btn" id="closeAuthModal" type="button">×</button>
       </header>
 
-      <p class="auth-status error-message-container active" id="authStatus">Provision only if you want backend sync.</p>
+      <p class="auth-status error-message-container active" id="authStatus">Your workspace, synced across every device.</p>
 
       <div class="auth-tabs" id="authTabs">
-        <button class="auth-tab is-active" data-auth-tab="login" type="button">Access</button>
-        <button class="auth-tab" data-auth-tab="signup" type="button">Provision</button>
+        <button class="auth-tab is-active" data-auth-tab="login" type="button">Sign in</button>
+        <button class="auth-tab" data-auth-tab="signup" type="button">Create account</button>
       </div>
 
       <form id="loginForm" data-auth-panel="login" class="auth-form">
         <label>
           Email or username
-          <input name="identifier" type="text" required />
+          <input name="identifier" type="text" autocomplete="username" required />
         </label>
         <label>
           Password
-          <input name="password" type="password" required />
+          <input name="password" type="password" autocomplete="current-password" required />
         </label>
-        <button class="btn btn-primary" id="loginBtn" type="submit">Access workspace</button>
-        <button class="btn btn-ghost" id="continueLocalBtn" type="button">Continue local mode</button>
+        <button class="btn btn-primary" id="loginBtn" type="submit">Sign in</button>
+        <button class="btn btn-ghost" id="continueLocalBtn" type="button">Continue without account</button>
       </form>
 
       <form id="signupForm" data-auth-panel="signup" class="auth-form hidden">
         <div class="auth-grid">
           <label>
             First name
-            <input name="firstName" type="text" required />
+            <input name="firstName" type="text" autocomplete="given-name" required />
           </label>
           <label>
             Last name
-            <input name="lastName" type="text" required />
+            <input name="lastName" type="text" autocomplete="family-name" required />
           </label>
         </div>
         <label>
           Email
-          <input id="signupEmail" name="email" type="email" required />
+          <input id="signupEmail" name="email" type="email" autocomplete="email" required />
         </label>
         <label>
           Username
-          <input id="signupUsername" name="username" type="text" required />
+          <input id="signupUsername" name="username" type="text" autocomplete="username" required />
         </label>
-        <p class="auth-hint error-message-container active" id="signupAvailability">Use a unique email and username.</p>
+        <p class="auth-hint error-message-container active" id="signupAvailability">Pick a unique email and username.</p>
         <label>
-          Role
+          I am a…
           <select id="signupRole" name="role"></select>
         </label>
         <label>
-          Password
-          <input name="password" type="password" minlength="8" required />
+          Password <small style="color:var(--muted);font-weight:400;">(min. 8 characters)</small>
+          <input name="password" type="password" minlength="8" autocomplete="new-password" required />
         </label>
         <label>
           Confirm password
-          <input name="confirmPassword" type="password" minlength="8" required />
+          <input name="confirmPassword" type="password" minlength="8" autocomplete="new-password" required />
         </label>
-        <button class="btn btn-primary" id="signupBtn" type="submit">Provision user</button>
-        <button class="btn btn-ghost" id="continueLocalSignupBtn" type="button">Continue local mode</button>
+        <button class="btn btn-primary" id="signupBtn" type="submit">Create account</button>
+        <button class="btn btn-ghost" id="continueLocalSignupBtn" type="button">Continue without account</button>
       </form>
     </section>
   </div>
@@ -669,8 +669,8 @@
             <p class="pricing-card-desc">For serious market participants</p>
           </div>
           <div class="pricing-price">
-            <span class="pricing-amount" id="priceAmountPro">$19</span><small id="pricePeriodPro">/mo</small>
-            <div class="pricing-annual-note hidden" id="priceAnnualPro">$152/yr · billed annually</div>
+            <span class="pricing-amount" id="priceAmountPro">$7.99</span><small id="pricePeriodPro">/mo</small>
+            <div class="pricing-annual-note hidden" id="priceAnnualPro">$71.88/yr · billed annually</div>
             <div class="pricing-trial-note">7-day free trial · cancel any time</div>
           </div>
           <ul class="pricing-features">
@@ -696,8 +696,8 @@
             <p class="pricing-card-desc">Quant &amp; power-user tier</p>
           </div>
           <div class="pricing-price">
-            <span class="pricing-amount" id="priceAmountProPlus">$39</span><small id="pricePeriodProPlus">/mo</small>
-            <div class="pricing-annual-note hidden" id="priceAnnualProPlus">$312/yr · billed annually</div>
+            <span class="pricing-amount" id="priceAmountProPlus">$14.99</span><small id="pricePeriodProPlus">/mo</small>
+            <div class="pricing-annual-note hidden" id="priceAnnualProPlus">$143.88/yr · billed annually</div>
           </div>
           <ul class="pricing-features">
             <li>Everything in Pro</li>
@@ -713,14 +713,10 @@
         </div>
       </div>
 
-      <!-- Waitlist capture -->
+      <!-- Trial CTA -->
       <div class="pricing-waitlist" id="pricingWaitlist">
-        <p class="pricing-waitlist-label">🚀 Be first when Pro launches — get 3 months free.</p>
-        <form class="pricing-waitlist-form" id="pricingWaitlistForm" autocomplete="off">
-          <input type="email" name="email" placeholder="your@email.com" class="pricing-waitlist-input" required />
-          <button class="btn btn-primary" type="submit" id="pricingWaitlistBtn">Notify me</button>
-        </form>
-        <p class="pricing-waitlist-note" id="pricingWaitlistNote">No spam. Unsubscribe any time.</p>
+        <p class="pricing-waitlist-label">✅ Billing is live — start your 7-day free trial today. No card charge until day 8.</p>
+        <p class="pricing-waitlist-note" id="pricingWaitlistNote">Cancel any time before the trial ends and you won't be charged.</p>
       </div>
 
       <p class="pricing-footer-note">All prices in USD. Card charged at period start. Cancel any time. <a href="#" data-pricing-faq>FAQ &amp; refund policy</a></p>

@@ -7720,7 +7720,7 @@ body[data-theme="light"] .tile {
   top: 64px;
   right: 18px;
   z-index: 250;
-  width: 320px;
+  width: 420px;
   background: linear-gradient(180deg, rgba(20, 30, 60, 0.98), rgba(14, 21, 46, 0.99));
   border: 1px solid var(--topbar-border);
   border-radius: 10px;
@@ -7755,7 +7755,7 @@ body[data-theme="light"] .tile {
 }
 .theme-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, 1fr);
   gap: 8px;
 }
 .theme-option {

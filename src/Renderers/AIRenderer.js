@@ -62,7 +62,7 @@ function formatRelativeTime(iso) {
 }
 
 export function createAIRenderer(context) {
-  const { state, buildQuote } = context;
+  const { state, buildQuote, isProUser } = context;
 
   return function renderAI(panel) {
     const symbol = state.panelSymbols?.[panel] || state.watchlist?.[0] || "AAPL";
@@ -70,6 +70,46 @@ export function createAIRenderer(context) {
     const cached = cache.get(symbol) || null;
     const quote = buildQuote ? buildQuote(symbol) : null;
     const loading = state.aiLoading?.has(symbol);
+
+    // Tier gate — require sign-in for AI commentary
+    if (!isProUser?.()) {
+      const price = quote?.price != null ? `$${tabularValue(quote.price, 2)}` : "—";
+      const changePct = Number(quote?.changePct ?? 0);
+      const changeTone = changePct >= 0 ? "positive" : "negative";
+      const changeArrow = changePct >= 0 ? "▲" : "▼";
+      return `
+        <section class="ai-panel">
+          <header class="ai-header">
+            <div class="ai-symbol-block">
+              <h2 class="ai-symbol">${escapeHtml(symbol)}</h2>
+              <p class="ai-symbol-meta">
+                <span>${price}</span>
+                <span class="${changeTone}">${changeArrow} ${Math.abs(changePct).toFixed(2)}%</span>
+              </p>
+            </div>
+          </header>
+          <div class="tier-gate-card">
+            <div class="tier-gate-icon">🤖</div>
+            <h3>AI Insights — Sign in to unlock</h3>
+            <p>Get analyst-style commentary on any ticker: price action analysis, volume signals, 52-week positioning, and key levels to watch. Powered by GPT and Claude.</p>
+            <div class="tier-gate-preview">
+              <div class="tier-gate-preview-line">
+                <span class="positive">▲ Bullish momentum building</span>
+                <span class="tier-gate-blur">above the 50-day moving average with expanding volume…</span>
+              </div>
+              <div class="tier-gate-preview-line">
+                <span class="tier-gate-blur">Key resistance at $xxx. Support at $xxx. Watch for…</span>
+              </div>
+            </div>
+            <div class="tier-gate-actions">
+              <button class="btn btn-accent" type="button" data-settings-action="sign-in">Sign in free</button>
+              <button class="btn btn-ghost" type="button" data-settings-action="create-account">Create account</button>
+            </div>
+            <small class="tier-gate-note">Free account · no credit card required</small>
+          </div>
+        </section>
+      `;
+    }
 
     const price = quote?.price != null ? `$${tabularValue(quote.price, 2)}` : "—";
     const changePct = Number(quote?.changePct ?? 0);

@@ -8176,6 +8176,114 @@ body[data-theme="light"] .tile {
 }
 
 
+/* ───────── Tier Gate Cards ───────── */
+.tier-gate-card {
+  margin: 24px auto;
+  max-width: 520px;
+  background: linear-gradient(160deg, rgba(18, 26, 56, 0.9) 0%, rgba(10, 16, 36, 0.95) 100%);
+  border: 1px solid rgba(111, 143, 255, 0.22);
+  border-radius: 14px;
+  padding: 32px 28px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  animation: card-in 280ms cubic-bezier(0.2, 0.8, 0.3, 1) both;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(111, 143, 255, 0.08);
+}
+.tier-gate-icon {
+  font-size: 2.4rem;
+  line-height: 1;
+  filter: drop-shadow(0 0 12px rgba(111, 143, 255, 0.4));
+}
+.tier-gate-card h3 {
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin: 0;
+}
+.tier-gate-card p {
+  font-size: 0.86rem;
+  color: var(--muted);
+  line-height: 1.6;
+  max-width: 400px;
+  margin: 0;
+}
+.tier-gate-preview {
+  width: 100%;
+  margin: 8px 0;
+  padding: 14px;
+  background: rgba(0, 0, 0, 0.25);
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  text-align: left;
+  font-size: 0.8rem;
+  overflow: hidden;
+  position: relative;
+}
+.tier-gate-preview::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 60%;
+  background: linear-gradient(to bottom, transparent, rgba(10, 16, 36, 0.95));
+  pointer-events: none;
+}
+.tier-gate-preview-line {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.tier-gate-blur {
+  filter: blur(4px);
+  user-select: none;
+  pointer-events: none;
+  color: var(--muted);
+}
+.tier-gate-table-preview {
+  padding: 0;
+  overflow-x: auto;
+}
+.tier-gate-preview-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.78rem;
+}
+.tier-gate-preview-table th {
+  padding: 6px 10px;
+  font-size: 0.66rem;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--muted);
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  text-align: right;
+}
+.tier-gate-preview-table th:first-child { text-align: left; }
+.tier-gate-preview-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  text-align: right;
+}
+.tier-gate-preview-table td:first-child { text-align: left; }
+.tier-gate-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.tier-gate-note {
+  font-size: 0.7rem;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+
 /* ───────── Fluid Animations ───────── */
 
 /* Panel content entrance */

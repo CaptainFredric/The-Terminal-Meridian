@@ -215,9 +215,38 @@ function renderGreeksSnapshot(chain, greekCtx) {
 }
 
 export function createOptionsRenderer(context) {
-  const { state, optionsKey, calculateBlackScholes } = context;
+  const { state, optionsKey, calculateBlackScholes, isProUser } = context;
 
   return function renderOptions(panel) {
+    // Tier gate — require sign-in for options chain
+    if (!isProUser?.()) {
+      const symbol = state.panelSymbols[panel] || "AAPL";
+      return `
+        <div class="stack">
+          <div class="tier-gate-card">
+            <div class="tier-gate-icon">📊</div>
+            <h3>Options Chain — Sign in to unlock</h3>
+            <p>Access live options chains with full Greeks (Δ delta, Θ theta, Γ gamma, V vega), implied volatility rank, open interest bars, and bid/ask spreads for any ticker.</p>
+            <div class="tier-gate-preview tier-gate-table-preview">
+              <table class="tier-gate-preview-table">
+                <thead><tr><th>Strike</th><th>Bid</th><th>Ask</th><th>IV</th><th>Δ</th><th>OI</th></tr></thead>
+                <tbody>
+                  <tr class="tier-gate-blur"><td>$180</td><td>$4.20</td><td>$4.35</td><td>28.4%</td><td>0.612</td><td>4.2K</td></tr>
+                  <tr class="options-atm-row tier-gate-blur"><td><strong>$185</strong></td><td>$2.10</td><td>$2.20</td><td>26.1%</td><td>0.500</td><td>8.8K</td></tr>
+                  <tr class="tier-gate-blur"><td>$190</td><td>$0.85</td><td>$0.92</td><td>24.3%</td><td>0.321</td><td>12.1K</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="tier-gate-actions">
+              <button class="btn btn-accent" type="button" data-settings-action="sign-in">Sign in free</button>
+              <button class="btn btn-ghost" type="button" data-settings-action="create-account">Create account</button>
+            </div>
+            <small class="tier-gate-note">Free account · no credit card required</small>
+          </div>
+        </div>
+      `;
+    }
+
     const symbol = state.panelSymbols[panel] || state.optionsSelection.symbol;
     const expiration = state.optionsSelection.expiration || "nearest";
     const chain = state.optionsCache.get(optionsKey(symbol, expiration)) || state.optionsCache.get(optionsKey(symbol, "nearest"));

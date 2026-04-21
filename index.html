@@ -6,10 +6,10 @@
   <meta name="theme-color" content="#06080d" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <title>Meridian — Bloomberg-Style Market Terminal</title>
+  <title>Meridian: Bloomberg-Style Market Terminal</title>
   <meta
     name="description"
-    content="Meridian is a free Bloomberg-style market terminal. Live stock quotes, interactive charts, options chains, AI-powered insights, portfolio tracking, and a built-in screener — all in one keyboard-driven workspace."
+    content="Meridian is a free Bloomberg-style market terminal. Live stock quotes, interactive charts, options chains, AI-powered insights, portfolio tracking, and a built-in screener, all in one keyboard-driven workspace."
   />
   <meta name="keywords" content="stock market terminal, bloomberg alternative, free stock screener, options chain, portfolio tracker, real-time quotes, market news, AI stock insights" />
   <link rel="canonical" href="https://captainfredric.github.io/The-Terminal-Meridian/" />
@@ -17,7 +17,7 @@
   <!-- Open Graph / social sharing -->
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://captainfredric.github.io/The-Terminal-Meridian/" />
-  <meta property="og:title" content="Meridian — Bloomberg-Style Market Terminal" />
+  <meta property="og:title" content="Meridian: Bloomberg-Style Market Terminal" />
   <meta property="og:description" content="Free Bloomberg-style market terminal. Live quotes, charts, options chains, screener, AI insights, and portfolio tracking in one keyboard-driven workspace." />
   <meta property="og:site_name" content="Meridian" />
   <meta property="og:image" content="https://captainfredric.github.io/The-Terminal-Meridian/og-preview.png" />
@@ -26,8 +26,8 @@
 
   <!-- Twitter / X card -->
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="Meridian — Bloomberg-Style Market Terminal" />
-  <meta name="twitter:description" content="Free Bloomberg-style market terminal. Live quotes, charts, options, AI insights, and portfolio tracking — keyboard-first, no Bloomberg price tag." />
+  <meta name="twitter:title" content="Meridian: Bloomberg-Style Market Terminal" />
+  <meta name="twitter:description" content="Free Bloomberg-style market terminal. Live quotes, charts, options, AI insights, and portfolio tracking. Keyboard-first, no Bloomberg price tag." />
   <meta name="twitter:image" content="https://captainfredric.github.io/The-Terminal-Meridian/og-preview.png" />
 
   <!-- Structured data (Google rich results) -->
@@ -117,7 +117,7 @@
             <p class="status-chip chip-net" id="networkStatus">Connecting</p>
             <p class="status-chip chip-live-users" id="liveUserCount" title="Active users right now">
               <i class="status-chip-dot"></i>
-              <span>—</span>
+              <span>...</span>
             </p>
           </div>
         </div>
@@ -229,7 +229,7 @@
       </div>
     </section>
 
-    <!-- Mobile-only bottom panel nav — JS populates and updates aria labels -->
+    <!-- Mobile-only bottom panel nav, JS populates and updates aria labels -->
     <nav class="mobile-panel-nav" id="mobilePanelNav" aria-label="Switch panels">
       <button class="mobile-panel-tab is-active" data-mobile-panel="1" type="button">
         <svg viewBox="0 0 20 20" fill="none" width="20" height="20"><rect x="3" y="3" width="6" height="6" rx="1.5" stroke="currentColor" stroke-width="1.6"/><rect x="11" y="3" width="6" height="6" rx="1.5" stroke="currentColor" stroke-width="1.6"/><rect x="3" y="11" width="6" height="6" rx="1.5" stroke="currentColor" stroke-width="1.6"/><rect x="11" y="11" width="6" height="6" rx="1.5" stroke="currentColor" stroke-width="1.6"/></svg>
@@ -250,9 +250,9 @@
     </nav>
 
     <footer class="statusbar">
-      <span>📡 Updated: <strong id="lastUpdated">—</strong></span>
+      <span>📡 Updated: <strong id="lastUpdated">...</strong></span>
       <span>⏱ Refresh: <strong id="refreshCountdown">30s</strong></span>
-      <span class="statusbar-market-clock"><span class="market-clock-dot" id="marketClockDot"></span><strong id="marketClock">—</strong></span>
+      <span class="statusbar-market-clock"><span class="market-clock-dot" id="marketClockDot"></span><strong id="marketClock">...</strong></span>
       <span>🕐 Session: <strong id="sessionClock">00:00:00</strong></span>
       <span class="statusbar-hint">Cmd+K to open command palette</span>
     </footer>
@@ -332,7 +332,7 @@
         type="text"
         autocomplete="off"
         spellcheck="false"
-        placeholder="Ticker, command, or ? for help — e.g. AAPL, CHART TSLA, BUY NVDA 5"
+        placeholder="Ticker, command, or ? for help. e.g. AAPL, CHART TSLA, BUY NVDA 5"
       />
       <kbd class="cmd-kbd-hint">↵ run</kbd>
       <kbd class="cmd-kbd-hint">↑↓ history</kbd>
@@ -473,7 +473,7 @@
 
         <div class="wizard-step-body">
           <h3>What do you want to track?</h3>
-          <p class="wizard-step-sub">Pick a category to seed your watchlist — you can always change it.</p>
+          <p class="wizard-step-sub">Pick a category to seed your watchlist. You can always change it.</p>
 
           <div class="wizard-focus-grid" id="wizardFocusGrid">
             <button class="wizard-focus-tile" type="button" data-focus="mega">
@@ -749,7 +749,7 @@
 
       <!-- Trial CTA -->
       <div class="pricing-waitlist" id="pricingWaitlist">
-        <p class="pricing-waitlist-label">✅ Billing is live — start your 7-day free trial today. No card charge until day 8.</p>
+        <p class="pricing-waitlist-label">✅ Billing is live. Start your 7-day free trial today. No card charge until day 8.</p>
         <p class="pricing-waitlist-note" id="pricingWaitlistNote">Cancel any time before the trial ends and you won't be charged.</p>
       </div>
 
@@ -777,7 +777,7 @@
           </div>
           <div class="pricing-faq-item">
             <strong>Is the data real-time?</strong>
-            <p>Yes — quotes refresh every 30s on Free, 10s on Pro, with live price flash. Sourced from Yahoo Finance.</p>
+            <p>Yes, quotes refresh every 30s on Free, 10s on Pro, with live price flash. Sourced from Yahoo Finance.</p>
           </div>
           <div class="pricing-faq-item">
             <strong>Can I get a refund?</strong>

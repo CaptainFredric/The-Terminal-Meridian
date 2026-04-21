@@ -102,7 +102,7 @@ export function createAIRenderer(context) {
               </div>
             </div>
             <div class="tier-gate-actions">
-              <button class="btn btn-accent" type="button" data-settings-action="sign-in">Sign in free</button>
+              <button class="btn btn-primary" type="button" data-settings-action="sign-in">Sign in free</button>
               <button class="btn btn-ghost" type="button" data-settings-action="create-account">Create account</button>
             </div>
             <small class="tier-gate-note">Free account · no credit card required</small>

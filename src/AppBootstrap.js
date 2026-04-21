@@ -1066,7 +1066,7 @@ function bindEvents() {
         const msg = String(error?.message || "");
         if (msg.includes("503") || /not configured/i.test(msg)) {
           // Stripe isn't live yet — gracefully fall back to waitlist signup.
-          showToast("💌 Billing isn't live yet — drop your email and we'll notify you.", "neutral", 5000);
+          showToast("💌 Billing isn't live yet. Drop your email and we'll notify you.", "neutral", 5000);
           document.querySelector("#pricingWaitlist")?.scrollIntoView({ behavior: "smooth", block: "center" });
           document.querySelector("#pricingWaitlistForm input[type=email]")?.focus();
         } else if (msg.includes("401") || /sign in/i.test(msg)) {
@@ -1098,7 +1098,7 @@ function bindEvents() {
       }).catch(() => {});
     } else if (billingFlag === "canceled") {
       setTimeout(() => {
-        showToast("Checkout canceled — you can try again any time from Pricing.", "neutral", 5000);
+        showToast("Checkout canceled. You can try again any time from Pricing.", "neutral", 5000);
       }, 600);
     }
     if (billingFlag) {
@@ -1118,7 +1118,7 @@ function bindEvents() {
     } catch (error) {
       const msg = String(error?.message || "");
       if (msg.includes("503") || /not configured/i.test(msg)) {
-        showToast("Billing portal isn't live yet — check back soon.", "neutral");
+        showToast("Billing portal isn't live yet. Check back soon.", "neutral");
       } else {
         showToast(`Couldn't open billing portal: ${msg || "error"}`, "error");
       }
@@ -1375,13 +1375,13 @@ function bindEvents() {
         document.body.removeChild(ta);
       }
       if (copied) {
-        showToast(`🔗 Share link copied — ${shareUrl.length} chars`, "success", 4000);
+        showToast(`🔗 Share link copied (${shareUrl.length} chars)`, "success", 4000);
       } else {
         // Surface the URL so user can copy it manually
         window.prompt("Copy this share link:", shareUrl);
       }
     } catch (err) {
-      showToast("Couldn't build a share link — try again.", "error");
+      showToast("Couldn't build a share link. Try again.", "error");
       console.error("[Meridian] share view failed:", err);
     }
   });
@@ -1620,7 +1620,7 @@ const TOUR_STEPS = [
     selector: "#overviewStrip",
     icon: "📈",
     title: "Live Market Overview",
-    desc: "The ticker strip shows real-time prices for major indices and ETFs — SPY, QQQ, VIX, and more. Click any card to chart it instantly.",
+    desc: "The ticker strip shows real-time prices for major indices and ETFs: SPY, QQQ, VIX, and more. Click any card to chart it instantly.",
     placement: "bottom",
   },
   {
@@ -1641,7 +1641,7 @@ const TOUR_STEPS = [
     selector: ".left-rail",
     icon: "👁️",
     title: "Watchlist & Tools",
-    desc: "Track your favourite tickers here — prices update live. Type 'WATCH AAPL' to add any symbol, or 'ALERT AAPL >= 200' to set a price alert.",
+    desc: "Track your favourite tickers here, prices update live. Type 'WATCH AAPL' to add any symbol, or 'ALERT AAPL >= 200' to set a price alert.",
     placement: "right",
   },
   {
@@ -2644,7 +2644,7 @@ async function triggerAICommentary(symbol, panel) {
   } catch (error) {
     const msg = String(error?.message || "");
     if (msg.includes("429")) {
-      try { showToast("AI insights: rate-limited (1 per 5s) — try again in a moment.", "neutral", 4000); } catch {}
+      try { showToast("AI insights: rate-limited (1 per 5s). Try again in a moment.", "neutral", 4000); } catch {}
     } else {
       try { showToast(`AI insights failed: ${msg || "unknown error"}`, "error", 4000); } catch {}
     }
@@ -3624,7 +3624,7 @@ function handleDocumentSubmit(event) {
     state.positions = state.positions.filter((p) => p.symbol !== symbol);
     state.positions.push({ symbol, shares, cost });
     queueWorkspaceSave();
-    showToast(`${symbol} updated — ${shares} sh @ $${cost.toFixed(2)}`, "success");
+    showToast(`${symbol} updated: ${shares} sh @ $${cost.toFixed(2)}`, "success");
     [1, 2, 3, 4].filter((p) => state.panelModules[p] === "portfolio").forEach((p) => renderPanel(p));
     return;
   }
@@ -4516,7 +4516,7 @@ function evaluateAlerts() {
 
   // Fire toasts + notifications for newly-triggered alerts only (deduped)
   newlyTriggered.forEach(({ alert, price }) => {
-    const message = `${alert.symbol} ${alert.operator} ${Number(alert.threshold).toLocaleString()} — now $${Number(price).toFixed(2)}`;
+    const message = `${alert.symbol} ${alert.operator} ${Number(alert.threshold).toLocaleString()}. Now: $${Number(price).toFixed(2)}`;
     showToast(message, "success");
     notifManager?.push({
       type: "alert-trigger",

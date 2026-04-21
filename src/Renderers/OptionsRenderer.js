@@ -225,7 +225,7 @@ export function createOptionsRenderer(context) {
         <div class="stack">
           <div class="tier-gate-card">
             <div class="tier-gate-icon">📊</div>
-            <h3>Options Chain — Sign in to unlock</h3>
+            <h3>Options Chain: Sign in to unlock</h3>
             <p>Access live options chains with full Greeks (Δ delta, Θ theta, Γ gamma, V vega), implied volatility rank, open interest bars, and bid/ask spreads for any ticker.</p>
             <div class="tier-gate-preview tier-gate-table-preview">
               <table class="tier-gate-preview-table">

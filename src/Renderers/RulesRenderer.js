@@ -56,12 +56,12 @@ export function createRulesRenderer(context) {
     const alertsWatching = alerts.filter((a) => a.status === "watching").length;
 
     const RULE_TEMPLATES = [
-      { label: "📈 SPY breakout",   cmd: "IF SPY > 520 THEN SPY breakout — above 520" },
+      { label: "📈 SPY breakout",   cmd: "IF SPY > 520 THEN SPY breakout, above 520" },
       { label: "🍎 AAPL above 200", cmd: "IF AAPL > 200 THEN Apple above 200" },
-      { label: "📉 QQQ sell-off",   cmd: "IF QQQ < 430 THEN QQQ selling off — below 430" },
-      { label: "🔥 NVDA momentum",  cmd: "IF NVDA > 950 THEN NVDA above 950 — momentum play" },
-      { label: "⚡ VIX spike",      cmd: "IF VIX > 20 THEN Volatility spike — hedge accordingly" },
-      { label: "₿ BTC above 90k",  cmd: "IF BTC-USD > 90000 THEN Bitcoin above 90k — risk-on" },
+      { label: "📉 QQQ sell-off",   cmd: "IF QQQ < 430 THEN QQQ selling off, below 430" },
+      { label: "🔥 NVDA momentum",  cmd: "IF NVDA > 950 THEN NVDA above 950, momentum play" },
+      { label: "⚡ VIX spike",      cmd: "IF VIX > 20 THEN Volatility spike, hedge accordingly" },
+      { label: "₿ BTC above 90k",  cmd: "IF BTC-USD > 90000 THEN Bitcoin above 90k, risk-on" },
     ];
 
     const ALERT_TEMPLATES = [
@@ -247,7 +247,7 @@ export function createRulesRenderer(context) {
                       const time = formatSystemTime(item.triggeredAt);
                       const symbol = String(item.symbol || "--").toUpperCase();
                       const message = item.msg || "Condition Met";
-                      return `<div class="system-log-entry"><span class="system-log-line">[${time}] <span class="log-trigger-dot"></span> <strong>${symbol}</strong> — ${message}</span></div>`;
+                      return `<div class="system-log-entry"><span class="system-log-line">[${time}] <span class="log-trigger-dot"></span> <strong>${symbol}</strong>: ${message}</span></div>`;
                     })
                     .join("")
                 : `

@@ -165,7 +165,7 @@ export function createSettingsRenderer(context) {
               <label class="settings-pref-row">
                 <div>
                   <strong>Compact mode</strong>
-                  <small>Denser layout — more data, less whitespace</small>
+                  <small>Denser layout: more data, less whitespace</small>
                 </div>
                 <button class="settings-toggle${state.compactMode ? " is-on" : ""}" data-pref-toggle="compactMode" type="button" aria-pressed="${Boolean(state.compactMode)}">
                   <span class="settings-toggle-knob"></span>

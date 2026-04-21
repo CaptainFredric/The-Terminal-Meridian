@@ -172,7 +172,7 @@ export function createQuoteRenderer(context) {
                   </div>
                 `,
               )
-              .join("") : `<div class="empty-inline" style="grid-column:1/-1">Statistics load after the first market refresh — try the <strong>ANALYZE</strong> button above for a deeper profile.</div>`}
+              .join("") : `<div class="empty-inline" style="grid-column:1/-1">Statistics load after the first market refresh. Try the <strong>ANALYZE</strong> button above for a deeper profile.</div>`}
           </div>
         </article>
 
@@ -273,7 +273,7 @@ export function createQuoteRenderer(context) {
             <h4 style="color:var(--warning)">📋 Analyst Ratings &amp; Financial Statements</h4>
             <button class="pro-lock-badge" type="button" data-open-pricing style="font-size:0.75rem;padding:3px 10px">🔒 Unlock with Pro</button>
           </header>
-          <p style="color:var(--muted);font-size:0.78rem;margin:0">Run ANALYZE to load deep-dive data, or upgrade to Pro for analyst targets, revenue, margins, ROE, and full financials — always visible without a manual fetch.</p>
+          <p style="color:var(--muted);font-size:0.78rem;margin:0">Run ANALYZE to load deep-dive data, or upgrade to Pro for analyst targets, revenue, margins, ROE, and full financials. Always visible without a manual fetch.</p>
         </article>
         ` : ""}
 
@@ -327,7 +327,7 @@ export function createQuoteRenderer(context) {
           ></textarea>
           <div class="ticker-notes-meta">
             <small data-ticker-notes-count="${symbol}">0 / 2000 chars</small>
-            <small class="muted-cell">Stored locally — never leaves your device</small>
+            <small class="muted-cell">Stored locally. Never leaves your device</small>
           </div>
         </article>
 

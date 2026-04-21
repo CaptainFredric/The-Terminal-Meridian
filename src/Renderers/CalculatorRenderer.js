@@ -57,35 +57,35 @@ export function createCalculatorRenderer(context) {
           <div class="calc-greeks-header">Greeks</div>
           <div class="calc-greeks-grid">
             <div class="calc-greek">
-              <span title="Call delta — sensitivity to spot price move">Δ Call</span>
+              <span title="Call delta: sensitivity to spot price move">Δ Call</span>
               <strong>${option.callDelta.toFixed(4)}</strong>
             </div>
             <div class="calc-greek">
-              <span title="Put delta — always negative">Δ Put</span>
+              <span title="Put delta: always negative">Δ Put</span>
               <strong class="negative">${option.putDelta.toFixed(4)}</strong>
             </div>
             <div class="calc-greek">
-              <span title="Gamma — rate of delta change per $1 spot move">Γ Gamma</span>
+              <span title="Gamma: rate of delta change per $1 spot move">Γ Gamma</span>
               <strong>${option.gamma.toFixed(6)}</strong>
             </div>
             <div class="calc-greek">
-              <span title="Vega — price change per 1% IV move">V Vega</span>
+              <span title="Vega: price change per 1% IV move">V Vega</span>
               <strong>${option.vega.toFixed(4)}</strong>
             </div>
             <div class="calc-greek">
-              <span title="Theta — daily time decay on a call">Θ Call/day</span>
+              <span title="Theta: daily time decay on a call">Θ Call/day</span>
               <strong class="negative">${option.callTheta.toFixed(4)}</strong>
             </div>
             <div class="calc-greek">
-              <span title="Theta — daily time decay on a put">Θ Put/day</span>
+              <span title="Theta: daily time decay on a put">Θ Put/day</span>
               <strong class="negative">${option.putTheta.toFixed(4)}</strong>
             </div>
             <div class="calc-greek">
-              <span title="Rho — price change per 1% rate move (call)">ρ Call</span>
+              <span title="Rho: price change per 1% rate move (call)">ρ Call</span>
               <strong>${option.callRho.toFixed(4)}</strong>
             </div>
             <div class="calc-greek">
-              <span title="Rho — price change per 1% rate move (put)">ρ Put</span>
+              <span title="Rho: price change per 1% rate move (put)">ρ Put</span>
               <strong class="negative">${option.putRho.toFixed(4)}</strong>
             </div>
           </div>

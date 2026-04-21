@@ -213,7 +213,7 @@ export function createPortfolioRenderer(context) {
         </article>
         ` : ""}
 
-        <!-- Today's Movers — attribution of today's P/L by position -->
+        <!-- Today's Movers: attribution of today's P/L by position -->
         ${dayChangeRows.length ? `
         <article class="card today-movers-card">
           <header class="card-head card-head-split">
@@ -263,7 +263,7 @@ export function createPortfolioRenderer(context) {
         </article>
         ` : ""}
 
-        <!-- Share performance card — only when there are positions -->
+        <!-- Share performance card: only when there are positions -->
         ${rows.length && totals.value > 0 ? `
         <article class="card port-share-card">
           <header class="card-head card-head-split">
@@ -283,11 +283,11 @@ export function createPortfolioRenderer(context) {
             </div>
             <div class="port-share-actions">
               <button class="btn btn-ghost btn-sm" type="button" data-share-portfolio="copy"
-                data-share-text="📊 My Meridian paper portfolio: ${formatPrice(totalValue, "USD")} · P/L ${totals.pnl >= 0 ? "+" : ""}${formatPrice(totals.pnl, "USD")} · Return ${formatSignedPct(totals.pnlPct)} — trade smarter with Meridian Terminal">
+                data-share-text="📊 My Meridian paper portfolio: ${formatPrice(totalValue, "USD")} · P/L ${totals.pnl >= 0 ? "+" : ""}${formatPrice(totals.pnl, "USD")} · Return ${formatSignedPct(totals.pnlPct)}. Trade smarter with Meridian Terminal">
                 📋 Copy text
               </button>
               <button class="btn btn-ghost btn-sm" type="button" data-share-portfolio="twitter"
-                data-share-text="📊 My Meridian paper portfolio: ${formatPrice(totalValue, "USD")} · P/L ${totals.pnl >= 0 ? "+" : ""}${formatPrice(totals.pnl, "USD")} · Return ${formatSignedPct(totals.pnlPct)} — trade smarter with Meridian Terminal %23trading %23stocks">
+                data-share-text="📊 My Meridian paper portfolio: ${formatPrice(totalValue, "USD")} · P/L ${totals.pnl >= 0 ? "+" : ""}${formatPrice(totals.pnl, "USD")} · Return ${formatSignedPct(totals.pnlPct)}. Trade smarter with Meridian Terminal %23trading %23stocks">
                 𝕏 Post on X
               </button>
             </div>

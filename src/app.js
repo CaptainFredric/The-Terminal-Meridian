@@ -986,7 +986,7 @@ function processCommand() {
     state.panelModules[state.activePanel] = "news";
     state.newsItems = commandCatalog.map((item) => ({
       source: "Command",
-      headline: `${item.cmd} — ${item.desc}`,
+      headline: `${item.cmd}: ${item.desc}`,
       time: currentTimeShort(),
       link: "#",
     }));
@@ -2540,7 +2540,7 @@ function processCommand() {
     state.panelModules[state.activePanel] = "news";
     state.newsItems = commandCatalog.map((item) => ({
       source: "Command",
-      headline: `${item.cmd} — ${item.desc}`,
+      headline: `${item.cmd}: ${item.desc}`,
       time: currentTimeShort(),
       link: "#",
     }));

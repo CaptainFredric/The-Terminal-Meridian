@@ -268,7 +268,7 @@ export function createScreenerRenderer(context) {
                     const clampedPct = Math.max(0, Math.min(100, rawPct));
                     const posLabel = clampedPct >= 80 ? "🔝" : clampedPct <= 20 ? "🔻" : "";
                     week52Cell = `
-                      <td style="text-align:center" class="screener-52wk-cell" title="52wk: $${low52.toFixed(0)} — $${high52.toFixed(0)} · ${clampedPct.toFixed(0)}% of range">
+                      <td style="text-align:center" class="screener-52wk-cell" title="52wk: $${low52.toFixed(0)} to $${high52.toFixed(0)} · ${clampedPct.toFixed(0)}% of range">
                         <div class="screener-52wk-wrap">
                           <span class="screener-52wk-lo">L</span>
                           <div class="screener-52wk-track">

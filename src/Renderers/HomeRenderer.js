@@ -22,7 +22,7 @@ function buildCommandSuggestions({ authEnabled, state, buildQuote, panel }) {
   }
 
   if (state.watchlist.length < 10) {
-    suggestions.push({ label: "Expand your watchlist", detail: "Track more symbols — try adding SPY or TSLA", command: "WATCH SPY", icon: "→" });
+    suggestions.push({ label: "Expand your watchlist", detail: "Track more symbols. Try adding SPY or TSLA", command: "WATCH SPY", icon: "→" });
   }
 
   suggestions.push({ label: "Open the heatmap", detail: "See every sector at a glance", command: "HEAT", icon: "→" });
@@ -297,8 +297,8 @@ export function createHomeRenderer(context) {
 
         <div class="upgrade-banner">
           <div class="upgrade-banner-text">
-            <h4>⚡ Go Pro — Unlock the Full Terminal</h4>
-            <p>Unlimited alerts &amp; rules, MACD/Bollinger/VWAP indicators, analyst ratings, financial statements, screener CSV export, webhook alerts, and 10s live refresh. <strong style="color:#fff">Starting at $13/mo with annual billing.</strong></p>
+            <h4>⚡ Go Pro: Unlock the Full Terminal</h4>
+            <p>Unlimited alerts &amp; rules, MACD/Bollinger/VWAP indicators, analyst ratings, financial statements, screener CSV export, webhook alerts, and 10s live refresh. <strong style="color:#fff">Starting at $5.99/mo with annual billing.</strong></p>
             <div class="upgrade-feature-pills">
               <span class="upgrade-pill">📊 Advanced indicators</span>
               <span class="upgrade-pill">🔔 Unlimited alerts</span>

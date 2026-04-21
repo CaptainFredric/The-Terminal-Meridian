@@ -90,7 +90,7 @@ export function createAIRenderer(context) {
           </header>
           <div class="tier-gate-card">
             <div class="tier-gate-icon">🤖</div>
-            <h3>AI Insights — Sign in to unlock</h3>
+            <h3>AI Insights: Sign in to unlock</h3>
             <p>Get analyst-style commentary on any ticker: price action analysis, volume signals, 52-week positioning, and key levels to watch. Powered by GPT and Claude.</p>
             <div class="tier-gate-preview">
               <div class="tier-gate-preview-line">
@@ -163,7 +163,7 @@ export function createAIRenderer(context) {
               different ticker.
             </p>
             <p class="ai-disclaimer">
-              ⚠ For information only — not investment advice. Meridian never recommends
+              ⚠ For information only. Not investment advice. Meridian never recommends
               buying or selling securities.
             </p>
           </div>
@@ -203,7 +203,7 @@ export function createAIRenderer(context) {
         </footer>
 
         <p class="ai-disclaimer">
-          ⚠ For information only — not investment advice.
+          ⚠ For information only. Not investment advice.
         </p>
       </section>
     `;

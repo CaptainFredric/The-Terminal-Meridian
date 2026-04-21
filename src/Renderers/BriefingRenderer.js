@@ -84,7 +84,7 @@ export function createBriefingRenderer(context) {
             <div class="brief-metric">
               <span>Volatility</span>
               <strong>${tabularValue(`${volatility.toFixed(2)}%`)}</strong>
-              <small>${volLabel} — avg absolute move</small>
+              <small>${volLabel} (avg absolute move)</small>
             </div>
             <div class="brief-metric">
               <span>News Tone</span>
@@ -160,7 +160,7 @@ export function createBriefingRenderer(context) {
               <button class="list-row" type="button" data-load-module="heatmap" data-target-panel="${panel}"><strong>🗺 Sector Heatmap</strong><small>Identify sector rotation and strength</small></button>
               <button class="list-row" type="button" data-open-pricing style="border-style:dashed;border-color:rgba(246,179,75,0.35)">
                 <strong style="color:var(--warning)">🔒 Webhook Alerts &amp; AI Commentary</strong>
-                <small>Get instant Slack/email pushes on rule triggers and AI market summaries — <span style="color:var(--warning);font-weight:600">Pro feature</span></small>
+                <small>Get instant Slack/email pushes on rule triggers and AI market summaries. <span style="color:var(--warning);font-weight:600">Pro feature</span></small>
               </button>
             </div>
           </article>

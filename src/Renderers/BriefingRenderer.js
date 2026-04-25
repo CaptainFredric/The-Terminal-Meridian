@@ -63,13 +63,13 @@ export function createBriefingRenderer(context) {
         <article class="card briefing-hero">
           <header class="card-head card-head-split">
             <h4>Meridian Briefing</h4>
-            <small>${currentTimeShort()} · ${state.health.ok ? "Live" : "Reconnecting"}</small>
+            <small>${currentTimeShort()} · ${state.health.ok ? "Live" : "Waking server"}</small>
           </header>
           <div class="briefing-grid">
             <div class="brief-metric">
               <span>Market Phase</span>
               <strong>${state.marketPhase}</strong>
-              <small>${state.health.ok ? "Feed connected" : "Feed reconnecting"}</small>
+              <small>${state.health.ok ? "Feed connected" : "Server waking up (free tier cold start, ~30s)"}</small>
             </div>
             <div class="brief-metric">
               <span>Regime</span>

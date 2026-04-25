@@ -1181,11 +1181,92 @@
 </footer>
 
 <script>
-  // Theme swatch interaction
+  /* ------------------------------------------------------------------
+   * Pre-warm the Render backend on landing page load.
+   * Render's free tier sleeps after 15min idle; cold-starts cost
+   * 30-60s. Firing this fetch while the user reads the marketing copy
+   * means the API is awake by the time they click "Open Terminal".
+   * ------------------------------------------------------------------ */
+  (function preWarmBackend() {
+    try {
+      fetch("https://the-terminal-meridian.onrender.com/api/health", {
+        mode: "no-cors",
+        cache: "no-store",
+        keepalive: true,
+      }).catch(() => {});
+    } catch (e) { /* network blocked, no harm */ }
+  })();
+
+  /* ------------------------------------------------------------------
+   * Cmd+K / Ctrl+K → jump straight to the terminal.
+   * Mirrors the in-app command palette shortcut so power users
+   * arriving from search engines or social can dive in instantly.
+   * ------------------------------------------------------------------ */
+  document.addEventListener("keydown", function (e) {
+    if ((e.metaKey || e.ctrlKey) && (e.key === "k" || e.key === "K")) {
+      e.preventDefault();
+      window.location.href = "index.html";
+    }
+  });
+
+  /* ------------------------------------------------------------------
+   * Theme swatch interaction.
+   * Clicking a swatch re-skins the live landing page using the same
+   * CSS variables as the real terminal app, so visitors see exactly
+   * how the chosen theme will look on their data.
+   * ------------------------------------------------------------------ */
+  const THEMES = {
+    "sw-dark":      { bg:"#0f1117", panel:"#161a23", surface:"#1d2230", border:"#262c3b", text:"#e6e8ef", muted:"#8a96b3", accent:"#2fcf84", danger:"#ff5f7f" },
+    "sw-bloomberg": { bg:"#000000", panel:"#0a0a0a", surface:"#1a1303", border:"#3d2f10", text:"#ffb84d", muted:"#a08050", accent:"#ff9c00", danger:"#ff3344" },
+    "sw-synthwave": { bg:"#150828", panel:"#1d0e35", surface:"#2a1452", border:"#4d2a8a", text:"#f0e8ff", muted:"#b09bd8", accent:"#ff66cc", danger:"#ff4477" },
+    "sw-emerald":   { bg:"#021410", panel:"#062018", surface:"#0a3025", border:"#155040", text:"#d8f5e8", muted:"#88b8a4", accent:"#d4af37", danger:"#ff6680" },
+    "sw-paper":     { bg:"#f8f6f0", panel:"#ffffff", surface:"#f0ebe0", border:"#d5cdb8", text:"#1a1a1a", muted:"#6b6356", accent:"#c43a3a", danger:"#c92024" },
+    "sw-midnight":  { bg:"#050d1a", panel:"#0a1628", surface:"#0f2040", border:"#1e3a68", text:"#cce0ff", muted:"#7a9cc4", accent:"#3b82f6", danger:"#f87171" },
+    "sw-crimson":   { bg:"#0f0208", panel:"#1a0510", surface:"#280a1c", border:"#4d1232", text:"#fce4ec", muted:"#c48aa0", accent:"#e53e6a", danger:"#ff6b6b" },
+    "sw-slate":     { bg:"#0c1018", panel:"#141d2b", surface:"#1e2a3d", border:"#2e4060", text:"#dce8f5", muted:"#7d98b8", accent:"#60a5fa", danger:"#f87171" },
+    "sw-amber":     { bg:"#100c00", panel:"#1c1600", surface:"#2c2200", border:"#503800", text:"#fef3c7", muted:"#c49d50", accent:"#f59e0b", danger:"#f87171" },
+  };
+
   function selectTheme(el) {
     document.querySelectorAll('.theme-swatch').forEach(s => s.classList.remove('active'));
     el.classList.add('active');
+
+    // Find which theme key by checking which sw-* class is present
+    const cls = Array.from(el.classList).find(c => c.startsWith("sw-") && THEMES[c]);
+    if (!cls) return;
+    const t = THEMES[cls];
+
+    const root = document.documentElement.style;
+    root.setProperty("--bg", t.bg);
+    root.setProperty("--panel", t.panel);
+    root.setProperty("--surface", t.surface);
+    root.setProperty("--border", t.border);
+    root.setProperty("--text", t.text);
+    root.setProperty("--muted", t.muted);
+    root.setProperty("--accent", t.accent);
+    root.setProperty("--danger", t.danger);
+    document.body.style.background = t.bg;
+    document.body.style.color = t.text;
   }
+
+  /* ------------------------------------------------------------------
+   * Make the terminal mockup clickable so it acts as a "live demo"
+   * entry point. Anyone who scrolls past it gets one more way in.
+   * ------------------------------------------------------------------ */
+  (function makeMockupClickable() {
+    const mock = document.querySelector(".terminal-mock");
+    if (!mock) return;
+    mock.style.cursor = "pointer";
+    mock.setAttribute("role", "link");
+    mock.setAttribute("tabindex", "0");
+    mock.setAttribute("aria-label", "Open the live Meridian terminal");
+    mock.title = "Open the live terminal";
+    const go = () => { window.location.href = "index.html"; };
+    mock.addEventListener("click", go);
+    mock.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(); }
+    });
+  })();
 </script>
 </body>
 </html>

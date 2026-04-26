@@ -2103,29 +2103,70 @@ async function checkHealth() {
  * looks like the app is broken. This banner says: "we're waking up,
  * it's expected, hang on."
  *
- * - First failed check: show the warming banner.
- * - Subsequent failed checks: leave it visible.
- * - First successful check after a fail: swap to "✓ Connected" green
- *   and CSS auto-fades it out over 1.8s.
+ * State machine:
+ *   1. First failed health check    → show "warming" copy + spinner
+ *   2. Failed >30s past first fail  → swap to "responding slowly,
+ *      showing demo data" so the user knows it's not just a cold start
+ *      and that what they see is seed data
+ *   3. First successful check       → green "✓ Connected" + fade out
+ *
+ * A close button lets the user dismiss the banner manually; the
+ * dismissal sticks for the rest of the session.
  */
+let _wakeFirstFailAt = null;
+let _wakeDismissed = false;
+
 function updateWakeBanner() {
   const banner = document.getElementById("wakeBanner");
-  if (!banner) return;
+  if (!banner || _wakeDismissed) return;
+
+  const text = banner.querySelector(".wake-text");
+
   if (!state.health.ok) {
+    if (_wakeFirstFailAt == null) _wakeFirstFailAt = Date.now();
+    const elapsed = Date.now() - _wakeFirstFailAt;
     banner.classList.add("is-shown");
     banner.classList.remove("is-resolved");
+
+    if (text) {
+      if (elapsed < 30_000) {
+        text.innerHTML =
+          "Waking the data server (free-tier cold start, ~30s). " +
+          "<strong>Live quotes will populate as soon as it responds.</strong>";
+      } else {
+        // Past the typical cold-start window, the failure is probably
+        // not "still booting" — surface that honestly.
+        banner.classList.add("is-extended");
+        text.innerHTML =
+          "Server is responding slowly today. " +
+          "<strong>Showing cached demo data — your watchlist still works.</strong>";
+      }
+    }
     return;
   }
+
   // Health is OK now. If we previously showed a banner, mark resolved
   // so it animates away. Otherwise just stay hidden.
   if (banner.classList.contains("is-shown") && !banner.classList.contains("is-resolved")) {
-    const text = banner.querySelector(".wake-text");
     if (text) text.innerHTML = "<strong>Connected.</strong> Live data is loading.";
+    banner.classList.remove("is-extended");
     banner.classList.add("is-resolved");
-    // Fully remove from layout after the CSS animation finishes
     setTimeout(() => banner.classList.remove("is-shown", "is-resolved"), 2600);
+    _wakeFirstFailAt = null;
   }
 }
+
+// Wire the dismiss button once on first paint
+document.addEventListener("DOMContentLoaded", () => {
+  const dismiss = document.getElementById("wakeBannerDismiss");
+  const banner = document.getElementById("wakeBanner");
+  if (dismiss && banner) {
+    dismiss.addEventListener("click", () => {
+      _wakeDismissed = true;
+      banner.classList.remove("is-shown");
+    });
+  }
+});
 
 function deriveMarketPhase() {
   const now = new Date();

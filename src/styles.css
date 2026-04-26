@@ -3272,6 +3272,16 @@ html {
   position: relative;
 }
 .wake-banner.is-shown { display: flex; }
+.wake-banner.is-extended {
+  background: linear-gradient(180deg, rgba(156,185,255,0.14), rgba(156,185,255,0.06));
+  border-bottom-color: rgba(156,185,255,0.28);
+  color: #b9cdfd;
+}
+.wake-banner.is-extended .wake-text strong { color: #fff; }
+.wake-banner.is-extended .wake-spinner {
+  border-color: rgba(156,185,255,0.3);
+  border-top-color: #b9cdfd;
+}
 .wake-banner.is-resolved {
   background: linear-gradient(180deg, rgba(47,207,132,0.16), rgba(47,207,132,0.08));
   border-bottom-color: rgba(47,207,132,0.28);
@@ -3313,6 +3323,21 @@ html {
   from { opacity: 1; max-height: 60px; }
   to   { opacity: 0; max-height: 0; padding-top: 0; padding-bottom: 0; border-bottom-width: 0; }
 }
+.wake-dismiss {
+  background: none;
+  border: none;
+  color: inherit;
+  opacity: 0.5;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 4px 8px;
+  margin-left: 8px;
+  border-radius: 4px;
+  transition: opacity 160ms, background 160ms;
+}
+.wake-dismiss:hover { opacity: 1; background: rgba(255,255,255,0.08); }
+
 @media (max-width: 720px) {
   .wake-banner { font-size: 12px; padding: 8px 14px; }
   .wake-banner .wake-text strong { display: block; }

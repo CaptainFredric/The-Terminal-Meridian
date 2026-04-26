@@ -2125,6 +2125,15 @@ function updateWakeBanner() {
   if (!state.health.ok) {
     if (_wakeFirstFailAt == null) _wakeFirstFailAt = Date.now();
     const elapsed = Date.now() - _wakeFirstFailAt;
+
+    // Auto-dismiss after the user has had time to read the extended-state
+    // message. Continuing to camp the banner just for "still down" adds noise.
+    if (elapsed >= 45_000) {
+      _wakeDismissed = true;
+      banner.classList.remove("is-shown", "is-extended", "is-resolved");
+      return;
+    }
+
     banner.classList.add("is-shown");
     banner.classList.remove("is-resolved");
 
@@ -2134,12 +2143,10 @@ function updateWakeBanner() {
           "Waking the data server (free-tier cold start, ~30s). " +
           "<strong>Live quotes will populate as soon as it responds.</strong>";
       } else {
-        // Past the typical cold-start window, the failure is probably
-        // not "still booting" — surface that honestly.
         banner.classList.add("is-extended");
         text.innerHTML =
-          "Server is responding slowly today. " +
-          "<strong>Showing cached demo data — your watchlist still works.</strong>";
+          "Backend is taking longer than usual. " +
+          "<strong>Showing cached demo data. Your watchlist still works.</strong>";
       }
     }
     return;
@@ -2156,17 +2163,25 @@ function updateWakeBanner() {
   }
 }
 
-// Wire the dismiss button once on first paint
-document.addEventListener("DOMContentLoaded", () => {
+// Wire the dismiss button. Module scripts are deferred, so DOMContentLoaded
+// may have already fired by the time we get here — bind directly if the DOM
+// is ready, otherwise wait for it.
+function wireWakeBannerDismiss() {
   const dismiss = document.getElementById("wakeBannerDismiss");
   const banner = document.getElementById("wakeBanner");
-  if (dismiss && banner) {
-    dismiss.addEventListener("click", () => {
-      _wakeDismissed = true;
-      banner.classList.remove("is-shown");
-    });
-  }
-});
+  if (!dismiss || !banner) return;
+  if (dismiss.dataset.wired === "1") return;
+  dismiss.dataset.wired = "1";
+  dismiss.addEventListener("click", () => {
+    _wakeDismissed = true;
+    banner.classList.remove("is-shown", "is-extended", "is-resolved");
+  });
+}
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", wireWakeBannerDismiss, { once: true });
+} else {
+  wireWakeBannerDismiss();
+}
 
 function deriveMarketPhase() {
   const now = new Date();
@@ -2595,15 +2610,21 @@ function renderRails() {
   if (el.alertRail) {
     el.alertRail.innerHTML = state.alerts
       .map(
-        (alert) => `
-        <div class="alert-row ${alert.status === "triggered" ? "is-triggered" : ""}">
-          <strong>${alert.symbol}</strong>
-          <span>${alert.operator} ${Number(alert.threshold).toLocaleString()}</span>
-          <small>${alert.status}</small>
+        (alert) => {
+          const key = `${alert.symbol}:${alert.operator}:${alert.threshold}`;
+          return `
+        <div class="alert-row ${alert.status === "triggered" ? "is-triggered" : ""}" data-alert-key="${key}">
+          <div class="alert-row-main">
+            <strong>${alert.symbol}</strong>
+            <span data-alert-edit="${key}" tabindex="0" role="button" title="Click to edit threshold">${alert.operator} <em>${Number(alert.threshold).toLocaleString()}</em></span>
+            <small>${alert.status}</small>
+          </div>
+          <button class="alert-row-x" type="button" data-remove-alert="${key}" title="Delete alert" aria-label="Delete alert for ${alert.symbol}">✕</button>
         </div>
-      `,
+      `;
+        },
       )
-      .join("");
+      .join("") || `<div class="empty-inline" style="margin:8px 4px;color:var(--muted);font-size:0.78rem">No alerts. Use <code>ALERT AAPL &gt;= 200</code> in the command bar.</div>`;
   }
 
   // Usage counters + tier-limit nudge cards
@@ -2744,6 +2765,31 @@ async function renderPanel(panel) {
       : "";
     title.textContent = `${moduleTitles[moduleName] || moduleName}${symbolLabel}`;
   } catch {}
+
+  // For news panels: skip the full DOM rebuild when none of the news-relevant
+  // inputs have changed. Without this, every 5s quote tick triggers
+  // scheduleUiRefresh → renderAllPanels → news innerHTML wipe, which makes
+  // the news area visibly blink and resets the user's scroll position.
+  if (moduleName === "news") {
+    const items = state.newsItems || [];
+    const fp = [
+      items.length,
+      items[0]?.headline || "",
+      items[0]?.time || "",
+      state.newsFilter || "",
+      state.newsSourceFilter || "",
+      state.fetchErrors?.has("news") ? "err" : "ok",
+    ].join("|");
+    const prev = panelNode.dataset.newsFingerprint;
+    const wasNews = panelNode.dataset.moduleKey === "NEWS";
+    if (wasNews && prev === fp && content.firstElementChild) {
+      // Same data + same filters + content already mounted: nothing to do.
+      return;
+    }
+    panelNode.dataset.newsFingerprint = fp;
+  } else if (panelNode.dataset.newsFingerprint) {
+    delete panelNode.dataset.newsFingerprint;
+  }
 
   // For chart panels: if chart is already mounted for this symbol+range, update data in-place
   // without touching innerHTML (avoids destroying and re-creating the canvas on every tick)
@@ -3209,7 +3255,37 @@ function handleDocumentClick(event) {
     if (state.alerts.length !== before) {
       queueWorkspaceSave();
       showToast("Alert deleted.", "neutral");
+      renderRails();
       renderAllPanels();
+    }
+    return;
+  }
+
+  // Inline-edit an alert threshold in the sidebar rail.
+  const editAlertEl = event.target.closest("[data-alert-edit]");
+  if (editAlertEl && !editAlertEl.classList.contains("is-editing")) {
+    const [sym, op, thresh] = editAlertEl.dataset.alertEdit.split(":");
+    editAlertEl.classList.add("is-editing");
+    const next = window.prompt(`New threshold for ${sym} (${op}):`, thresh);
+    editAlertEl.classList.remove("is-editing");
+    if (next != null) {
+      const num = Number(String(next).replace(/[, ]/g, ""));
+      if (Number.isFinite(num) && num > 0) {
+        const idx = state.alerts.findIndex(
+          (a) => a.symbol === sym && a.operator === op && String(a.threshold) === thresh,
+        );
+        if (idx >= 0) {
+          state.alerts = state.alerts.map((a, i) =>
+            i === idx ? { ...a, threshold: num, status: "watching" } : a,
+          );
+          queueWorkspaceSave();
+          showToast(`${sym} threshold updated to ${num.toLocaleString()}.`, "success");
+          renderRails();
+          renderAllPanels();
+        }
+      } else if (next.trim() !== "") {
+        showToast("Threshold must be a positive number.", "error");
+      }
     }
     return;
   }
@@ -3601,7 +3677,7 @@ function ensureShortcutsOverlay() {
           <h4>💬 Core Commands</h4>
           <div class="shortcut-row"><code>AAPL Q</code><span>Open quote for AAPL</span></div>
           <div class="shortcut-row"><code>AAPL CHART</code><span>Open chart for AAPL</span></div>
-          <div class="shortcut-row"><code>CHART SPY 2Y</code><span>Chart with inline range (1M–5Y / ALL)</span></div>
+          <div class="shortcut-row"><code>CHART SPY 2Y</code><span>Chart with inline range (1M to 5Y / ALL)</span></div>
           <div class="shortcut-row"><code>WATCH TSLA</code><span>Add to watchlist</span></div>
           <div class="shortcut-row"><code>ALERT NVDA &gt;= 950</code><span>Price alert (≥ or ≤)</span></div>
           <div class="shortcut-row"><code>ANALYZE MSFT</code><span>Deep research view</span></div>
@@ -3621,7 +3697,7 @@ function ensureShortcutsOverlay() {
           <div class="shortcut-row"><code>CLEARRULES</code><span>Remove all active rules</span></div>
           <div class="shortcut-row"><code>IF SPY &gt; 520 THEN Breakout</code><span>Create a live rule</span></div>
           <div class="shortcut-row"><code>IF VIX &gt; 20 THEN Hedge</code><span>Volatility rule</span></div>
-          <div class="shortcut-row"><code>RANGE 2Y</code><span>Set chart range (5D / 1M–1Y / 2Y / 5Y / ALL)</span></div>
+          <div class="shortcut-row"><code>RANGE 2Y</code><span>Set chart range (5D / 1M to 1Y / 2Y / 5Y / ALL)</span></div>
           <div class="shortcut-row"><code>SAVE</code><span>Save workspace now</span></div>
           <div class="shortcut-row"><code>REFRESH</code><span>Fetch latest data</span></div>
         </div>

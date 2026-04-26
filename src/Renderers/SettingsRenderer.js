@@ -128,8 +128,8 @@ export function createSettingsRenderer(context) {
     // ── Keyboard shortcuts ───────────────────────────────────────────────────
     const shortcuts = [
       ["T", "Cycle themes"],
-      ["F1–F4", "Jump to panel module"],
-      ["Alt + 1–4", "Focus / unfocus panel"],
+      ["F1 to F4", "Jump to panel module"],
+      ["Alt + 1 to 4", "Focus / unfocus panel"],
       ["Enter", "Load ticker in active panel"],
       ["?", "Show keyboard shortcuts"],
       ["Cmd/Ctrl + K", "Open command palette"],

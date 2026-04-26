@@ -6,6 +6,12 @@
       "runtimeExecutable": "/usr/local/bin/python3",
       "runtimeArgs": ["backend/app.py"],
       "port": 4173
+    },
+    {
+      "name": "static",
+      "runtimeExecutable": "/usr/local/bin/python3",
+      "runtimeArgs": ["-m", "http.server", "5173"],
+      "port": 5173
     }
   ]
 }

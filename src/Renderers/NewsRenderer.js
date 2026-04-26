@@ -212,9 +212,9 @@ export function createNewsRenderer(context) {
           ` : "";
         })() : ""}
 
-        <article class="card">
+        <article class="card news-list-card">
           ${displayItems.length
-            ? displayItems
+            ? `<div class="news-list-grid">${displayItems
                 .slice(0, 30)
                 .map((item) => {
                   const relatedSymbol = extractHeadlineSymbol(item.headline);
@@ -233,7 +233,7 @@ export function createNewsRenderer(context) {
                     </article>
                   `;
                 })
-                .join("")
+                .join("")}</div>`
             : `<div class="empty-inline">${
                 items.length
                   ? `<p>No headlines from <strong>${activeSource}</strong>. Try "All" sources.</p>`

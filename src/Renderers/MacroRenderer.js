@@ -186,7 +186,7 @@ export function createMacroRenderer(context) {
             <small class="${inverted ? "negative" : ""}">
               ${isLive ? "Live · " : "Seed data · "}
               ${inverted ? "⚠ Inverted" : "Normal"}
-              ${longShortSpread !== null ? ` · 1M–30Y: ${longShortSpread >= 0 ? "+" : ""}${longShortSpread.toFixed(2)}%` : ""}
+              ${longShortSpread !== null ? ` · 1M to 30Y: ${longShortSpread >= 0 ? "+" : ""}${longShortSpread.toFixed(2)}%` : ""}
             </small>
           </header>
           <div class="yield-curve-wrap">

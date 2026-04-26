@@ -286,37 +286,35 @@
       </form>
 
       <form id="signupForm" data-auth-panel="signup" class="auth-form hidden">
-        <div class="auth-grid">
-          <label>
-            First name
-            <input name="firstName" type="text" autocomplete="given-name" required />
-          </label>
-          <label>
-            Last name
-            <input name="lastName" type="text" autocomplete="family-name" required />
-          </label>
-        </div>
+        <!--
+          Simplified signup: 4 visible fields instead of 8.
+          - "Display name" splits client-side into firstName + lastName.
+          - Role defaults to "trader" (hidden) — change in Settings later.
+          - Confirm-password removed; the show/hide toggle below covers
+            mistype prevention without doubling the field count.
+        -->
+        <label>
+          Display name
+          <input id="signupDisplayName" name="displayName" type="text" autocomplete="name" placeholder="e.g. Alex Rivera" required />
+        </label>
         <label>
           Email
-          <input id="signupEmail" name="email" type="email" autocomplete="email" required />
+          <input id="signupEmail" name="email" type="email" autocomplete="email" placeholder="you@email.com" required />
         </label>
         <label>
           Username
-          <input id="signupUsername" name="username" type="text" autocomplete="username" required />
+          <input id="signupUsername" name="username" type="text" autocomplete="username" placeholder="alexr" required />
         </label>
         <p class="auth-hint error-message-container active" id="signupAvailability">Pick a unique email and username.</p>
         <label>
-          I am a…
-          <select id="signupRole" name="role"></select>
-        </label>
-        <label>
           Password <small style="color:var(--muted);font-weight:400;">(min. 8 characters)</small>
-          <input name="password" type="password" minlength="8" autocomplete="new-password" required />
+          <div class="password-field" style="position:relative; display:flex;">
+            <input id="signupPassword" name="password" type="password" minlength="8" autocomplete="new-password" required style="flex:1; padding-right:60px;" />
+            <button type="button" id="signupPasswordToggle" aria-label="Show password" style="position:absolute; right:0; top:0; bottom:0; padding:0 12px; background:none; border:none; color:var(--muted); cursor:pointer; font-size:11px; font-weight:600; letter-spacing:0.04em;">SHOW</button>
+          </div>
         </label>
-        <label>
-          Confirm password
-          <input name="confirmPassword" type="password" minlength="8" autocomplete="new-password" required />
-        </label>
+        <!-- Hidden defaults the backend still expects -->
+        <input type="hidden" name="role" value="trader" />
         <button class="btn btn-primary" id="signupBtn" type="submit">Create account</button>
         <button class="btn btn-ghost" id="continueLocalSignupBtn" type="button">Continue without account</button>
       </form>

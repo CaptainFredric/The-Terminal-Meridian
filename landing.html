@@ -134,20 +134,99 @@
     }
     .btn-ghost:hover { background: rgba(255,255,255,0.09); color: var(--text); }
 
+    .btn-block {
+      width: 100%;
+      justify-content: center;
+      padding: 12px 20px;
+    }
     .btn-primary {
       background: var(--accent);
       color: #051a0e;
+      transition: background 160ms, transform 120ms, box-shadow 180ms;
       font-weight: 600;
       box-shadow: 0 2px 12px rgba(47,207,132,0.28);
     }
-    .btn-primary:hover { opacity: 0.9; box-shadow: 0 2px 18px rgba(47,207,132,0.36); }
+    .btn-primary:hover {
+      background: #3ee08f;
+      box-shadow: 0 6px 22px rgba(47,207,132,0.42);
+      transform: translateY(-1px);
+    }
+    .btn-primary:active { transform: translateY(0); box-shadow: 0 2px 12px rgba(47,207,132,0.28); }
 
     .btn-outline {
       background: transparent;
       color: var(--text);
       border: 1px solid rgba(255,255,255,0.18);
+      transition: background 160ms, border-color 160ms;
     }
     .btn-outline:hover { background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.3); }
+
+    /* ── EMAIL SIGNUP CARD ────────────────────────────────────── */
+    .signup-wrap {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 64px 28px 96px;
+      text-align: center;
+    }
+    .signup-card {
+      background: linear-gradient(160deg, #162035 0%, #111a2e 100%);
+      border: 1px solid var(--border-accent);
+      border-radius: var(--radius-lg);
+      padding: 48px 36px;
+      box-shadow: 0 24px 64px rgba(0,0,0,0.4), 0 0 0 1px rgba(47,207,132,0.10);
+    }
+    .signup-card .section-eyebrow { color: var(--accent); margin-bottom: 14px; }
+    .signup-card .section-title { font-size: clamp(24px, 3.5vw, 34px); margin-bottom: 12px; }
+    .signup-card .section-sub { margin: 0 auto 32px; font-size: 15px; }
+
+    .signup-form {
+      display: flex;
+      gap: 10px;
+      max-width: 480px;
+      margin: 0 auto 16px;
+    }
+    .signup-form input[type="email"] {
+      flex: 1;
+      padding: 14px 16px;
+      font-size: 15px;
+      font-family: var(--font-sans);
+      background: rgba(15,17,23,0.7);
+      color: var(--text);
+      border: 1px solid var(--border-card);
+      border-radius: 10px;
+      outline: none;
+      transition: border-color 160ms, box-shadow 160ms;
+    }
+    .signup-form input[type="email"]::placeholder { color: var(--text-faint); }
+    .signup-form input[type="email"]:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(47,207,132,0.18);
+    }
+    .signup-form .btn { white-space: nowrap; }
+
+    .signup-note { font-size: 12px; color: var(--text-faint); margin-top: 4px; }
+
+    .signup-success {
+      display: none;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: 16px 22px;
+      background: rgba(47,207,132,0.10);
+      border: 1px solid var(--border-accent);
+      border-radius: 10px;
+      color: var(--accent);
+      font-weight: 500;
+      max-width: 480px;
+      margin: 0 auto;
+    }
+    .signup-success.is-shown { display: inline-flex; }
+
+    @media (max-width: 540px) {
+      .signup-form { flex-direction: column; }
+      .signup-form .btn { width: 100%; }
+      .signup-card { padding: 36px 22px; }
+    }
 
     /* ── TICKER ───────────────────────────────────────────────── */
     .ticker-wrap {
@@ -1099,7 +1178,7 @@
         <li class="muted"><span class="dash">–</span> Portfolio tracker</li>
       </ul>
       <div class="price-cta">
-        <a href="index.html" class="btn btn-outline" style="width:100%; justify-content:center; padding:12px;">Open free →</a>
+        <a href="index.html" class="btn btn-outline btn-block">Open free →</a>
       </div>
     </div>
 
@@ -1120,7 +1199,7 @@
         <li><span class="check">✓</span> Full news + sentiment</li>
       </ul>
       <div class="price-cta">
-        <a href="index.html" class="btn btn-primary" style="width:100%; justify-content:center; padding:12px;">Start Pro →</a>
+        <a href="#get-early-access" class="btn btn-primary btn-block">Get Pro early access →</a>
       </div>
     </div>
 
@@ -1141,8 +1220,57 @@
         <li><span class="check">✓</span> White-label option</li>
       </ul>
       <div class="price-cta">
-        <a href="index.html" class="btn btn-outline" style="width:100%; justify-content:center; padding:12px;">Start Pro+ →</a>
+        <a href="#get-early-access" class="btn btn-outline btn-block">Get Pro+ early access →</a>
       </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── EMAIL SIGNUP / EARLY ACCESS ────────────────────────────────── -->
+<section class="signup-wrap" id="get-early-access">
+  <div class="signup-card">
+    <div class="section-eyebrow">Early Access</div>
+    <h2 class="section-title">Be first in line for Pro.</h2>
+    <p class="section-sub">
+      Drop your email and we'll send you a launch-week trial code the moment Pro
+      goes live. One email when it's ready. No spam, ever.
+    </p>
+
+    <!--
+      Form posts to Formsubmit.co which relays to captainarmoreddude@gmail.com.
+      The first submission triggers a one-time confirmation email; after you
+      click that link, every subsequent submission lands directly in the inbox.
+      No backend required, no signup on Formsubmit, no rate-limit gotchas.
+    -->
+    <form
+      class="signup-form"
+      id="emailSignupForm"
+      action="https://formsubmit.co/captainarmoreddude@gmail.com"
+      method="POST"
+    >
+      <input
+        type="email"
+        name="email"
+        placeholder="you@email.com"
+        required
+        autocomplete="email"
+        aria-label="Email address"
+      />
+      <button type="submit" class="btn btn-primary">Get early access →</button>
+
+      <!-- Formsubmit.co control fields -->
+      <input type="hidden" name="_subject" value="🚀 New Meridian early-access signup">
+      <input type="hidden" name="_template" value="table">
+      <input type="hidden" name="_captcha" value="false">
+      <input type="hidden" name="_next" value="https://captainfredric.github.io/The-Terminal-Meridian/landing.html?signup=ok#get-early-access">
+      <!-- honeypot for bots -->
+      <input type="text" name="_honey" tabindex="-1" autocomplete="off" style="position:absolute;left:-9999px;">
+    </form>
+
+    <p class="signup-note">No credit card. No spam. Unsubscribe with one click.</p>
+
+    <div class="signup-success" id="signupSuccess" role="status" aria-live="polite">
+      ✓ You're on the list. Check your inbox for confirmation.
     </div>
   </div>
 </section>
@@ -1171,8 +1299,9 @@
   </div>
 
   <div class="footer-links">
-    <a href="#">Privacy</a>
-    <a href="#">Terms</a>
+    <a href="#features">Features</a>
+    <a href="#pricing">Pricing</a>
+    <a href="#get-early-access">Early access</a>
     <a href="https://github.com/captainfredric/The-Terminal-Meridian" target="_blank" rel="noopener">GitHub</a>
     <a href="index.html">Open Terminal ↗</a>
   </div>
@@ -1248,6 +1377,57 @@
     document.body.style.background = t.bg;
     document.body.style.color = t.text;
   }
+
+  /* ------------------------------------------------------------------
+   * Email-signup success banner.
+   * Formsubmit.co bounces back to ?signup=ok after a successful submit
+   * (set via the _next hidden input). We surface a green confirmation
+   * card right where the form lived so the user knows it worked.
+   * Also persists the email locally so duplicate signups don't repeat
+   * the round-trip.
+   * ------------------------------------------------------------------ */
+  (function signupSuccessBanner() {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("signup") !== "ok") return;
+    const success = document.getElementById("signupSuccess");
+    const form = document.getElementById("emailSignupForm");
+    if (success) success.classList.add("is-shown");
+    if (form) form.style.display = "none";
+    try { localStorage.setItem("meridian.earlyAccess", "subscribed"); } catch {}
+    // Strip ?signup=ok from URL so a refresh doesn't re-show the banner forever
+    if (window.history?.replaceState) {
+      const clean = window.location.pathname + window.location.hash;
+      window.history.replaceState({}, document.title, clean);
+    }
+  })();
+
+  /* ------------------------------------------------------------------
+   * Soft client-side validation + analytics-friendly fallback.
+   * If the email field is empty, prevent submit and focus it. If the
+   * user has already subscribed in this browser, show the success card
+   * instead of re-submitting.
+   * ------------------------------------------------------------------ */
+  (function emailFormBehavior() {
+    const form = document.getElementById("emailSignupForm");
+    if (!form) return;
+
+    try {
+      if (localStorage.getItem("meridian.earlyAccess") === "subscribed") {
+        const success = document.getElementById("signupSuccess");
+        if (success) success.classList.add("is-shown");
+        form.style.display = "none";
+        return;
+      }
+    } catch {}
+
+    form.addEventListener("submit", (e) => {
+      const input = form.querySelector('input[type="email"]');
+      const value = input?.value?.trim();
+      if (!value) { e.preventDefault(); input?.focus(); return; }
+      const btn = form.querySelector('button[type="submit"]');
+      if (btn) { btn.textContent = "Sending..."; btn.disabled = true; }
+    });
+  })();
 
   /* ------------------------------------------------------------------
    * Make the terminal mockup clickable so it acts as a "live demo"

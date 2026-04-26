@@ -157,26 +157,33 @@ function bindAuthEvents() {
     event.preventDefault();
     const form = new FormData(elements.signupForm);
     const password = String(form.get("password") ?? "");
-    const confirmPassword = String(form.get("confirmPassword") ?? "");
 
     if (password.length < 8) {
       showAuthMessage("Password must be at least 8 characters.", "error");
       return;
     }
 
-    if (password !== confirmPassword) {
-      showAuthMessage("Passwords do not match.", "error");
+    // Split "Display name" into first/last on the first space.
+    // Backend still requires firstName + lastName but the user only
+    // had to type one field, which is the actual UX win.
+    const displayName = String(form.get("displayName") ?? "").trim();
+    const firstSpace = displayName.indexOf(" ");
+    const firstName = firstSpace >= 0 ? displayName.slice(0, firstSpace) : displayName;
+    const lastName  = firstSpace >= 0 ? displayName.slice(firstSpace + 1).trim() : "";
+
+    if (!firstName) {
+      showAuthMessage("Please enter your name.", "error");
       return;
     }
 
     try {
       const user = await createAccount({
-        firstName: String(form.get("firstName") ?? ""),
-        lastName: String(form.get("lastName") ?? ""),
+        firstName,
+        lastName: lastName || firstName, // backend requires lastName, fall back to firstName
         email: String(form.get("email") ?? ""),
         username: String(form.get("username") ?? ""),
         password,
-        role: String(form.get("role") ?? "Other"),
+        role: String(form.get("role") ?? "trader"),
       });
       showAuthMessage("Account created. Loading workspace...", "success");
       completeLogin(user);
@@ -184,6 +191,18 @@ function bindAuthEvents() {
       showAuthMessage(error.message, "error");
     }
   });
+
+  // Show/hide password toggle on the simplified signup form
+  const pwdToggle = document.getElementById("signupPasswordToggle");
+  const pwdInput  = document.getElementById("signupPassword");
+  if (pwdToggle && pwdInput) {
+    pwdToggle.addEventListener("click", () => {
+      const showing = pwdInput.type === "text";
+      pwdInput.type = showing ? "password" : "text";
+      pwdToggle.textContent = showing ? "SHOW" : "HIDE";
+      pwdToggle.setAttribute("aria-label", showing ? "Show password" : "Hide password");
+    });
+  }
 }
 
 function bindWorkspaceEvents() {
@@ -1708,26 +1727,33 @@ function bindAuthEvents() {
     event.preventDefault();
     const form = new FormData(elements.signupForm);
     const password = String(form.get("password") ?? "");
-    const confirmPassword = String(form.get("confirmPassword") ?? "");
 
     if (password.length < 8) {
       showAuthMessage("Password must be at least 8 characters.", "error");
       return;
     }
 
-    if (password !== confirmPassword) {
-      showAuthMessage("Passwords do not match.", "error");
+    // Split "Display name" into first/last on the first space.
+    // Backend still requires firstName + lastName but the user only
+    // had to type one field, which is the actual UX win.
+    const displayName = String(form.get("displayName") ?? "").trim();
+    const firstSpace = displayName.indexOf(" ");
+    const firstName = firstSpace >= 0 ? displayName.slice(0, firstSpace) : displayName;
+    const lastName  = firstSpace >= 0 ? displayName.slice(firstSpace + 1).trim() : "";
+
+    if (!firstName) {
+      showAuthMessage("Please enter your name.", "error");
       return;
     }
 
     try {
       const user = await createAccount({
-        firstName: String(form.get("firstName") ?? ""),
-        lastName: String(form.get("lastName") ?? ""),
+        firstName,
+        lastName: lastName || firstName, // backend requires lastName, fall back to firstName
         email: String(form.get("email") ?? ""),
         username: String(form.get("username") ?? ""),
         password,
-        role: String(form.get("role") ?? "Other"),
+        role: String(form.get("role") ?? "trader"),
       });
       showAuthMessage("Account created. Loading workspace...", "success");
       completeLogin(user);
@@ -1735,6 +1761,18 @@ function bindAuthEvents() {
       showAuthMessage(error.message, "error");
     }
   });
+
+  // Show/hide password toggle on the simplified signup form
+  const pwdToggle = document.getElementById("signupPasswordToggle");
+  const pwdInput  = document.getElementById("signupPassword");
+  if (pwdToggle && pwdInput) {
+    pwdToggle.addEventListener("click", () => {
+      const showing = pwdInput.type === "text";
+      pwdInput.type = showing ? "password" : "text";
+      pwdToggle.textContent = showing ? "SHOW" : "HIDE";
+      pwdToggle.setAttribute("aria-label", showing ? "Show password" : "Hide password");
+    });
+  }
 }
 
 function bindWorkspaceEvents() {

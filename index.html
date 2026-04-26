@@ -67,6 +67,17 @@
   <link rel="stylesheet" href="./src/styles.css" />
 </head>
 <body>
+  <!-- Wake-server banner: shown only when the first health check fails.
+       Render's free tier sleeps after 15min idle and takes ~30s to warm
+       up. This makes that wait state visible and reassuring instead of
+       silent. AppBootstrap.js toggles the .is-shown class. -->
+  <div class="wake-banner" id="wakeBanner" role="status" aria-live="polite">
+    <span class="wake-spinner" aria-hidden="true"></span>
+    <span class="wake-text">
+      Waking the data server (free-tier cold start, ~30s).
+      <strong>Live quotes will populate as soon as it responds.</strong>
+    </span>
+  </div>
   <main class="terminal-app" id="terminalApp">
     <header class="topbar">
       <div class="brand-block" style="flex-direction: row; align-items: center; gap: 14px;">

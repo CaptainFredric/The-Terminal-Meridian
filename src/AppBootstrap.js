@@ -2089,6 +2089,42 @@ async function checkHealth() {
     el.serverStatus.classList.toggle("chip-server-offline", !state.health.ok);
   }
   if (!state.user) setNetworkStatus(state.health.ok ? "Guest · Live" : "Guest · Local");
+
+  // Wake-server cold-start banner. Show on first failed health check;
+  // animate to a "✓ Connected" state and fade out when it succeeds.
+  updateWakeBanner();
+}
+
+/**
+ * Manage the cold-start wake banner shown above the topbar.
+ *
+ * Render's free tier sleeps after 15min idle. The first user request
+ * each session takes ~30s to warm the dyno. Without feedback, that
+ * looks like the app is broken. This banner says: "we're waking up,
+ * it's expected, hang on."
+ *
+ * - First failed check: show the warming banner.
+ * - Subsequent failed checks: leave it visible.
+ * - First successful check after a fail: swap to "✓ Connected" green
+ *   and CSS auto-fades it out over 1.8s.
+ */
+function updateWakeBanner() {
+  const banner = document.getElementById("wakeBanner");
+  if (!banner) return;
+  if (!state.health.ok) {
+    banner.classList.add("is-shown");
+    banner.classList.remove("is-resolved");
+    return;
+  }
+  // Health is OK now. If we previously showed a banner, mark resolved
+  // so it animates away. Otherwise just stay hidden.
+  if (banner.classList.contains("is-shown") && !banner.classList.contains("is-resolved")) {
+    const text = banner.querySelector(".wake-text");
+    if (text) text.innerHTML = "<strong>Connected.</strong> Live data is loading.";
+    banner.classList.add("is-resolved");
+    // Fully remove from layout after the CSS animation finishes
+    setTimeout(() => banner.classList.remove("is-shown", "is-resolved"), 2600);
+  }
 }
 
 function deriveMarketPhase() {
@@ -4427,6 +4463,7 @@ function updateStatusBar() {
     el.serverStatus.textContent = state.health.ok ? "Live" : "Offline";
     el.serverStatus.classList.toggle("chip-server-offline", !state.health.ok);
   }
+  updateWakeBanner();
   updateMarketClock();
 }
 

@@ -746,6 +746,62 @@
 
     .price-cta { margin-top: auto; }
 
+    /* ── FAQ ──────────────────────────────────────────────────── */
+    .faq-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-top: 48px;
+      text-align: left;
+    }
+    .faq-item {
+      background: var(--bg-card);
+      border: 1px solid var(--border-card);
+      border-radius: var(--radius);
+      padding: 18px 22px;
+      transition: border-color 200ms, background 200ms;
+    }
+    .faq-item:hover { border-color: rgba(47,207,132,0.18); }
+    .faq-item[open] {
+      border-color: rgba(47,207,132,0.28);
+      background: linear-gradient(180deg, var(--bg-card), rgba(47,207,132,0.03));
+    }
+    .faq-item summary {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text);
+      cursor: pointer;
+      list-style: none;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      outline: none;
+    }
+    .faq-item summary::-webkit-details-marker { display: none; }
+    .faq-item summary::after {
+      content: '+';
+      font-family: var(--font-mono);
+      font-size: 18px;
+      color: var(--accent);
+      line-height: 1;
+      transition: transform 220ms;
+    }
+    .faq-item[open] summary::after { content: '−'; }
+    .faq-item p {
+      margin-top: 12px;
+      font-size: 14px;
+      color: var(--text-muted);
+      line-height: 1.65;
+    }
+    @media (max-width: 720px) { .faq-grid { grid-template-columns: 1fr; } }
+
+    /* ── SCROLL-SPY NAV ACTIVE STATE ───────────────────────────── */
+    .nav-links a.is-active {
+      color: var(--accent);
+      background: rgba(47,207,132,0.08);
+    }
+
     /* ── FOOTER ───────────────────────────────────────────────── */
     .footer {
       border-top: 1px solid var(--border);
@@ -848,10 +904,11 @@
   </a>
 
   <nav class="nav-links">
-    <a href="#features">Features</a>
-    <a href="#themes">Themes</a>
-    <a href="#pricing">Pricing</a>
-    <a href="index.html" >Terminal ↗</a>
+    <a href="#features" data-spy>Features</a>
+    <a href="#themes" data-spy>Themes</a>
+    <a href="#pricing" data-spy>Pricing</a>
+    <a href="#faq" data-spy>FAQ</a>
+    <a href="index.html">Terminal ↗</a>
   </nav>
 
   <div class="nav-actions">
@@ -1226,6 +1283,58 @@
   </div>
 </section>
 
+<!-- ── FAQ ────────────────────────────────────────────────────────── -->
+<section class="section section-center" id="faq">
+  <div class="section-eyebrow">FAQ</div>
+  <h2 class="section-title">Questions, answered.</h2>
+
+  <div class="faq-grid">
+    <details class="faq-item" open>
+      <summary>Is the data real-time?</summary>
+      <p>Pro users get streaming live quotes. Free users get 15-minute delayed quotes,
+        the same delay used by most consumer trackers. Both tiers refresh
+        automatically while the panel is open.</p>
+    </details>
+
+    <details class="faq-item">
+      <summary>Where does the data come from?</summary>
+      <p>Quotes flow through licensed market data providers. News headlines and AI
+        summaries use public news APIs plus GPT and Claude. The whole stack is open
+        source on GitHub if you want to inspect the wiring.</p>
+    </details>
+
+    <details class="faq-item">
+      <summary>Is my account data private?</summary>
+      <p>Watchlists, positions, alerts, and ticker notes stay scoped to your account.
+        Notes are stored locally first and only sync to your workspace when you're
+        signed in. Email is used for login and account-related notifications only,
+        never sold or shared.</p>
+    </details>
+
+    <details class="faq-item">
+      <summary>What happens if the server is down?</summary>
+      <p>The terminal degrades gracefully: the last quotes that loaded stay on screen,
+        charts render from cached data, and the UI surfaces a "Server waking up"
+        indicator. The free tier sleeps when idle, so the first visit each day
+        takes ~30 seconds to warm up.</p>
+    </details>
+
+    <details class="faq-item">
+      <summary>Can I trade through Meridian?</summary>
+      <p>No. Meridian is information-only. We never recommend buying or selling
+        securities, never route orders to a brokerage, and never auto-trade on
+        alerts. You can paper-trade in the Portfolio panel for practice.</p>
+    </details>
+
+    <details class="faq-item">
+      <summary>Why is it free?</summary>
+      <p>The free tier is genuinely free, forever. Pro and Pro+ subscriptions cover
+        the live data feeds and AI tokens. We don't sell your data, run ads, or
+        rent your watchlist to anyone.</p>
+    </details>
+  </div>
+</section>
+
 <!-- ── EMAIL SIGNUP / EARLY ACCESS ────────────────────────────────── -->
 <section class="signup-wrap" id="get-early-access">
   <div class="signup-card">
@@ -1427,6 +1536,37 @@
       const btn = form.querySelector('button[type="submit"]');
       if (btn) { btn.textContent = "Sending..."; btn.disabled = true; }
     });
+  })();
+
+  /* ------------------------------------------------------------------
+   * Scroll-spy: highlight the nav link whose section is centered in
+   * the viewport. Uses IntersectionObserver so it scales for free as
+   * we add more sections.
+   * ------------------------------------------------------------------ */
+  (function scrollSpyNav() {
+    const links = document.querySelectorAll('.nav-links a[data-spy]');
+    if (!links.length || !('IntersectionObserver' in window)) return;
+    const linkBySection = new Map();
+    links.forEach(a => {
+      const id = a.getAttribute('href')?.slice(1);
+      const section = id && document.getElementById(id);
+      if (section) linkBySection.set(section, a);
+    });
+    const io = new IntersectionObserver((entries) => {
+      // Pick the most-visible intersecting section
+      let best = null, bestRatio = 0;
+      entries.forEach(e => {
+        if (e.isIntersecting && e.intersectionRatio > bestRatio) {
+          best = e.target;
+          bestRatio = e.intersectionRatio;
+        }
+      });
+      if (!best) return;
+      links.forEach(a => a.classList.remove('is-active'));
+      const a = linkBySection.get(best);
+      if (a) a.classList.add('is-active');
+    }, { rootMargin: '-30% 0px -55% 0px', threshold: [0, 0.25, 0.5, 0.75, 1] });
+    linkBySection.forEach((_a, section) => io.observe(section));
   })();
 
   /* ------------------------------------------------------------------

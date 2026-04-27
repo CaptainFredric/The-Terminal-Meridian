@@ -8,7 +8,10 @@ sys.path.insert(0, str(ROOT))
 
 from backend.app import create_app  # noqa: E402
 
-INDEX = ROOT / "index.html"
+# The terminal application markup lives at terminal.html. The repo root
+# index.html is the marketing landing page.
+INDEX = ROOT / "terminal.html"
+LANDING = ROOT / "index.html"
 CLIENT = ROOT / "src" / "clientApp.js"
 APP_BOOTSTRAP = ROOT / "src" / "AppBootstrap.js"
 REGISTRY = ROOT / "src" / "Registry.js"
@@ -34,13 +37,17 @@ RENDERERS = [
     ROOT / "src" / "Renderers" / "ScreenerRenderer.js",
 ]
 
-required_files = [INDEX, CLIENT, APP_BOOTSTRAP, REGISTRY, API, BACKEND, DATA, STYLES, PACKAGE, REQUIREMENTS, *RENDERERS]
+required_files = [INDEX, LANDING, CLIENT, APP_BOOTSTRAP, REGISTRY, API, BACKEND, DATA, STYLES, PACKAGE, REQUIREMENTS, *RENDERERS]
 for file_path in required_files:
     assert file_path.exists(), f"Missing required file: {file_path}"
 
 html = INDEX.read_text(encoding="utf-8")
 for token in ["authModal", "loginForm", "signupForm", "terminalApp", "functionRow", "watchlistRail", "networkStatus", "clientApp.js"]:
-    assert token in html, f"Expected token missing from index.html: {token}"
+    assert token in html, f"Expected token missing from terminal.html: {token}"
+
+landing_html = LANDING.read_text(encoding="utf-8")
+for token in ["The terminal.", "compare", "pricing", "whats-new", "Get Pro early access"]:
+    assert token in landing_html, f"Expected token missing from index.html (landing): {token}"
 
 client_code = CLIENT.read_text(encoding="utf-8")
 for token in ["initializeApp", "DOMContentLoaded", "./AppBootstrap.js"]:

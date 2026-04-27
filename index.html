@@ -1,854 +1,2596 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#06080d" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <title>Meridian: Bloomberg-Style Market Terminal</title>
-  <meta
-    name="description"
-    content="Meridian is a free Bloomberg-style market terminal. Live stock quotes, interactive charts, options chains, AI-powered insights, portfolio tracking, and a built-in screener, all in one keyboard-driven workspace."
-  />
-  <meta name="keywords" content="stock market terminal, bloomberg alternative, free stock screener, options chain, portfolio tracker, real-time quotes, market news, AI stock insights" />
-  <link rel="canonical" href="https://captainfredric.github.io/The-Terminal-Meridian/" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Meridian Market Terminal | Bloomberg-grade tools at retail price</title>
+  <meta name="description" content="The only open-source, AI-native market terminal at retail price. Live quotes, options chains, AI commentary, portfolio tracking, and smart alerts in your browser. $0 to start, $7.99/mo for Pro.">
+  <meta name="theme-color" content="#0f1117">
+  <meta name="color-scheme" content="dark">
 
-  <!-- Open Graph / social sharing -->
-  <meta property="og:type" content="website" />
-  <meta property="og:url" content="https://captainfredric.github.io/The-Terminal-Meridian/" />
-  <meta property="og:title" content="Meridian: Bloomberg-Style Market Terminal" />
-  <meta property="og:description" content="Free Bloomberg-style market terminal. Live quotes, charts, options chains, screener, AI insights, and portfolio tracking in one keyboard-driven workspace." />
-  <meta property="og:site_name" content="Meridian" />
-  <meta property="og:image" content="https://captainfredric.github.io/The-Terminal-Meridian/og-preview.png" />
-  <meta property="og:image:width" content="1200" />
-  <meta property="og:image:height" content="630" />
+  <!-- Open Graph / social cards -->
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Meridian Market Terminal">
+  <meta property="og:title" content="Meridian: a pro market terminal for everyone">
+  <meta property="og:description" content="Bloomberg costs $25,000 a year. Meridian gives you the same playbook in your browser, open-source, AI-native, for $96 a year. Or $0.">
+  <meta property="og:url" content="https://captainfredric.github.io/The-Terminal-Meridian/">
+  <meta property="og:image" content="https://captainfredric.github.io/The-Terminal-Meridian/og-preview.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Meridian: a pro market terminal for everyone">
+  <meta name="twitter:description" content="Bloomberg-grade tools at retail price. Open source. AI-native. Free to start.">
+  <meta name="twitter:image" content="https://captainfredric.github.io/The-Terminal-Meridian/og-preview.png">
 
-  <!-- Twitter / X card -->
-  <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="Meridian: Bloomberg-Style Market Terminal" />
-  <meta name="twitter:description" content="Free Bloomberg-style market terminal. Live quotes, charts, options, AI insights, and portfolio tracking. Keyboard-first, no Bloomberg price tag." />
-  <meta name="twitter:image" content="https://captainfredric.github.io/The-Terminal-Meridian/og-preview.png" />
+  <link rel="canonical" href="https://captainfredric.github.io/The-Terminal-Meridian/">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-  <!-- Structured data (Google rich results) -->
-  <script type="application/ld+json">
-  {
-    "@context": "https://schema.org",
-    "@type": "WebApplication",
-    "name": "Meridian Market Terminal",
-    "url": "https://captainfredric.github.io/The-Terminal-Meridian/",
-    "description": "Bloomberg-style market terminal. Live stock quotes, interactive charts, options chains, AI-powered insights, portfolio tracking, and a built-in screener.",
-    "applicationCategory": "FinanceApplication",
-    "operatingSystem": "All",
-    "offers": {
-      "@type": "Offer",
-      "price": "0",
-      "priceCurrency": "USD"
-    },
-    "featureList": [
-      "Real-time stock quotes",
-      "Interactive candlestick charts",
-      "Options chain viewer",
-      "AI market commentary",
-      "Stock screener",
-      "Paper trading simulator",
-      "Portfolio tracker",
-      "Market news aggregator"
-    ]
-  }
-  </script>
+    :root {
+      --bg:           #0f1117;
+      --bg-card:      #141926;
+      --bg-panel:     #1a2236;
+      --bg-panel2:    #1e2840;
+      --accent:       #2fcf84;
+      --accent-dim:   rgba(47,207,132,0.12);
+      --danger:       #ff5f7f;
+      --danger-dim:   rgba(255,95,127,0.12);
+      --warning:      #ffb84d;
+      --blue:         #9cb9ff;
+      --text:         #e8ecf0;
+      --text-muted:   #8a96b3;
+      --text-faint:   #5a6480;
+      --border:       rgba(255,255,255,0.06);
+      --border-card:  rgba(255,255,255,0.08);
+      --border-accent:rgba(47,207,132,0.22);
+      --font-mono:    'IBM Plex Mono', 'Cascadia Code', monospace;
+      --font-sans:    system-ui, -apple-system, 'Segoe UI', sans-serif;
+      --radius:       10px;
+      --radius-lg:    16px;
+      --shadow-card:  0 1px 3px rgba(0,0,0,0.4), 0 8px 24px rgba(0,0,0,0.3);
+    }
 
-  <!-- PWA / standalone -->
-  <meta name="mobile-web-app-capable" content="yes" />
-  <link rel="manifest" href="./manifest.json" />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="./src/styles.css" />
+    html { scroll-behavior: smooth; }
+
+    /* ── Fluid motion primitives ─────────────────────────────────
+       Scroll-reveal: any element with [data-reveal] starts slightly
+       offset and faded; an IntersectionObserver toggles .is-visible
+       which animates it into place. Stagger is opt-in via data-stagger.
+       Honors prefers-reduced-motion. */
+    @keyframes reveal-in {
+      from { opacity: 0; transform: translate3d(0, 18px, 0); }
+      to   { opacity: 1; transform: translate3d(0, 0, 0); }
+    }
+    @keyframes reveal-child-in {
+      from { opacity: 0; transform: translate3d(0, 14px, 0); }
+      to   { opacity: 1; transform: translate3d(0, 0, 0); }
+    }
+    [data-reveal] {
+      opacity: 0;
+      transform: translate3d(0, 18px, 0);
+      will-change: opacity, transform;
+    }
+    [data-reveal].is-visible {
+      /* End-state set directly so the element is visible even if the
+         keyframe animation gets starved (eg. background tab, paused
+         document timeline). The animation paints the motion. */
+      opacity: 1;
+      transform: translate3d(0, 0, 0);
+      animation: reveal-in 680ms cubic-bezier(0.2, 0.7, 0.3, 1) forwards;
+    }
+    [data-reveal][data-stagger] > * {
+      opacity: 0;
+      transform: translate3d(0, 14px, 0);
+    }
+    [data-reveal][data-stagger].is-visible > * {
+      opacity: 1;
+      transform: translate3d(0, 0, 0);
+      animation: reveal-child-in 580ms cubic-bezier(0.2, 0.7, 0.3, 1) forwards;
+      animation-delay: calc(var(--stagger, 60ms) * var(--i, 0));
+    }
+
+    /* Card lift micro-interaction. Uses transform so it never reflows
+       layout — works on any block with the hover-lift class. */
+    .hover-lift {
+      transition: transform 280ms cubic-bezier(0.2, 0.7, 0.3, 1),
+                  box-shadow 280ms ease,
+                  border-color 220ms ease;
+      will-change: transform;
+    }
+    .hover-lift:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.4), 0 14px 32px rgba(0,0,0,0.4);
+    }
+
+    /* Subtle attention-pull on the primary CTA without it being garish. */
+    @keyframes pulse-accent {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(47, 207, 132, 0.0); }
+      50%      { box-shadow: 0 0 0 8px rgba(47, 207, 132, 0.10); }
+    }
+    .btn-primary { animation: pulse-accent 3.6s ease-in-out infinite; }
+    .btn-primary:hover { animation-play-state: paused; }
+
+    /* ── Polished micro-interactions (eye-catching, not garish) ─── */
+
+    /* Animated underline on the primary nav. Slides in on hover, sticks
+       on the active link via JS-set .is-active. */
+    .nav-links a {
+      position: relative;
+    }
+    .nav-links a::after {
+      content: '';
+      position: absolute;
+      left: 12px;
+      right: 12px;
+      bottom: 2px;
+      height: 2px;
+      background: linear-gradient(90deg, var(--accent), #4ee2a3);
+      border-radius: 2px;
+      transform: scaleX(0);
+      transform-origin: left center;
+      transition: transform 320ms cubic-bezier(0.2, 0.7, 0.3, 1);
+    }
+    .nav-links a:hover::after,
+    .nav-links a.is-active::after { transform: scaleX(1); }
+
+    /* CTA shimmer — a slow specular highlight that sweeps across the
+       primary button every ~6s, like a glossy chrome detail. The button's
+       own pulse-accent halo handles the breathing. */
+    .btn-primary { position: relative; overflow: hidden; }
+    .btn-primary::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(120deg,
+        transparent 0%,
+        transparent 38%,
+        rgba(255,255,255,0.32) 50%,
+        transparent 62%,
+        transparent 100%);
+      transform: translateX(-120%);
+      pointer-events: none;
+      animation: cta-shimmer 6s ease-in-out 1.4s infinite;
+    }
+    @keyframes cta-shimmer {
+      0%, 18% { transform: translateX(-120%); }
+      30%     { transform: translateX(120%); }
+      100%    { transform: translateX(120%); }
+    }
+
+    /* "MOST POPULAR" badge gradient sweep + pricing tier card halo. */
+    .price-card.featured {
+      position: relative;
+      overflow: visible;
+    }
+    .price-card.featured::after {
+      content: '';
+      position: absolute;
+      inset: -2px;
+      border-radius: inherit;
+      background: linear-gradient(135deg, rgba(47,207,132,0.4), rgba(78,226,163,0.0) 60%);
+      filter: blur(14px);
+      opacity: 0.35;
+      z-index: -1;
+      pointer-events: none;
+      animation: popular-glow 5s ease-in-out infinite;
+    }
+    @keyframes popular-glow {
+      0%, 100% { opacity: 0.30; }
+      50%      { opacity: 0.60; }
+    }
+    .price-badge {
+      position: relative;
+      overflow: hidden;
+    }
+    .price-badge::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(120deg,
+        transparent 0%, rgba(255,255,255,0.45) 50%, transparent 100%);
+      transform: translateX(-120%);
+      animation: cta-shimmer 4.5s ease-in-out 0.6s infinite;
+      pointer-events: none;
+    }
+
+    /* Theme-swatch ripple. Click triggers an expanding circle from the
+       swatch center that briefly tints the screen. */
+    .theme-swatch {
+      position: relative;
+      overflow: visible;
+    }
+    .theme-swatch::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      box-shadow: 0 0 0 0 currentColor;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 200ms ease;
+    }
+    .theme-swatch.is-rippling::after {
+      animation: swatch-ripple 520ms cubic-bezier(0.2, 0.7, 0.3, 1);
+    }
+    @keyframes swatch-ripple {
+      0%   { box-shadow: 0 0 0 0 rgba(47,207,132,0.55); opacity: 1; }
+      100% { box-shadow: 0 0 0 18px rgba(47,207,132,0);  opacity: 0; }
+    }
+
+    /* Scroll-down nudge below the hero. Hidden once the user scrolls. */
+    .hero-scroll-cue {
+      position: absolute;
+      left: 50%;
+      bottom: 16px;
+      transform: translateX(-50%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      color: var(--text-faint);
+      font-family: var(--font-mono);
+      font-size: 10.5px;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      opacity: 0.7;
+      pointer-events: none;
+      animation: scroll-cue 2.4s ease-in-out infinite;
+      transition: opacity 320ms ease;
+    }
+    .hero-scroll-cue.is-faded { opacity: 0; }
+    .hero-scroll-cue::after {
+      content: '';
+      width: 1px;
+      height: 18px;
+      background: linear-gradient(180deg, currentColor, transparent);
+    }
+    @keyframes scroll-cue {
+      0%, 100% { transform: translate(-50%, 0); }
+      50%      { transform: translate(-50%, 6px); }
+    }
+
+    /* Mouse-tilt on the terminal mockup. Default state has a subtle
+       perspective so the JS tilt feels physical. */
+    .terminal-mock {
+      transform-style: preserve-3d;
+      transition: transform 120ms cubic-bezier(0.2, 0.7, 0.3, 1), box-shadow 220ms ease;
+      will-change: transform;
+    }
+    .mockup-wrap {
+      perspective: 1400px;
+      perspective-origin: 50% 30%;
+    }
+
+    /* Comparison-table row stagger. Each row lifts in 60ms after the
+       prior. Active only when the parent reveal-card is is-visible. */
+    .compare-table tbody tr {
+      opacity: 0;
+      transform: translate3d(0, 8px, 0);
+    }
+    .compare-wrap.is-visible .compare-table tbody tr {
+      animation: reveal-child-in 480ms cubic-bezier(0.2, 0.7, 0.3, 1) forwards;
+    }
+    .compare-wrap.is-visible .compare-table tbody tr:nth-child(1) { animation-delay:  40ms; }
+    .compare-wrap.is-visible .compare-table tbody tr:nth-child(2) { animation-delay: 100ms; }
+    .compare-wrap.is-visible .compare-table tbody tr:nth-child(3) { animation-delay: 160ms; }
+    .compare-wrap.is-visible .compare-table tbody tr:nth-child(4) { animation-delay: 220ms; }
+    .compare-wrap.is-visible .compare-table tbody tr:nth-child(5) { animation-delay: 280ms; }
+    .compare-wrap.is-visible .compare-table tbody tr:nth-child(6) { animation-delay: 340ms; }
+    .compare-wrap.is-visible .compare-table tbody tr:nth-child(7) { animation-delay: 400ms; }
+    .compare-wrap.is-visible .compare-table tbody tr:nth-child(8) { animation-delay: 460ms; }
+
+    /* FAQ items: subtle stagger when the FAQ section enters view. */
+    .faq-grid {
+      counter-reset: faq;
+    }
+    .faq-grid[data-reveal] .faq-item {
+      opacity: 0;
+      transform: translate3d(0, 12px, 0);
+    }
+    .faq-grid[data-reveal].is-visible .faq-item {
+      animation: reveal-child-in 520ms cubic-bezier(0.2, 0.7, 0.3, 1) forwards;
+    }
+    .faq-grid[data-reveal].is-visible .faq-item:nth-child(1) { animation-delay:  60ms; }
+    .faq-grid[data-reveal].is-visible .faq-item:nth-child(2) { animation-delay: 120ms; }
+    .faq-grid[data-reveal].is-visible .faq-item:nth-child(3) { animation-delay: 180ms; }
+    .faq-grid[data-reveal].is-visible .faq-item:nth-child(4) { animation-delay: 240ms; }
+    .faq-grid[data-reveal].is-visible .faq-item:nth-child(5) { animation-delay: 300ms; }
+    .faq-grid[data-reveal].is-visible .faq-item:nth-child(6) { animation-delay: 360ms; }
+
+    /* Subtle "live" pulse on the green check marks in the comparison
+       table — gives the table a heartbeat without shouting. */
+    .compare-table .check {
+      display: inline-block;
+      animation: check-breathe 4.8s ease-in-out infinite;
+    }
+    @keyframes check-breathe {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50%      { opacity: 0.78; transform: scale(0.94); }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      [data-reveal],
+      [data-reveal].is-visible,
+      [data-reveal][data-stagger] > *,
+      [data-reveal][data-stagger].is-visible > * {
+        opacity: 1 !important;
+        transform: none !important;
+        transition: none !important;
+      }
+      .hover-lift:hover { transform: none; }
+      .btn-primary,
+      .btn-primary::before,
+      .price-card.featured::after,
+      .price-badge::after,
+      .compare-table .check,
+      .hero-scroll-cue { animation: none !important; }
+      .ticker-track { animation: none !important; }
+      .compare-wrap.is-visible .compare-table tbody tr,
+      .faq-grid[data-reveal].is-visible .faq-item { opacity: 1 !important; transform: none !important; animation: none !important; }
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-sans);
+      font-size: 16px;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+
+    a { color: inherit; text-decoration: none; }
+
+    /* ── NAV ─────────────────────────────────────────────────── */
+    .nav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: rgba(15,17,23,0.88);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 28px;
+      height: 58px;
+    }
+
+    .nav-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-family: var(--font-mono);
+      font-weight: 600;
+      font-size: 15px;
+      letter-spacing: 0.05em;
+      color: var(--text);
+      transition: opacity 150ms;
+    }
+    .nav-brand:hover { opacity: 0.85; }
+
+    .nav-logo {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      background: linear-gradient(145deg, #0e1930 0%, #172040 100%);
+      border: 1px solid rgba(79,124,255,0.28);
+      display: grid;
+      place-items: center;
+      box-shadow: 0 0 0 1px rgba(79,124,255,0.12), 0 4px 12px rgba(5,12,40,0.5);
+      transition: transform 200ms cubic-bezier(0.2,0.7,0.3,1);
+      flex-shrink: 0;
+    }
+    .nav-logo:hover { transform: rotate(-3deg) scale(1.06); }
+
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .nav-links a {
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 14px;
+      color: var(--text-muted);
+      transition: color 150ms, background 150ms;
+    }
+    .nav-links a:hover { color: var(--text); background: rgba(255,255,255,0.05); }
+
+    .nav-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 16px;
+      border-radius: 7px;
+      font-family: var(--font-mono);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      border: none;
+      transition: transform 120ms, opacity 150ms, box-shadow 150ms;
+    }
+    .btn:active { transform: scale(0.97); }
+
+    .btn-ghost {
+      background: rgba(255,255,255,0.05);
+      color: var(--text-muted);
+      border: 1px solid var(--border-card);
+    }
+    .btn-ghost:hover { background: rgba(255,255,255,0.09); color: var(--text); }
+
+    .btn-block {
+      width: 100%;
+      justify-content: center;
+      padding: 12px 20px;
+    }
+    .btn-primary {
+      background: var(--accent);
+      color: #051a0e;
+      transition: background 160ms, transform 120ms, box-shadow 180ms;
+      font-weight: 600;
+      box-shadow: 0 2px 12px rgba(47,207,132,0.28);
+    }
+    .btn-primary:hover {
+      background: #3ee08f;
+      box-shadow: 0 6px 22px rgba(47,207,132,0.42);
+      transform: translateY(-1px);
+    }
+    .btn-primary:active { transform: translateY(0); box-shadow: 0 2px 12px rgba(47,207,132,0.28); }
+
+    .btn-outline {
+      background: transparent;
+      color: var(--text);
+      border: 1px solid rgba(255,255,255,0.18);
+      transition: background 160ms, border-color 160ms;
+    }
+    .btn-outline:hover { background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.3); }
+
+    /* ── EMAIL SIGNUP CARD ────────────────────────────────────── */
+    .signup-wrap {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 64px 28px 96px;
+      text-align: center;
+    }
+    .signup-card {
+      background: linear-gradient(160deg, #162035 0%, #111a2e 100%);
+      border: 1px solid var(--border-accent);
+      border-radius: var(--radius-lg);
+      padding: 48px 36px;
+      box-shadow: 0 24px 64px rgba(0,0,0,0.4), 0 0 0 1px rgba(47,207,132,0.10);
+    }
+    .signup-card .section-eyebrow { color: var(--accent); margin-bottom: 14px; }
+    .signup-card .section-title { font-size: clamp(24px, 3.5vw, 34px); margin-bottom: 12px; }
+    .signup-card .section-sub { margin: 0 auto 32px; font-size: 15px; }
+
+    .signup-form {
+      display: flex;
+      gap: 10px;
+      max-width: 480px;
+      margin: 0 auto 16px;
+    }
+    .signup-form input[type="email"] {
+      flex: 1;
+      padding: 14px 16px;
+      font-size: 15px;
+      font-family: var(--font-sans);
+      background: rgba(15,17,23,0.7);
+      color: var(--text);
+      border: 1px solid var(--border-card);
+      border-radius: 10px;
+      outline: none;
+      transition: border-color 160ms, box-shadow 160ms;
+    }
+    .signup-form input[type="email"]::placeholder { color: var(--text-faint); }
+    .signup-form input[type="email"]:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(47,207,132,0.18);
+    }
+    .signup-form .btn { white-space: nowrap; }
+
+    .signup-note { font-size: 12px; color: var(--text-faint); margin-top: 4px; }
+
+    .signup-success {
+      display: none;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: 16px 22px;
+      background: rgba(47,207,132,0.10);
+      border: 1px solid var(--border-accent);
+      border-radius: 10px;
+      color: var(--accent);
+      font-weight: 500;
+      max-width: 480px;
+      margin: 0 auto;
+    }
+    .signup-success.is-shown { display: inline-flex; }
+
+    @media (max-width: 540px) {
+      .signup-form { flex-direction: column; }
+      .signup-form .btn { width: 100%; }
+      .signup-card { padding: 36px 22px; }
+    }
+
+    /* ── TICKER ───────────────────────────────────────────────── */
+    .ticker-wrap {
+      width: 100%;
+      overflow: hidden;
+      background: rgba(20,25,38,0.7);
+      border-bottom: 1px solid var(--border);
+      padding: 8px 0;
+      white-space: nowrap;
+      position: relative;
+    }
+    .ticker-wrap::before,
+    .ticker-wrap::after {
+      content: '';
+      position: absolute;
+      top: 0; bottom: 0;
+      width: 60px;
+      z-index: 1;
+      pointer-events: none;
+    }
+    .ticker-wrap::before { left: 0; background: linear-gradient(to right, rgba(20,25,38,0.9), transparent); }
+    .ticker-wrap::after  { right: 0; background: linear-gradient(to left,  rgba(20,25,38,0.9), transparent); }
+
+    .ticker-track {
+      display: inline-flex;
+      gap: 0;
+      animation: tickerScroll 55s linear infinite;
+    }
+    .ticker-wrap:hover .ticker-track { animation-play-state: paused; }
+
+    @keyframes tickerScroll {
+      0%   { transform: translateX(0); }
+      100% { transform: translateX(-50%); }
+    }
+
+    .tick {
+      display: inline-flex;
+      align-items: baseline;
+      gap: 6px;
+      padding: 0 22px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      border-right: 1px solid var(--border);
+    }
+    .tick-sym { color: var(--text); font-weight: 600; letter-spacing: 0.04em; }
+    .tick-price { color: var(--text-muted); }
+    .tick-chg.pos { color: var(--accent); }
+    .tick-chg.neg { color: var(--danger); }
+
+    /* ── HERO ─────────────────────────────────────────────────── */
+    .hero {
+      padding: 96px 28px 80px;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+    .hero::before {
+      content: '';
+      position: absolute;
+      top: -120px; left: 50%;
+      transform: translateX(-50%);
+      width: 800px; height: 600px;
+      background: radial-gradient(ellipse at center, rgba(47,207,132,0.07) 0%, transparent 65%);
+      pointer-events: none;
+    }
+
+    .hero-eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.12em;
+      color: var(--text-faint);
+      text-transform: uppercase;
+      margin-bottom: 28px;
+    }
+    .hero-eyebrow::before,
+    .hero-eyebrow::after {
+      content: '';
+      display: block;
+      width: 36px;
+      height: 1px;
+      background: linear-gradient(to right, transparent, var(--text-faint));
+    }
+    .hero-eyebrow::after { background: linear-gradient(to left, transparent, var(--text-faint)); }
+
+    .hero-headline {
+      font-size: clamp(48px, 9vw, 88px);
+      font-weight: 800;
+      line-height: 1.0;
+      letter-spacing: -0.03em;
+      color: var(--text);
+      margin-bottom: 6px;
+    }
+    .hero-headline .accent {
+      background: linear-gradient(110deg,
+        var(--accent) 0%,
+        #4ee2a3 35%,
+        #6df0bc 50%,
+        #4ee2a3 65%,
+        var(--accent) 100%);
+      background-size: 220% 100%;
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: transparent;
+      color: transparent;
+      animation: accent-sweep 7s ease-in-out infinite;
+    }
+    @keyframes accent-sweep {
+      0%, 100% { background-position: 0% 50%; }
+      50%      { background-position: 100% 50%; }
+    }
+
+    .hero-sub {
+      max-width: 580px;
+      margin: 24px auto 40px;
+      font-size: 17px;
+      color: var(--text-muted);
+      line-height: 1.7;
+    }
+    .hero-sub strong { color: var(--text); font-weight: 500; }
+
+    .hero-ctas {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+      flex-wrap: wrap;
+    }
+
+    /* ── STATS STRIP ──────────────────────────────────────────── */
+    .stats {
+      display: flex;
+      justify-content: center;
+      gap: 0;
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+      background: var(--bg-card);
+      overflow-x: auto;
+    }
+    .stat {
+      flex: 1;
+      min-width: 140px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 24px 20px;
+      border-right: 1px solid var(--border);
+      gap: 4px;
+    }
+    .stat:last-child { border-right: none; }
+    .stat-num {
+      font-family: var(--font-mono);
+      font-size: 26px;
+      font-weight: 700;
+      color: var(--text);
+      line-height: 1;
+      letter-spacing: -0.01em;
+    }
+    .stat-num .stat-yr {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-faint);
+      letter-spacing: 0;
+      margin-left: 2px;
+    }
+    .stat-label {
+      font-size: 12px;
+      color: var(--text-muted);
+      letter-spacing: 0.02em;
+      text-align: center;
+    }
+    .stat-vs .stat-num.stat-arrow {
+      font-size: 22px;
+      color: var(--text-faint);
+      font-weight: 400;
+    }
+    .stat-featured {
+      background: linear-gradient(180deg, rgba(47,207,132,0.08), transparent);
+      border-bottom: 2px solid var(--accent);
+      margin-bottom: -1px;
+    }
+    .stat-featured .stat-num {
+      color: var(--accent);
+      font-weight: 700;
+    }
+    .stat-featured .stat-num .stat-yr { color: rgba(47,207,132,0.6); }
+    .stat-featured .stat-label { color: var(--text); }
+
+    /* ── HERO TRUST STRIP (under CTAs) ────────────────────────── */
+    .hero-trust {
+      margin-top: 36px;
+      display: flex;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 24px;
+      font-size: 12px;
+      color: var(--text-faint);
+      letter-spacing: 0.02em;
+    }
+    .hero-trust span { white-space: nowrap; }
+
+    /* ── COMPARISON TABLE ─────────────────────────────────────── */
+    .compare-wrap {
+      margin-top: 48px;
+      max-width: 920px;
+      margin-left: auto;
+      margin-right: auto;
+      overflow-x: auto;
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--border-card);
+      background: var(--bg-card);
+    }
+    .compare-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+    .compare-table th,
+    .compare-table td {
+      padding: 14px 18px;
+      text-align: center;
+      border-bottom: 1px solid var(--border);
+      vertical-align: middle;
+    }
+    .compare-table tr:last-child td { border-bottom: none; }
+    .compare-table th {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      background: rgba(255,255,255,0.02);
+      padding: 18px;
+    }
+    .compare-table th.featured {
+      color: var(--accent);
+      background: rgba(47,207,132,0.06);
+      border-bottom: 1px solid var(--border-accent);
+    }
+    .compare-table td:first-child,
+    .compare-table th:first-child {
+      text-align: left;
+      color: var(--text);
+      font-weight: 500;
+    }
+    .compare-table td.featured {
+      background: rgba(47,207,132,0.04);
+      color: var(--accent);
+      font-weight: 600;
+    }
+    .compare-table td.dim { color: var(--text-faint); }
+    .compare-table .check { color: var(--accent); font-weight: 700; }
+    .compare-table .x     { color: var(--text-faint); }
+    .compare-table .price { font-family: var(--font-mono); font-weight: 600; }
+    .compare-table .price.expensive { color: var(--danger); }
+    .compare-table .price.cheap { color: var(--accent); }
+
+    /* ── PERSONAS ─────────────────────────────────────────────── */
+    .personas-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 14px;
+      margin-top: 48px;
+      text-align: left;
+    }
+    .persona {
+      background: var(--bg-card);
+      border: 1px solid var(--border-card);
+      border-radius: var(--radius-lg);
+      padding: 24px 20px;
+      transition: border-color 200ms, transform 200ms;
+    }
+    .persona:hover {
+      border-color: var(--border-accent);
+      transform: translateY(-2px);
+    }
+    .persona-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 9px;
+      background: var(--accent-dim);
+      border: 1px solid rgba(47,207,132,0.18);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 17px;
+      margin-bottom: 14px;
+    }
+    .persona h3 {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 8px;
+      letter-spacing: -0.01em;
+    }
+    .persona p {
+      font-size: 13px;
+      color: var(--text-muted);
+      line-height: 1.6;
+    }
+    @media (max-width: 1000px) { .personas-grid { grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 540px)  { .personas-grid { grid-template-columns: 1fr; } }
+
+    /* ── TRUST STRIP (separator, full-width) ──────────────────── */
+    .trust-strip {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 28px 28px;
+      display: flex;
+      justify-content: space-around;
+      flex-wrap: wrap;
+      gap: 18px;
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+      background: rgba(20,25,38,0.5);
+    }
+    .trust-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 13px;
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+      letter-spacing: 0.02em;
+    }
+    .trust-item strong { color: var(--text); font-weight: 500; }
+
+    /* ── FEATURES ─────────────────────────────────────────────── */
+    .section {
+      padding: 96px 28px;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+    .section-center { text-align: center; }
+
+    .section-eyebrow {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 16px;
+    }
+
+    .section-title {
+      font-size: clamp(28px, 4.5vw, 42px);
+      font-weight: 700;
+      line-height: 1.15;
+      letter-spacing: -0.02em;
+      color: var(--text);
+      margin-bottom: 16px;
+    }
+
+    .section-sub {
+      font-size: 16px;
+      color: var(--text-muted);
+      max-width: 580px;
+      margin: 0 auto 60px;
+      line-height: 1.7;
+    }
+
+    /* ── Claim strip: the single distinguishing-line answer ──── */
+    .claim-strip {
+      max-width: 880px;
+      margin: 0 auto;
+      padding: 56px 28px 32px;
+      text-align: center;
+    }
+    .claim-line {
+      font-size: clamp(20px, 2.6vw, 28px);
+      font-weight: 600;
+      line-height: 1.45;
+      letter-spacing: -0.012em;
+      color: var(--text);
+      margin: 0 0 14px;
+    }
+    .claim-line strong {
+      font-weight: 700;
+      background: linear-gradient(180deg, var(--accent) 0%, #4ee2a3 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: transparent;
+      color: transparent;
+    }
+    .claim-sep {
+      display: inline-block;
+      margin: 0 6px;
+      color: var(--text-faint);
+      font-weight: 400;
+    }
+    .claim-foot {
+      font-family: var(--font-mono);
+      font-size: 12.5px;
+      color: var(--text-faint);
+      letter-spacing: 0.02em;
+      margin: 0;
+    }
+    @media (max-width: 600px) {
+      .claim-strip { padding: 40px 20px 24px; }
+      .claim-sep { display: block; margin: 4px 0; opacity: 0; height: 0; }
+    }
+
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+    }
+
+    .feature-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-card);
+      border-radius: var(--radius-lg);
+      padding: 28px 24px;
+      transition: border-color 220ms, transform 200ms, box-shadow 200ms;
+    }
+    .feature-card:hover {
+      border-color: var(--border-accent);
+      transform: translateY(-2px);
+      box-shadow: 0 12px 32px rgba(0,0,0,0.35), 0 0 0 1px var(--border-accent);
+    }
+
+    .feature-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      background: var(--accent-dim);
+      border: 1px solid rgba(47,207,132,0.18);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      margin-bottom: 16px;
+    }
+    .feature-icon.red { background: var(--danger-dim); border-color: rgba(255,95,127,0.18); }
+    .feature-icon.blue { background: rgba(156,185,255,0.1); border-color: rgba(156,185,255,0.18); }
+
+    .feature-title {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 8px;
+    }
+    .feature-desc {
+      font-size: 14px;
+      color: var(--text-muted);
+      line-height: 1.65;
+    }
+
+    /* ── TERMINAL MOCKUP ──────────────────────────────────────── */
+    .mockup-wrap {
+      width: 100%;
+      background: linear-gradient(180deg, transparent, var(--bg-card) 30%, var(--bg-card));
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+      padding: 60px 28px;
+      overflow: hidden;
+    }
+
+    .terminal-mock {
+      max-width: 960px;
+      margin: 0 auto;
+      background: #0a0d14;
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,0.1);
+      box-shadow: 0 32px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.04);
+      overflow: hidden;
+    }
+
+    .mock-topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 16px;
+      background: #0d111b;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      gap: 12px;
+    }
+    .mock-dots { display: flex; gap: 6px; }
+    .mock-dot {
+      width: 11px; height: 11px;
+      border-radius: 50%;
+    }
+    .mock-dot.r { background: #ff5f57; }
+    .mock-dot.y { background: #ffbd2e; }
+    .mock-dot.g { background: #28ca42; }
+    .mock-brand {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-family: var(--font-mono);
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+    }
+    .mock-ticker-strip {
+      flex: 1;
+      display: flex;
+      gap: 16px;
+      overflow: hidden;
+      font-family: var(--font-mono);
+      font-size: 11px;
+    }
+    .mock-tick { display: flex; gap: 4px; }
+    .mock-tick .sym { color: var(--text-muted); }
+    .mock-tick .p   { color: var(--text); }
+    .mock-tick .c.pos { color: var(--accent); }
+    .mock-tick .c.neg { color: var(--danger); }
+
+    .mock-panels {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      grid-template-rows: auto auto;
+      gap: 1px;
+      background: rgba(255,255,255,0.04);
+      min-height: 340px;
+    }
+    .mock-panel {
+      background: #0f1420;
+      padding: 14px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+    }
+    .mock-panel.span2 { grid-column: span 2; }
+    .mp-label {
+      font-size: 10px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-faint);
+      margin-bottom: 10px;
+    }
+    .mp-sym { font-size: 13px; font-weight: 600; color: var(--text); }
+    .mp-price { font-size: 22px; font-weight: 600; color: var(--text); margin: 4px 0; }
+    .mp-chg.pos { color: var(--accent); }
+    .mp-chg.neg { color: var(--danger); }
+    .mp-chart {
+      margin-top: 8px;
+      height: 40px;
+      position: relative;
+    }
+    .mp-chart svg { width: 100%; height: 100%; }
+
+    .wl-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 7px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+      font-size: 12px;
+    }
+    .wl-row:last-child { border-bottom: none; }
+    .wl-name { color: var(--text); font-weight: 500; }
+    .wl-price { color: var(--text-muted); }
+    .wl-chg.pos { color: var(--accent); }
+    .wl-chg.neg { color: var(--danger); }
+
+    .ai-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 8px;
+      border-radius: 4px;
+      background: rgba(47,207,132,0.1);
+      border: 1px solid rgba(47,207,132,0.2);
+      font-size: 10px;
+      color: var(--accent);
+      margin-bottom: 8px;
+    }
+
+    /* ── THEMES ───────────────────────────────────────────────── */
+    .themes-grid {
+      display: grid;
+      grid-template-columns: repeat(9, 1fr);
+      gap: 10px;
+      margin-top: 48px;
+    }
+
+    .theme-swatch {
+      border-radius: 10px;
+      overflow: hidden;
+      border: 1px solid var(--border-card);
+      cursor: pointer;
+      transition: transform 180ms, box-shadow 180ms, border-color 180ms;
+      aspect-ratio: 2/3;
+    }
+    .theme-swatch:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 16px 40px rgba(0,0,0,0.45);
+      border-color: rgba(255,255,255,0.2);
+    }
+    .theme-swatch.active {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 2px var(--accent-dim);
+    }
+
+    .sw-bar { height: 18px; width: 100%; }
+    .sw-body { padding: 6px 4px; display: flex; flex-direction: column; gap: 3px; }
+    .sw-line { height: 3px; border-radius: 2px; width: 80%; }
+    .sw-line.short { width: 55%; }
+    .sw-label {
+      font-family: var(--font-mono);
+      font-size: 9px;
+      text-align: center;
+      padding: 5px 4px;
+      color: var(--text-faint);
+      letter-spacing: 0.06em;
+    }
+
+    /* theme colors */
+    .sw-dark    .sw-bar { background: #0f1117; }
+    .sw-dark    .sw-line { background: #2fcf84; }
+    .sw-dark    .sw-line.short { background: #ff5f7f; }
+
+    .sw-bloomberg .sw-bar { background: #1a0e00; }
+    .sw-bloomberg .sw-line { background: #ff9900; }
+    .sw-bloomberg .sw-line.short { background: #ff4444; }
+
+    .sw-synthwave .sw-bar { background: #140828; }
+    .sw-synthwave .sw-line { background: #c248ff; }
+    .sw-synthwave .sw-line.short { background: #ff5fa0; }
+
+    .sw-emerald .sw-bar { background: #061a10; }
+    .sw-emerald .sw-line { background: #00e676; }
+    .sw-emerald .sw-line.short { background: #ff5252; }
+
+    .sw-paper   .sw-bar { background: #f5f0e8; }
+    .sw-paper   .sw-line { background: #1a6b3c; }
+    .sw-paper   .sw-line.short { background: #c0392b; }
+
+    .sw-midnight .sw-bar { background: #080c1a; }
+    .sw-midnight .sw-line { background: #4a9eff; }
+    .sw-midnight .sw-line.short { background: #ff6b6b; }
+
+    .sw-crimson .sw-bar { background: #1a0808; }
+    .sw-crimson .sw-line { background: #ff5f7f; }
+    .sw-crimson .sw-line.short { background: #ffb84d; }
+
+    .sw-slate   .sw-bar { background: #10141f; }
+    .sw-slate   .sw-line { background: #94a3b8; }
+    .sw-slate   .sw-line.short { background: #fb923c; }
+
+    .sw-amber   .sw-bar { background: #1a1200; }
+    .sw-amber   .sw-line { background: #ffb84d; }
+    .sw-amber   .sw-line.short { background: #ff5f7f; }
+
+    /* ── PRICING ──────────────────────────────────────────────── */
+    .pricing-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin-top: 60px;
+    }
+
+    .price-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-card);
+      border-radius: var(--radius-lg);
+      padding: 32px 28px 36px;
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      position: relative;
+    }
+    .price-card.featured {
+      background: #162035;
+      border-color: var(--border-accent);
+      box-shadow: 0 0 0 1px rgba(47,207,132,0.14), 0 24px 56px rgba(0,0,0,0.4);
+    }
+
+    .price-badge {
+      position: absolute;
+      top: -13px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--accent);
+      color: #051a0e;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      padding: 4px 14px;
+      border-radius: 99px;
+      white-space: nowrap;
+    }
+
+    .price-tier {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 10px;
+    }
+    .price-amount {
+      font-size: 36px;
+      font-weight: 800;
+      color: var(--text);
+      line-height: 1;
+      margin-bottom: 4px;
+    }
+    .price-amount span {
+      font-size: 16px;
+      font-weight: 400;
+      color: var(--text-faint);
+    }
+    .price-tagline {
+      font-size: 14px;
+      color: var(--text-muted);
+      margin-bottom: 28px;
+      padding-bottom: 24px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .price-features {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 11px;
+      flex: 1;
+      margin-bottom: 32px;
+    }
+    .price-features li {
+      display: flex;
+      align-items: flex-start;
+      gap: 9px;
+      font-size: 14px;
+      color: var(--text-muted);
+      line-height: 1.4;
+    }
+    .price-features li .check { color: var(--accent); font-size: 13px; flex-shrink: 0; margin-top: 1px; }
+    .price-features li .plus  { color: var(--accent); font-size: 16px; flex-shrink: 0; line-height: 1; }
+    .price-features li .dash  { color: var(--text-faint); flex-shrink: 0; }
+    .price-features li.muted  { color: var(--text-faint); }
+
+    .price-cta { margin-top: auto; }
+
+    /* ── FAQ ──────────────────────────────────────────────────── */
+    .faq-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-top: 48px;
+      text-align: left;
+    }
+    .faq-item {
+      background: var(--bg-card);
+      border: 1px solid var(--border-card);
+      border-radius: var(--radius);
+      padding: 18px 22px;
+      transition: border-color 200ms, background 200ms;
+    }
+    .faq-item:hover { border-color: rgba(47,207,132,0.18); }
+    .faq-item[open] {
+      border-color: rgba(47,207,132,0.28);
+      background: linear-gradient(180deg, var(--bg-card), rgba(47,207,132,0.03));
+    }
+    .faq-item summary {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text);
+      cursor: pointer;
+      list-style: none;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      outline: none;
+    }
+    .faq-item summary::-webkit-details-marker { display: none; }
+    .faq-item summary::after {
+      content: '+';
+      font-family: var(--font-mono);
+      font-size: 18px;
+      color: var(--accent);
+      line-height: 1;
+      transition: transform 220ms;
+    }
+    .faq-item[open] summary::after { content: '−'; }
+    .faq-item p {
+      margin-top: 12px;
+      font-size: 14px;
+      color: var(--text-muted);
+      line-height: 1.65;
+    }
+    @media (max-width: 720px) { .faq-grid { grid-template-columns: 1fr; } }
+
+    /* ── Release feed (What's new) ────────────────────────────── */
+    .release-feed {
+      list-style: none;
+      padding: 0;
+      margin: 56px auto 0;
+      max-width: 760px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      text-align: left;
+    }
+    .release-entry {
+      background: var(--bg-card);
+      border: 1px solid var(--border-card);
+      border-radius: var(--radius);
+      padding: 18px 22px;
+      display: grid;
+      grid-template-columns: 120px 1fr;
+      gap: 18px;
+      align-items: start;
+      transition: border-color 200ms, background 200ms;
+    }
+    .release-entry:hover { border-color: rgba(47,207,132,0.20); }
+    .release-entry:first-child {
+      border-color: rgba(47,207,132,0.32);
+      background: linear-gradient(180deg, var(--bg-card), rgba(47,207,132,0.04));
+    }
+    .release-meta {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      font-family: var(--font-mono);
+    }
+    .release-tag {
+      display: inline-block;
+      width: max-content;
+      padding: 2px 8px;
+      border-radius: 4px;
+      background: rgba(47,207,132,0.10);
+      border: 1px solid rgba(47,207,132,0.25);
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+    }
+    .release-meta time {
+      font-size: 11.5px;
+      color: var(--text-faint);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+    .release-body h3 {
+      margin: 0 0 8px;
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text);
+      letter-spacing: -0.005em;
+    }
+    .release-body ul {
+      margin: 0;
+      padding-left: 18px;
+      color: var(--text-muted);
+      font-size: 13.5px;
+      line-height: 1.65;
+    }
+    .release-body li + li { margin-top: 4px; }
+    .release-foot {
+      margin-top: 28px;
+      font-size: 12.5px;
+      color: var(--text-faint);
+    }
+    .release-foot a {
+      color: var(--accent);
+      font-family: var(--font-mono);
+    }
+    .release-foot a:hover { text-decoration: underline; }
+    @media (max-width: 600px) {
+      .release-entry { grid-template-columns: 1fr; gap: 10px; padding: 16px; }
+      .release-meta { flex-direction: row; align-items: center; gap: 10px; }
+    }
+
+    /* ── SCROLL-SPY NAV ACTIVE STATE ───────────────────────────── */
+    .nav-links a.is-active {
+      color: var(--accent);
+      background: rgba(47,207,132,0.08);
+    }
+
+    /* ── SCROLL-TO-TOP BUTTON ─────────────────────────────────── */
+    .to-top {
+      position: fixed;
+      right: 24px;
+      bottom: 24px;
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: var(--accent);
+      color: #051a0e;
+      border: none;
+      box-shadow: 0 8px 24px rgba(47,207,132,0.35), 0 0 0 1px rgba(47,207,132,0.4);
+      font-size: 18px;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 90;
+      opacity: 0;
+      transform: translateY(12px) scale(0.92);
+      pointer-events: none;
+      transition: opacity 220ms ease, transform 220ms cubic-bezier(0.2,0.7,0.3,1), background 160ms;
+    }
+    .to-top.is-shown {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+      pointer-events: auto;
+    }
+    .to-top:hover { background: #3ee08f; transform: translateY(-2px) scale(1.02); }
+    .to-top:active { transform: translateY(0) scale(0.96); }
+    @media (max-width: 540px) {
+      .to-top { right: 16px; bottom: 16px; width: 40px; height: 40px; }
+    }
+
+    /* ── FOOTER ───────────────────────────────────────────────── */
+    .footer {
+      border-top: 1px solid var(--border);
+      padding: 32px 28px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    .footer-brand {
+      font-family: var(--font-mono);
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      color: var(--accent);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .footer-links {
+      display: flex;
+      gap: 24px;
+      font-size: 13px;
+      color: var(--text-faint);
+    }
+    .footer-links a:hover { color: var(--text-muted); }
+
+    .footer-copy {
+      font-size: 12px;
+      color: var(--text-faint);
+      width: 100%;
+      text-align: center;
+      margin-top: 8px;
+    }
+
+    /* ── DIVIDER ──────────────────────────────────────────────── */
+    .divider {
+      height: 1px;
+      background: linear-gradient(to right, transparent, var(--border), transparent);
+      margin: 0 28px;
+    }
+
+    /* ── RESPONSIVE ───────────────────────────────────────────── */
+    @media (max-width: 900px) {
+      .features-grid { grid-template-columns: repeat(2, 1fr); }
+      .pricing-grid  { grid-template-columns: 1fr; max-width: 420px; margin: 60px auto 0; }
+      .themes-grid   { grid-template-columns: repeat(5, 1fr); }
+      .mock-panels   { grid-template-columns: 1fr 1fr; }
+      .nav-links     { display: none; }
+    }
+    @media (max-width: 600px) {
+      .features-grid { grid-template-columns: 1fr; }
+      .themes-grid   { grid-template-columns: repeat(3, 1fr); }
+      .hero-headline { font-size: 40px; }
+      .stats         { flex-wrap: wrap; }
+      .stat          { min-width: calc(50% - 0px); border-right: none; border-bottom: 1px solid var(--border); }
+      .nav           { padding: 0 16px; }
+      .nav-cmdk      { display: none; }
+      .nav-actions   { gap: 6px; }
+      .compare-wrap  { position: relative; mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent 100%); -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent 100%); }
+      .compare-wrap.is-scrolled-end { mask-image: none; -webkit-mask-image: none; }
+      .compare-table { min-width: 520px; }
+    }
+  </style>
 </head>
 <body>
-  <!-- Wake-server banner: shown only when the first health check fails.
-       Render's free tier sleeps after 15min idle and takes ~30s to warm
-       up. This makes that wait state visible and reassuring instead of
-       silent. AppBootstrap.js toggles the .is-shown class. -->
-  <div class="wake-banner" id="wakeBanner" role="status" aria-live="polite">
-    <span class="wake-spinner" aria-hidden="true"></span>
-    <span class="wake-text">
-      Waking the data server (free-tier cold start, ~30s).
-      <strong>Live quotes will populate as soon as it responds.</strong>
-    </span>
-    <button class="wake-dismiss" id="wakeBannerDismiss" type="button" aria-label="Dismiss notice">×</button>
+
+<!-- ── NAV ──────────────────────────────────────────────────────── -->
+<nav class="nav">
+  <a href="terminal.html" class="nav-brand">
+    <div class="nav-logo">
+      <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" width="28" height="28" aria-label="Meridian">
+        <rect x="2" y="2" width="36" height="36" rx="11" fill="url(#lpBgGlow)"/>
+        <path d="M9.8 14.4L20 20.6" stroke="url(#lpDiagLeft)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M20 20.6L30.2 14.4" stroke="url(#lpDiagRight)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+        <rect x="8.1" y="14.2" width="3.4" height="12.4" rx="1" fill="#2fcf84"/>
+        <line x1="9.8" y1="11.6" x2="9.8" y2="14.2" stroke="#2fcf84" stroke-width="1.5" stroke-linecap="round"/>
+        <line x1="9.8" y1="26.6" x2="9.8" y2="29.2" stroke="#2fcf84" stroke-width="1.5" stroke-linecap="round"/>
+        <rect x="18.3" y="19.8" width="3.4" height="9.6" rx="1" fill="#ff5f7f"/>
+        <line x1="20" y1="17.1" x2="20" y2="19.8" stroke="#ff5f7f" stroke-width="1.5" stroke-linecap="round"/>
+        <line x1="20" y1="29.4" x2="20" y2="32" stroke="#ff5f7f" stroke-width="1.5" stroke-linecap="round"/>
+        <rect x="28.5" y="14.2" width="3.4" height="12.4" rx="1" fill="#2fcf84"/>
+        <line x1="30.2" y1="11.6" x2="30.2" y2="14.2" stroke="#2fcf84" stroke-width="1.5" stroke-linecap="round"/>
+        <line x1="30.2" y1="26.6" x2="30.2" y2="29.2" stroke="#2fcf84" stroke-width="1.5" stroke-linecap="round"/>
+                <defs>
+          <linearGradient id="lpBgGlow" x1="4" y1="4" x2="36" y2="36" gradientUnits="userSpaceOnUse">
+            <stop stop-color="#172953"/><stop offset="1" stop-color="#0d1529"/>
+          </linearGradient>
+          <linearGradient id="lpDiagLeft" x1="9.8" y1="14.4" x2="20" y2="20.6" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stop-color="#2fcf84"/>
+            <stop offset="100%" stop-color="#ff5f7f"/>
+          </linearGradient>
+          <linearGradient id="lpDiagRight" x1="20" y1="20.6" x2="30.2" y2="14.4" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stop-color="#ff5f7f"/>
+            <stop offset="100%" stop-color="#2fcf84"/>
+          </linearGradient>
+        </defs>
+      </svg>
+    </div>
+    MERIDIAN
+  </a>
+
+  <nav class="nav-links">
+    <a href="#compare" data-spy>Why</a>
+    <a href="#features" data-spy>Features</a>
+    <a href="#who" data-spy>Built for</a>
+    <a href="#pricing" data-spy>Pricing</a>
+    <a href="#faq" data-spy>FAQ</a>
+    <a href="#whats-new" data-spy>What's new</a>
+    <a href="terminal.html">Terminal ↗</a>
+  </nav>
+
+  <div class="nav-actions">
+    <a href="terminal.html" class="btn btn-ghost nav-cmdk">
+      <span>⌘K</span> Command
+    </a>
+    <a href="terminal.html" class="btn btn-primary">Open Terminal →</a>
   </div>
-  <main class="terminal-app" id="terminalApp">
-    <header class="topbar">
-      <div class="brand-block" style="flex-direction: row; align-items: center; gap: 14px;">
-        <div class="brand-mark" aria-hidden="true">
-          <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="Meridian">
-            <rect x="2" y="2" width="36" height="36" rx="11" fill="url(#tbBgGlow)"/>
-            <!-- left arm: green at left bar, transitions to red at center valley -->
-            <path d="M9.8 14.4L20 20.6" stroke="url(#tbDiagLeft)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
-            <!-- right arm: red at center valley, transitions to green at right bar -->
-            <path d="M20 20.6L30.2 14.4" stroke="url(#tbDiagRight)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
-            <!-- left bar (green) -->
-            <rect x="8.1" y="14.2" width="3.4" height="12.4" rx="1" fill="#2fcf84"/>
-            <line x1="9.8" y1="11.6" x2="9.8" y2="14.2" stroke="#2fcf84" stroke-width="1.5" stroke-linecap="round"/>
-            <line x1="9.8" y1="26.6" x2="9.8" y2="29.2" stroke="#2fcf84" stroke-width="1.5" stroke-linecap="round"/>
-            <!-- center bar (red) -->
-            <rect x="18.3" y="19.8" width="3.4" height="9.6" rx="1" fill="#ff5f7f"/>
-            <line x1="20" y1="17.1" x2="20" y2="19.8" stroke="#ff5f7f" stroke-width="1.5" stroke-linecap="round"/>
-            <line x1="20" y1="29.4" x2="20" y2="32" stroke="#ff5f7f" stroke-width="1.5" stroke-linecap="round"/>
-            <!-- right bar (green) -->
-            <rect x="28.5" y="14.2" width="3.4" height="12.4" rx="1" fill="#2fcf84"/>
-            <line x1="30.2" y1="11.6" x2="30.2" y2="14.2" stroke="#2fcf84" stroke-width="1.5" stroke-linecap="round"/>
-            <line x1="30.2" y1="26.6" x2="30.2" y2="29.2" stroke="#2fcf84" stroke-width="1.5" stroke-linecap="round"/>
+</nav>
+
+<!-- ── TICKER ────────────────────────────────────────────────────── -->
+<div class="ticker-wrap" aria-hidden="true">
+  <div class="ticker-track" id="tickerTrack">
+    <!-- first copy -->
+    <span class="tick"><span class="tick-sym">BTC-USD</span><span class="tick-price">84,201.00</span><span class="tick-chg pos">+2.41%</span></span>
+    <span class="tick"><span class="tick-sym">ETH-USD</span><span class="tick-price">1,622.40</span><span class="tick-chg neg">-1.03%</span></span>
+    <span class="tick"><span class="tick-sym">NVDA</span><span class="tick-price">112.47</span><span class="tick-chg pos">+1.88%</span></span>
+    <span class="tick"><span class="tick-sym">TSLA</span><span class="tick-price">243.18</span><span class="tick-chg neg">-3.12%</span></span>
+    <span class="tick"><span class="tick-sym">AAPL</span><span class="tick-price">198.62</span><span class="tick-chg neg">-0.43%</span></span>
+    <span class="tick"><span class="tick-sym">SPY</span><span class="tick-price">527.30</span><span class="tick-chg pos">+0.64%</span></span>
+    <span class="tick"><span class="tick-sym">QQQ</span><span class="tick-price">430.12</span><span class="tick-chg pos">+0.91%</span></span>
+    <span class="tick"><span class="tick-sym">META</span><span class="tick-price">571.09</span><span class="tick-chg pos">+1.15%</span></span>
+    <span class="tick"><span class="tick-sym">AMZN</span><span class="tick-price">198.80</span><span class="tick-chg pos">+0.30%</span></span>
+    <span class="tick"><span class="tick-sym">GLD</span><span class="tick-price">303.74</span><span class="tick-chg pos">+1.20%</span></span>
+    <span class="tick"><span class="tick-sym">VIX</span><span class="tick-price">17.82</span><span class="tick-chg pos">+4.10%</span></span>
+    <span class="tick"><span class="tick-sym">DXY</span><span class="tick-price">99.41</span><span class="tick-chg neg">-0.22%</span></span>
+    <span class="tick"><span class="tick-sym">WTI</span><span class="tick-price">63.14</span><span class="tick-chg neg">-0.88%</span></span>
+    <span class="tick"><span class="tick-sym">MSFT</span><span class="tick-price">381.25</span><span class="tick-chg pos">+0.55%</span></span>
+    <span class="tick"><span class="tick-sym">GOOGL</span><span class="tick-price">164.38</span><span class="tick-chg pos">+0.72%</span></span>
+    <!-- duplicate for seamless loop -->
+    <span class="tick"><span class="tick-sym">BTC-USD</span><span class="tick-price">84,201.00</span><span class="tick-chg pos">+2.41%</span></span>
+    <span class="tick"><span class="tick-sym">ETH-USD</span><span class="tick-price">1,622.40</span><span class="tick-chg neg">-1.03%</span></span>
+    <span class="tick"><span class="tick-sym">NVDA</span><span class="tick-price">112.47</span><span class="tick-chg pos">+1.88%</span></span>
+    <span class="tick"><span class="tick-sym">TSLA</span><span class="tick-price">243.18</span><span class="tick-chg neg">-3.12%</span></span>
+    <span class="tick"><span class="tick-sym">AAPL</span><span class="tick-price">198.62</span><span class="tick-chg neg">-0.43%</span></span>
+    <span class="tick"><span class="tick-sym">SPY</span><span class="tick-price">527.30</span><span class="tick-chg pos">+0.64%</span></span>
+    <span class="tick"><span class="tick-sym">QQQ</span><span class="tick-price">430.12</span><span class="tick-chg pos">+0.91%</span></span>
+    <span class="tick"><span class="tick-sym">META</span><span class="tick-price">571.09</span><span class="tick-chg pos">+1.15%</span></span>
+    <span class="tick"><span class="tick-sym">AMZN</span><span class="tick-price">198.80</span><span class="tick-chg pos">+0.30%</span></span>
+    <span class="tick"><span class="tick-sym">GLD</span><span class="tick-price">303.74</span><span class="tick-chg pos">+1.20%</span></span>
+    <span class="tick"><span class="tick-sym">VIX</span><span class="tick-price">17.82</span><span class="tick-chg pos">+4.10%</span></span>
+    <span class="tick"><span class="tick-sym">DXY</span><span class="tick-price">99.41</span><span class="tick-chg neg">-0.22%</span></span>
+    <span class="tick"><span class="tick-sym">WTI</span><span class="tick-price">63.14</span><span class="tick-chg neg">-0.88%</span></span>
+    <span class="tick"><span class="tick-sym">MSFT</span><span class="tick-price">381.25</span><span class="tick-chg pos">+0.55%</span></span>
+    <span class="tick"><span class="tick-sym">GOOGL</span><span class="tick-price">164.38</span><span class="tick-chg pos">+0.72%</span></span>
+  </div>
+</div>
+
+<!-- ── HERO ───────────────────────────────────────────────────────── -->
+<section class="hero">
+  <div class="hero-eyebrow">Meridian Market Terminal</div>
+  <h1 class="hero-headline">
+    The terminal.<br>
+    <span class="accent">For everyone.</span>
+  </h1>
+  <p class="hero-sub">
+    Bloomberg Terminal costs <strong>$25,000 a year</strong>. Meridian gives you the same
+    playbook (live quotes, AI commentary, options chains, smart alerts, portfolio
+    tracking) for <strong>$96 a year</strong>. Or zero, if you can wait 15 minutes.
+  </p>
+  <div class="hero-ctas">
+    <a href="terminal.html" class="btn btn-primary" style="font-size:14px; padding:12px 24px;">Open Terminal →</a>
+    <a href="#get-early-access" class="btn btn-outline" style="font-size:14px; padding:12px 24px;">Get Pro early access</a>
+  </div>
+  <p class="hero-trust">
+    <span>📂 Open source · MIT</span>
+    <span>🔒 No ads · No tracking</span>
+    <span>⚡ Powered by GPT + Claude</span>
+  </p>
+  <div class="hero-scroll-cue" id="heroScrollCue" aria-hidden="true">scroll</div>
+</section>
+
+<!-- ── STATS — Quantified value claim ─────────────────────────────── -->
+<div class="stats" data-reveal data-stagger style="--stagger:90ms">
+  <div class="stat">
+    <span class="stat-num"><span data-count="25000" data-count-prefix="$">$25,000</span><span class="stat-yr">/yr</span></span>
+    <span class="stat-label">Bloomberg Terminal</span>
+  </div>
+  <div class="stat stat-vs">
+    <span class="stat-num stat-arrow">→</span>
+    <span class="stat-label">Same job, retail price</span>
+  </div>
+  <div class="stat stat-featured">
+    <span class="stat-num"><span data-count="96" data-count-prefix="$">$96</span><span class="stat-yr">/yr</span></span>
+    <span class="stat-label">Meridian Pro (annual)</span>
+  </div>
+  <div class="stat">
+    <span class="stat-num"><span data-count="260">260</span><span class="stat-yr">×</span></span>
+    <span class="stat-label">Cheaper. Same data.</span>
+  </div>
+</div>
+
+<!-- ── ONE-LINE CLAIM ─────────────────────────────────────────────── -->
+<div class="claim-strip" data-reveal>
+  <p class="claim-line">
+    The only <strong>open-source</strong>, <strong>AI-native</strong> market terminal
+    <span class="claim-sep">·</span>
+    at <strong>retail price</strong>.
+  </p>
+  <p class="claim-foot">
+    Audit the source. Fork it. Self-host it. Or just use it for $0 in your browser.
+  </p>
+</div>
+
+<!-- ── WHY MERIDIAN — comparison table ───────────────────────────── -->
+<section class="section section-center" id="compare">
+  <div class="section-eyebrow">Why Meridian</div>
+  <h2 class="section-title">The same job. A 260× discount.</h2>
+  <p class="section-sub">
+    Bloomberg Terminal is the institutional standard, but it's priced for hedge funds.
+    Yahoo Finance is free, but the UX is stuck in 2005. Meridian closes the gap:
+    pro tooling, modern UX, retail price.
+  </p>
+
+  <div class="compare-wrap" data-reveal>
+    <table class="compare-table">
+      <thead>
+        <tr>
+          <th></th>
+          <th>Yahoo Finance</th>
+          <th class="featured">Meridian Pro</th>
+          <th>Bloomberg Terminal</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Annual cost</td>
+          <td><span class="price cheap">Free</span></td>
+          <td class="featured"><span class="price">$96</span></td>
+          <td><span class="price expensive">$25,000</span></td>
+        </tr>
+        <tr>
+          <td>Real-time quotes</td>
+          <td class="dim">15-min delayed</td>
+          <td class="featured"><span class="check">✓</span></td>
+          <td><span class="check">✓</span></td>
+        </tr>
+        <tr>
+          <td>Options chains with Greeks</td>
+          <td class="dim">Limited</td>
+          <td class="featured"><span class="check">✓</span></td>
+          <td><span class="check">✓</span></td>
+        </tr>
+        <tr>
+          <td>AI commentary</td>
+          <td><span class="x">✗</span></td>
+          <td class="featured"><span class="check">✓</span> GPT + Claude</td>
+          <td><span class="x">✗</span></td>
+        </tr>
+        <tr>
+          <td>Custom rules engine &amp; alerts</td>
+          <td class="dim">Basic price alerts</td>
+          <td class="featured"><span class="check">✓</span> Unlimited</td>
+          <td><span class="check">✓</span></td>
+        </tr>
+        <tr>
+          <td>Portfolio P&amp;L tracker</td>
+          <td class="dim">Basic</td>
+          <td class="featured"><span class="check">✓</span></td>
+          <td><span class="check">✓</span></td>
+        </tr>
+        <tr>
+          <td>Visual themes</td>
+          <td class="dim">1</td>
+          <td class="featured">9</td>
+          <td class="dim">1 (amber on black)</td>
+        </tr>
+        <tr>
+          <td>Browser-based, no install</td>
+          <td><span class="check">✓</span></td>
+          <td class="featured"><span class="check">✓</span></td>
+          <td><span class="x">✗ Dedicated terminal</span></td>
+        </tr>
+        <tr>
+          <td>Open source &amp; auditable</td>
+          <td><span class="x">✗</span></td>
+          <td class="featured"><span class="check">✓</span> MIT licensed</td>
+          <td><span class="x">✗</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ── FEATURES ───────────────────────────────────────────────────── -->
+<section class="section section-center" id="features">
+  <div class="section-eyebrow">Features</div>
+  <h2 class="section-title">Everything the pros use.<br>For the rest of us.</h2>
+  <p class="section-sub">
+    Every panel, every data point, every insight, built for traders and investors
+    who want Bloomberg-grade tools without the $25,000 per year subscription.
+  </p>
+
+  <div class="features-grid" data-reveal data-stagger style="--stagger:80ms">
+    <div class="feature-card hover-lift">
+      <div class="feature-icon">🤖</div>
+      <div class="feature-title">AI Insights</div>
+      <p class="feature-desc">Analyst-style commentary on any ticker, powered by GPT and Claude. Price action, volume conviction, 52-week positioning, and key levels to watch.</p>
+    </div>
+    <div class="feature-card hover-lift">
+      <div class="feature-icon red">📊</div>
+      <div class="feature-title">Options Chain</div>
+      <p class="feature-desc">Full strike and expiry grid with bid/ask, implied volatility, volume, and open interest. Updated live. Spot unusual flow instantly.</p>
+    </div>
+    <div class="feature-card hover-lift">
+      <div class="feature-icon">💼</div>
+      <div class="feature-title">Portfolio Tracker</div>
+      <p class="feature-desc">Track positions, cost basis, and P&L across your entire watchlist. Session summaries keep you oriented at a glance.</p>
+    </div>
+    <div class="feature-card hover-lift">
+      <div class="feature-icon blue">🎨</div>
+      <div class="feature-title">9 Visual Themes</div>
+      <p class="feature-desc">From classic Bloomberg amber to neon Synthwave and clean Paper mode for daytime. Switch your entire workspace aesthetic in one click.</p>
+    </div>
+    <div class="feature-card hover-lift">
+      <div class="feature-icon red">🔔</div>
+      <div class="feature-title">Smart Alerts</div>
+      <p class="feature-desc">Set price targets, RSI thresholds, volume spikes, and custom conditions. Get notified in-browser or by email the moment something triggers.</p>
+    </div>
+    <div class="feature-card hover-lift">
+      <div class="feature-icon">📰</div>
+      <div class="feature-title">News with Sentiment</div>
+      <p class="feature-desc">Real-time headlines filtered by your watchlist. Every story scored bullish, bearish, or neutral so you can triage in seconds.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ── TERMINAL MOCKUP ────────────────────────────────────────────── -->
+<div class="mockup-wrap">
+  <div class="terminal-mock">
+    <div class="mock-topbar">
+      <div class="mock-dots">
+        <div class="mock-dot r"></div>
+        <div class="mock-dot y"></div>
+        <div class="mock-dot g"></div>
+      </div>
+      <div class="mock-brand">
+        <svg viewBox="0 0 40 40" fill="none" width="18" height="18">
+          <rect x="2" y="2" width="36" height="36" rx="11" fill="#172953"/>
+          <path d="M9.8 14.4L20 20.6" stroke="url(#mkDL)" stroke-width="2.4" stroke-linecap="round"/>
+          <path d="M20 20.6L30.2 14.4" stroke="url(#mkDR)" stroke-width="2.4" stroke-linecap="round"/>
+          <rect x="8.1" y="14.2" width="3.4" height="12.4" rx="1" fill="#2fcf84"/>
+          <rect x="18.3" y="19.8" width="3.4" height="9.6" rx="1" fill="#ff5f7f"/>
+          <rect x="28.5" y="14.2" width="3.4" height="12.4" rx="1" fill="#2fcf84"/>
+                    <defs>
+            <linearGradient id="mkDL" x1="9.8" y1="14.4" x2="20" y2="20.6" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stop-color="#2fcf84"/><stop offset="100%" stop-color="#ff5f7f"/>
+            </linearGradient>
+            <linearGradient id="mkDR" x1="20" y1="20.6" x2="30.2" y2="14.4" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stop-color="#ff5f7f"/><stop offset="100%" stop-color="#2fcf84"/>
+            </linearGradient>
+          </defs>
+        </svg>
+        MERIDIAN
+      </div>
+      <div class="mock-ticker-strip">
+        <span class="mock-tick"><span class="sym">SPY</span> <span class="p">527.30</span> <span class="c pos">+0.64%</span></span>
+        <span class="mock-tick"><span class="sym">TSLA</span> <span class="p">243.18</span> <span class="c neg">-3.12%</span></span>
+        <span class="mock-tick"><span class="sym">NVDA</span> <span class="p">112.47</span> <span class="c pos">+1.88%</span></span>
+        <span class="mock-tick"><span class="sym">BTC</span> <span class="p">84,201</span> <span class="c pos">+2.41%</span></span>
+      </div>
+    </div>
+    <div class="mock-panels">
+      <div class="mock-panel">
+        <div class="mp-label">Quote · NVDA</div>
+        <div class="mp-sym">NVIDIA</div>
+        <div class="mp-price">$112.47</div>
+        <div class="mp-chg pos">+2.08 +1.88%</div>
+        <div class="mp-chart">
+          <svg viewBox="0 0 140 40" preserveAspectRatio="none">
+            <polyline points="0,35 20,28 40,32 60,20 80,22 100,14 120,10 140,8" fill="none" stroke="#2fcf84" stroke-width="1.8" stroke-linejoin="round"/>
+            <polyline points="0,35 20,28 40,32 60,20 80,22 100,14 120,10 140,8 140,40 0,40" fill="url(#chartFill)" stroke="none"/>
             <defs>
-              <linearGradient id="tbBgGlow" x1="4" y1="4" x2="36" y2="36" gradientUnits="userSpaceOnUse">
-                <stop stop-color="#172953"/>
-                <stop offset="1" stop-color="#0d1529"/>
-              </linearGradient>
-              <linearGradient id="tbDiagLeft" x1="9.8" y1="14.4" x2="20" y2="20.6" gradientUnits="userSpaceOnUse">
-                <stop offset="0%" stop-color="#2fcf84"/>
-                <stop offset="100%" stop-color="#ff5f7f"/>
-              </linearGradient>
-              <linearGradient id="tbDiagRight" x1="20" y1="20.6" x2="30.2" y2="14.4" gradientUnits="userSpaceOnUse">
-                <stop offset="0%" stop-color="#ff5f7f"/>
-                <stop offset="100%" stop-color="#2fcf84"/>
+              <linearGradient id="chartFill" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#2fcf84" stop-opacity="0.25"/>
+                <stop offset="100%" stop-color="#2fcf84" stop-opacity="0"/>
               </linearGradient>
             </defs>
           </svg>
         </div>
-        <div style="display: flex; flex-direction: row; align-items: center; gap: 12px;">
-          <a href="landing.html" id="appTitle" title="About Meridian" style="font-weight:700; text-decoration:none; color:inherit; letter-spacing:0.01em; transition:opacity 150ms;" onmouseover="this.style.opacity='0.75'" onmouseout="this.style.opacity='1'">Meridian</a>
-          <div class="chip-row" style="display: flex; flex-direction: row; gap: 8px; align-items: center; margin-left: 10px;">
-            <p class="status-chip chip-phase" id="marketPhase">Market</p>
-            <p class="status-chip chip-server" id="serverStatus">Server</p>
-            <p class="status-chip chip-net" id="networkStatus">Connecting</p>
-            <p class="status-chip chip-live-users" id="liveUserCount" title="Active users right now">
-              <i class="status-chip-dot"></i>
-              <span>...</span>
-            </p>
-          </div>
+      </div>
+      <div class="mock-panel">
+        <div class="mp-label">Watchlist</div>
+        <div class="wl-row"><span class="wl-name">AAPL</span><span class="wl-price">$198.62</span><span class="wl-chg neg">-0.43%</span></div>
+        <div class="wl-row"><span class="wl-name">MSFT</span><span class="wl-price">$381.25</span><span class="wl-chg pos">+0.55%</span></div>
+        <div class="wl-row"><span class="wl-name">NVDA</span><span class="wl-price">$112.47</span><span class="wl-chg pos">+1.88%</span></div>
+        <div class="wl-row"><span class="wl-name">TSLA</span><span class="wl-price">$243.18</span><span class="wl-chg neg">-3.12%</span></div>
+        <div class="wl-row"><span class="wl-name">SPY</span><span class="wl-price">$527.30</span><span class="wl-chg pos">+0.64%</span></div>
+      </div>
+      <div class="mock-panel">
+        <div class="mp-label">AI Insights · NVDA</div>
+        <div class="ai-badge">▲ Bullish</div>
+        <div style="font-size:11px; color:#8a96b3; line-height:1.6; margin-top:6px;">
+          NVDA trading above 50-day MA with expanding volume. Key resistance at $115. Support at $108. IV elevated ahead of earnings.
         </div>
       </div>
-      <div class="topbar-right">
-        <div class="topbar-divider"></div>
-        <button class="btn btn-ghost mobile-only hidden" id="mobileMoreMenuBtn" type="button" aria-haspopup="true" aria-expanded="false" title="More options">⋯</button>
-        <div class="mobile-more-menu hidden" id="mobileMoreMenu" role="menu" aria-label="More options"></div>
-        <button class="btn btn-icon" id="refreshAllButton" type="button" title="Refresh live data">
-          <svg viewBox="0 0 20 20" fill="none"><path d="M3 10a7 7 0 0 1 12-4.9L17 7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M17 10a7 7 0 0 1-12 4.9L3 13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><polyline points="14,4 17,7 14,10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><polyline points="6,16 3,13 6,10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </button>
-        <button class="btn btn-ghost" id="openCommandPalette" type="button">Cmd+K</button>
-        <button class="btn btn-icon notif-bell-btn" id="notifBellBtn" type="button" title="Notification history">
-          <svg viewBox="0 0 20 20" fill="none" width="18" height="18"><path d="M10 2a6 6 0 0 1 6 6v3l1.5 2.5H2.5L4 11V8a6 6 0 0 1 6-6z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 16a2 2 0 0 0 4 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-          <span class="notif-badge hidden" id="notifBadge"></span>
-        </button>
-        <button class="btn btn-trial" id="freeTrialBtn" type="button" title="Try Pro free for 7 days" data-open-pricing>
-          <span class="trial-badge-pulse"></span>
-          ⚡ Try Pro free
-        </button>
-        <button class="btn btn-ghost" id="shareViewBtn" type="button" title="Copy a link to this exact panel layout">🔗 Share</button>
-        <button class="btn btn-ghost" id="replayTourBtn" type="button" title="Replay the welcome tour">💡 Tour</button>
-        <button class="btn btn-ghost" id="themePickerBtn" type="button" title="Switch theme (T)">🎨 Theme</button>
-        <button class="btn btn-ghost" id="autoJumpButton" type="button" title="Auto-scroll to active panel">Auto-jump: On</button>
-        <button class="btn btn-ghost" id="resetFocusButton" type="button">Grid</button>
-        <span class="tier-badge hidden" id="userTierBadge" title="Your subscription tier">FREE</span>
-        <button class="btn btn-ghost hidden" id="openSettingsBtn" type="button">Account</button>
-        <button class="btn btn-ghost hidden" id="logoutButton" type="button">Sign out</button>
-        <button class="btn btn-primary hidden" id="openAuthBtn" type="button">Sync</button>
-      </div>
-    </header>
-
-    <nav class="function-row hidden" id="functionRow" aria-hidden="true"></nav>
-
-    <section class="ticker-tape" id="tickerTape" aria-label="Live price ticker"></section>
-
-    <section class="overview-strip" id="overviewStrip" aria-label="Live market overview"></section>
-
-    <section class="workspace-shell">
-      <aside class="left-rail">
-        <section class="rail-card">
-          <header class="rail-head">
-            <h2>Watchlist</h2>
-            <small id="watchCount">0</small>
-          </header>
-          <div class="rail-body" id="watchlistRail"></div>
-        </section>
-
-        <section class="rail-card">
-          <header class="rail-head">
-            <h2>Alerts</h2>
-            <small id="alertCount">0</small>
-          </header>
-          <div class="rail-body" id="alertRail"></div>
-        </section>
-      </aside>
-
-      <div class="workspace-main">
-        <section class="workspace-grid" id="workspaceGrid">
-          <article class="panel is-active" data-panel="1">
-            <header class="panel-head">
-              <h3 id="panelTitle1">Home</h3>
-              <div class="panel-controls">
-                <button class="panel-btn" data-panel-focus="1" type="button" title="Focus panel">⤢</button>
-                <button class="panel-btn" data-panel-cycle="1:-1" type="button">◀</button>
-                <button class="panel-btn" data-panel-cycle="1:1" type="button">▶</button>
-              </div>
-            </header>
-            <div class="panel-content" id="panelContent1"></div>
-          </article>
-
-          <article class="panel" data-panel="2">
-            <header class="panel-head">
-              <h3 id="panelTitle2">Quote</h3>
-              <div class="panel-controls">
-                <button class="panel-btn" data-panel-focus="2" type="button" title="Focus panel">⤢</button>
-                <button class="panel-btn" data-panel-cycle="2:-1" type="button">◀</button>
-                <button class="panel-btn" data-panel-cycle="2:1" type="button">▶</button>
-              </div>
-            </header>
-            <div class="panel-content" id="panelContent2"></div>
-          </article>
-
-          <article class="panel" data-panel="3">
-            <header class="panel-head">
-              <h3 id="panelTitle3">Chart</h3>
-              <div class="panel-controls">
-                <button class="panel-btn" data-panel-focus="3" type="button" title="Focus panel">⤢</button>
-                <button class="panel-btn" data-panel-cycle="3:-1" type="button">◀</button>
-                <button class="panel-btn" data-panel-cycle="3:1" type="button">▶</button>
-              </div>
-            </header>
-            <div class="panel-content" id="panelContent3"></div>
-          </article>
-
-          <article class="panel" data-panel="4">
-            <header class="panel-head">
-              <h3 id="panelTitle4">News</h3>
-              <div class="panel-controls">
-                <button class="panel-btn" data-panel-focus="4" type="button" title="Focus panel">⤢</button>
-                <button class="panel-btn" data-panel-cycle="4:-1" type="button">◀</button>
-                <button class="panel-btn" data-panel-cycle="4:1" type="button">▶</button>
-              </div>
-            </header>
-            <div class="panel-content" id="panelContent4"></div>
-          </article>
-        </section>
-
-      </div>
-    </section>
-
-    <!-- Mobile-only bottom panel nav, JS populates and updates aria labels -->
-    <nav class="mobile-panel-nav" id="mobilePanelNav" aria-label="Switch panels">
-      <button class="mobile-panel-tab is-active" data-mobile-panel="1" type="button">
-        <svg viewBox="0 0 20 20" fill="none" width="20" height="20"><rect x="3" y="3" width="6" height="6" rx="1.5" stroke="currentColor" stroke-width="1.6"/><rect x="11" y="3" width="6" height="6" rx="1.5" stroke="currentColor" stroke-width="1.6"/><rect x="3" y="11" width="6" height="6" rx="1.5" stroke="currentColor" stroke-width="1.6"/><rect x="11" y="11" width="6" height="6" rx="1.5" stroke="currentColor" stroke-width="1.6"/></svg>
-        <span id="mobileTab1Label">Home</span>
-      </button>
-      <button class="mobile-panel-tab" data-mobile-panel="2" type="button">
-        <svg viewBox="0 0 20 20" fill="none" width="20" height="20"><path d="M5 10h10M5 7h10M5 13h6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><rect x="2" y="3" width="16" height="14" rx="2" stroke="currentColor" stroke-width="1.6"/></svg>
-        <span id="mobileTab2Label">Trade</span>
-      </button>
-      <button class="mobile-panel-tab" data-mobile-panel="3" type="button">
-        <svg viewBox="0 0 20 20" fill="none" width="20" height="20"><polyline points="2,14 7,8 11,12 18,5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        <span id="mobileTab3Label">Chart</span>
-      </button>
-      <button class="mobile-panel-tab" data-mobile-panel="4" type="button">
-        <svg viewBox="0 0 20 20" fill="none" width="20" height="20"><path d="M4 5h12M4 9h8M4 13h10M4 17h6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
-        <span id="mobileTab4Label">News</span>
-      </button>
-    </nav>
-
-    <footer class="statusbar">
-      <span>📡 Updated: <strong id="lastUpdated">...</strong></span>
-      <span>⏱ Refresh: <strong id="refreshCountdown">30s</strong></span>
-      <span class="statusbar-market-clock"><span class="market-clock-dot" id="marketClockDot"></span><strong id="marketClock">...</strong></span>
-      <span>🕐 Session: <strong id="sessionClock">00:00:00</strong></span>
-      <span class="statusbar-hint">Cmd+K to open command palette</span>
-    </footer>
-  </main>
-
-  <div class="modal-backdrop hidden" id="authModalBackdrop">
-    <section class="auth-modal" id="authModal">
-      <header class="auth-head">
-        <h2 id="authModalTitle">Welcome back</h2>
-        <button class="icon-btn" id="closeAuthModal" type="button">×</button>
-      </header>
-
-      <p class="auth-status error-message-container active" id="authStatus">Your workspace, synced across every device.</p>
-
-      <div class="auth-tabs" id="authTabs">
-        <button class="auth-tab is-active" data-auth-tab="login" type="button">Sign in</button>
-        <button class="auth-tab" data-auth-tab="signup" type="button">Create account</button>
-      </div>
-
-      <form id="loginForm" data-auth-panel="login" class="auth-form">
-        <label>
-          Email or username
-          <input name="identifier" type="text" autocomplete="username" required />
-        </label>
-        <label>
-          Password
-          <input name="password" type="password" autocomplete="current-password" required />
-        </label>
-        <button class="btn btn-primary" id="loginBtn" type="submit">Sign in</button>
-        <button class="btn btn-ghost" id="continueLocalBtn" type="button">Continue without account</button>
-      </form>
-
-      <form id="signupForm" data-auth-panel="signup" class="auth-form hidden">
-        <!--
-          Simplified signup: 4 visible fields instead of 8.
-          - "Display name" splits client-side into firstName + lastName.
-          - Role defaults to "trader" (hidden) — change in Settings later.
-          - Confirm-password removed; the show/hide toggle below covers
-            mistype prevention without doubling the field count.
-        -->
-        <label>
-          Display name
-          <input id="signupDisplayName" name="displayName" type="text" autocomplete="name" placeholder="e.g. Alex Rivera" required />
-        </label>
-        <label>
-          Email
-          <input id="signupEmail" name="email" type="email" autocomplete="email" placeholder="you@email.com" required />
-        </label>
-        <label>
-          Username
-          <input id="signupUsername" name="username" type="text" autocomplete="username" placeholder="alexr" required />
-        </label>
-        <p class="auth-hint error-message-container active" id="signupAvailability">Pick a unique email and username.</p>
-        <label>
-          Password <small style="color:var(--muted);font-weight:400;">(min. 8 characters)</small>
-          <div class="password-field" style="position:relative; display:flex;">
-            <input id="signupPassword" name="password" type="password" minlength="8" autocomplete="new-password" required style="flex:1; padding-right:60px;" />
-            <button type="button" id="signupPasswordToggle" aria-label="Show password" style="position:absolute; right:0; top:0; bottom:0; padding:0 12px; background:none; border:none; color:var(--muted); cursor:pointer; font-size:11px; font-weight:600; letter-spacing:0.04em;">SHOW</button>
-          </div>
-        </label>
-        <!-- Hidden defaults the backend still expects -->
-        <input type="hidden" name="role" value="trader" />
-        <button class="btn btn-primary" id="signupBtn" type="submit">Create account</button>
-        <button class="btn btn-ghost" id="continueLocalSignupBtn" type="button">Continue without account</button>
-      </form>
-    </section>
+    </div>
   </div>
+</div>
 
-  <div class="palette-backdrop hidden" id="paletteBackdrop">
-    <section class="command-shell command-palette" id="commandPalette" aria-label="Command palette">
-      <span class="cmd-prefix">⌘</span>
+<!-- ── THEMES ─────────────────────────────────────────────────────── -->
+<section class="section section-center" id="themes">
+  <div class="section-eyebrow">Themes</div>
+  <h2 class="section-title">Your terminal, your aesthetic.</h2>
+  <p class="section-sub">
+    Nine handcrafted color systems. From the classic Bloomberg amber on black
+    to neon Synthwave to clean Paper mode for daytime sessions.
+  </p>
+
+  <div class="themes-grid">
+    <div class="theme-swatch sw-dark active" onclick="selectTheme(this)">
+      <div class="sw-bar"></div>
+      <div class="sw-body">
+        <div class="sw-line"></div>
+        <div class="sw-line short"></div>
+        <div class="sw-line"></div>
+      </div>
+      <div class="sw-label">DARK</div>
+    </div>
+    <div class="theme-swatch sw-bloomberg" onclick="selectTheme(this)">
+      <div class="sw-bar"></div>
+      <div class="sw-body">
+        <div class="sw-line"></div>
+        <div class="sw-line short"></div>
+        <div class="sw-line"></div>
+      </div>
+      <div class="sw-label">BLOOMBERG</div>
+    </div>
+    <div class="theme-swatch sw-synthwave" onclick="selectTheme(this)">
+      <div class="sw-bar"></div>
+      <div class="sw-body">
+        <div class="sw-line"></div>
+        <div class="sw-line short"></div>
+        <div class="sw-line"></div>
+      </div>
+      <div class="sw-label">SYNTHWAVE</div>
+    </div>
+    <div class="theme-swatch sw-emerald" onclick="selectTheme(this)">
+      <div class="sw-bar"></div>
+      <div class="sw-body">
+        <div class="sw-line"></div>
+        <div class="sw-line short"></div>
+        <div class="sw-line"></div>
+      </div>
+      <div class="sw-label">EMERALD</div>
+    </div>
+    <div class="theme-swatch sw-paper" onclick="selectTheme(this)">
+      <div class="sw-bar"></div>
+      <div class="sw-body">
+        <div class="sw-line"></div>
+        <div class="sw-line short"></div>
+        <div class="sw-line"></div>
+      </div>
+      <div class="sw-label">PAPER</div>
+    </div>
+    <div class="theme-swatch sw-midnight" onclick="selectTheme(this)">
+      <div class="sw-bar"></div>
+      <div class="sw-body">
+        <div class="sw-line"></div>
+        <div class="sw-line short"></div>
+        <div class="sw-line"></div>
+      </div>
+      <div class="sw-label">MIDNIGHT</div>
+    </div>
+    <div class="theme-swatch sw-crimson" onclick="selectTheme(this)">
+      <div class="sw-bar"></div>
+      <div class="sw-body">
+        <div class="sw-line"></div>
+        <div class="sw-line short"></div>
+        <div class="sw-line"></div>
+      </div>
+      <div class="sw-label">CRIMSON</div>
+    </div>
+    <div class="theme-swatch sw-slate" onclick="selectTheme(this)">
+      <div class="sw-bar"></div>
+      <div class="sw-body">
+        <div class="sw-line"></div>
+        <div class="sw-line short"></div>
+        <div class="sw-line"></div>
+      </div>
+      <div class="sw-label">SLATE</div>
+    </div>
+    <div class="theme-swatch sw-amber" onclick="selectTheme(this)">
+      <div class="sw-bar"></div>
+      <div class="sw-body">
+        <div class="sw-line"></div>
+        <div class="sw-line short"></div>
+        <div class="sw-line"></div>
+      </div>
+      <div class="sw-label">AMBER</div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ── BUILT FOR — personas ──────────────────────────────────────── -->
+<section class="section section-center" id="who">
+  <div class="section-eyebrow">Built for</div>
+  <h2 class="section-title">Serious analysts. Without the institution.</h2>
+  <p class="section-sub">
+    Meridian isn't built for a Wall Street trading desk. It's built for the people
+    who want a Wall Street trading desk's tools but don't have a $25,000 expense
+    account.
+  </p>
+
+  <div class="personas-grid" data-reveal data-stagger style="--stagger:90ms">
+    <div class="persona hover-lift">
+      <div class="persona-icon">📈</div>
+      <h3>The Active Trader</h3>
+      <p>Real-time quotes, options chains with full Greeks, custom alerts on price,
+        RSI, and volume. Built for swing setups and day-trade triage.</p>
+    </div>
+    <div class="persona hover-lift">
+      <div class="persona-icon">🎓</div>
+      <h3>The Finance Student</h3>
+      <p>Practice with paper accounts. Learn from AI commentary on real tickers.
+        The free tier covers an entire investments course without spending a cent.</p>
+    </div>
+    <div class="persona hover-lift">
+      <div class="persona-icon">💼</div>
+      <h3>The Independent RIA</h3>
+      <p>Manage client watchlists, run sector heatmaps, generate AI briefings for
+        end-of-week notes. Pay for the data you actually use, not a per-seat license.</p>
+    </div>
+    <div class="persona hover-lift">
+      <div class="persona-icon">🔬</div>
+      <h3>The Analyst &amp; Writer</h3>
+      <p>Newsletter writers, podcasters, independent researchers. Pull AI-summarized
+        fundamentals on demand. Share screenshots that actually look professional.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ── PRICING ────────────────────────────────────────────────────── -->
+<section class="section section-center" id="pricing">
+  <div class="section-eyebrow">Pricing</div>
+  <h2 class="section-title">Start free. Upgrade when you're ready.</h2>
+  <p class="section-sub">
+    No trial periods, no credit card required. The free tier is genuinely powerful.
+    Upgrade for live data, AI, and unlimited access.
+  </p>
+
+  <div class="pricing-grid" data-reveal data-stagger style="--stagger:120ms">
+    <!-- FREE -->
+    <div class="price-card hover-lift">
+      <div class="price-tier">Free</div>
+      <div class="price-amount">$0 <span>/ forever</span></div>
+      <p class="price-tagline">A real terminal, not a watered-down demo.</p>
+      <ul class="price-features">
+        <li><span class="check">✓</span> Quotes with 15-min delay</li>
+        <li><span class="check">✓</span> Watchlist up to 10 symbols</li>
+        <li><span class="check">✓</span> Sparkline charts</li>
+        <li><span class="check">✓</span> News feed (limited)</li>
+        <li><span class="check">✓</span> 3 price alerts</li>
+        <li><span class="check">✓</span> All 9 themes</li>
+        <li class="muted"><span class="dash">✗</span> AI Insights</li>
+        <li class="muted"><span class="dash">✗</span> Options chain</li>
+        <li class="muted"><span class="dash">✗</span> Portfolio tracker</li>
+      </ul>
+      <div class="price-cta">
+        <a href="terminal.html" class="btn btn-outline btn-block">Open free →</a>
+      </div>
+    </div>
+
+    <!-- PRO -->
+    <div class="price-card featured hover-lift">
+      <div class="price-badge">Most popular</div>
+      <div class="price-tier">Pro</div>
+      <div class="price-amount">$7.99 <span>/ mo</span></div>
+      <p class="price-tagline">Everything you need to trade with conviction. <span style="color:var(--accent); font-size:12px;">$5.99/mo billed annually</span></p>
+      <ul class="price-features">
+        <li><span class="check">✓</span> Everything in Free</li>
+        <li><span class="plus">+</span> <strong>Real-time quotes (live)</strong></li>
+        <li><span class="plus">+</span> Unlimited watchlist</li>
+        <li><span class="plus">+</span> <strong>AI Insights via GPT + Claude</strong></li>
+        <li><span class="plus">+</span> Full options chain</li>
+        <li><span class="plus">+</span> Portfolio P&amp;L tracker</li>
+        <li><span class="check">✓</span> Unlimited alerts</li>
+        <li><span class="check">✓</span> Full news + sentiment</li>
+      </ul>
+      <div class="price-cta">
+        <a href="#get-early-access" class="btn btn-primary btn-block">Get Pro early access →</a>
+      </div>
+    </div>
+
+    <!-- PRO+ -->
+    <div class="price-card hover-lift">
+      <div class="price-tier">Pro+</div>
+      <div class="price-amount">$14.99 <span>/ mo</span></div>
+      <p class="price-tagline">For power users, teams, and builders. <span style="color:var(--accent); font-size:12px;">$11.99/mo billed annually</span></p>
+      <ul class="price-features">
+        <li><span class="check">✓</span> Everything in Pro</li>
+        <li><span class="plus">+</span> Multi-account portfolios</li>
+        <li><span class="plus">+</span> Brokerage sync (coming soon)</li>
+        <li><span class="plus">+</span> Team workspaces</li>
+        <li><span class="plus">+</span> API access</li>
+        <li><span class="plus">+</span> Custom alert webhooks</li>
+        <li><span class="check">✓</span> Priority support</li>
+        <li><span class="check">✓</span> Early feature access</li>
+        <li><span class="check">✓</span> White-label option</li>
+      </ul>
+      <div class="price-cta">
+        <a href="#get-early-access" class="btn btn-outline btn-block">Get Pro+ early access →</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── TRUST STRIP ───────────────────────────────────────────────── -->
+<div class="trust-strip">
+  <div class="trust-item">📂 <strong>Open source</strong> · MIT licensed</div>
+  <div class="trust-item">🔒 <strong>No ads</strong> · No tracking</div>
+  <div class="trust-item">💳 <strong>No credit card</strong> for Free tier</div>
+  <div class="trust-item">📊 Quotes from <strong>licensed feeds</strong></div>
+  <div class="trust-item">🧠 AI: <strong>GPT + Claude</strong></div>
+</div>
+
+<!-- ── FAQ ────────────────────────────────────────────────────────── -->
+<section class="section section-center" id="faq">
+  <div class="section-eyebrow">FAQ</div>
+  <h2 class="section-title">Questions, answered.</h2>
+
+  <div class="faq-grid" data-reveal>
+    <details class="faq-item" open>
+      <summary>Is the data real-time?</summary>
+      <p>Pro users get streaming live quotes. Free users get 15-minute delayed quotes,
+        the same delay used by most consumer trackers. Both tiers refresh
+        automatically while the panel is open.</p>
+    </details>
+
+    <details class="faq-item">
+      <summary>Where does the data come from?</summary>
+      <p>Quotes flow through licensed market data providers. News headlines and AI
+        summaries use public news APIs plus GPT and Claude. The whole stack is open
+        source on GitHub if you want to inspect the wiring.</p>
+    </details>
+
+    <details class="faq-item">
+      <summary>Is my account data private?</summary>
+      <p>Watchlists, positions, alerts, and ticker notes stay scoped to your account.
+        Notes are stored locally first and only sync to your workspace when you're
+        signed in. Email is used for login and account-related notifications only,
+        never sold or shared.</p>
+    </details>
+
+    <details class="faq-item">
+      <summary>What happens if the server is down?</summary>
+      <p>The terminal degrades gracefully: the last quotes that loaded stay on screen,
+        charts render from cached data, and the UI surfaces a "Server waking up"
+        indicator. The free tier sleeps when idle, so the first visit each day
+        takes ~30 seconds to warm up.</p>
+    </details>
+
+    <details class="faq-item">
+      <summary>Can I trade through Meridian?</summary>
+      <p>No. Meridian is information-only. We never recommend buying or selling
+        securities, never route orders to a brokerage, and never auto-trade on
+        alerts. You can paper-trade in the Portfolio panel for practice.</p>
+    </details>
+
+    <details class="faq-item">
+      <summary>Why is it free?</summary>
+      <p>The free tier is genuinely free, forever. Pro and Pro+ subscriptions cover
+        the live data feeds and AI tokens. We don't sell your data, run ads, or
+        rent your watchlist to anyone.</p>
+    </details>
+  </div>
+</section>
+
+<!-- ── WHAT'S NEW / RELEASE NOTES ─────────────────────────────────── -->
+<section class="section section-center" id="whats-new">
+  <div class="section-eyebrow">What's New</div>
+  <h2 class="section-title">Built in the open. Shipped weekly.</h2>
+  <p class="section-sub">
+    The latest improvements, in the order they landed. Every change is in the
+    public Git history, and the full source is on GitHub.
+  </p>
+
+  <ol class="release-feed" data-reveal data-stagger style="--stagger:80ms">
+    <li class="release-entry hover-lift">
+      <div class="release-meta">
+        <span class="release-tag">v0.7</span>
+        <time>Latest</time>
+      </div>
+      <div class="release-body">
+        <h3>Quality + responsiveness pass</h3>
+        <ul>
+          <li>Fixed the notification drawer close button (a stray CSS animation kept it pinned to the screen).</li>
+          <li>News panel no longer flickers every 5s. The DOM only re-mounts when the headlines actually change.</li>
+          <li>Wake-server banner now auto-dismisses after 45s instead of camping forever during cold starts.</li>
+          <li>Alerts in the sidebar are now editable inline and have a per-row delete button.</li>
+          <li>Headlines on widescreen now flow into a 2 or 3-column grid (container queries) instead of leaving a half-empty page.</li>
+          <li>Cleaner logo. Mobile nav fits properly at 375px. Em-dashes removed from all user-visible copy.</li>
+        </ul>
+      </div>
+    </li>
+    <li class="release-entry hover-lift">
+      <div class="release-meta">
+        <span class="release-tag">v0.6</span>
+        <time>Apr 26</time>
+      </div>
+      <div class="release-body">
+        <h3>Disruption thesis + strategy memo</h3>
+        <ul>
+          <li>Comparison table: side-by-side Yahoo Finance vs Meridian Pro vs Bloomberg Terminal.</li>
+          <li>"Built for" personas: Active Trader, Finance Student, Independent RIA, Analyst &amp; Writer.</li>
+          <li>FAQ section, scroll-spy nav, and a scroll-to-top button.</li>
+          <li>One-page strategy memo for the business case behind the product.</li>
+        </ul>
+      </div>
+    </li>
+    <li class="release-entry hover-lift">
+      <div class="release-meta">
+        <span class="release-tag">v0.5</span>
+        <time>Earlier</time>
+      </div>
+      <div class="release-body">
+        <h3>Real email signup + simpler accounts</h3>
+        <ul>
+          <li>Static-site email relay (Formsubmit) — no backend required for early-access list.</li>
+          <li>Signup form reduced from 8 fields to 4 with a Show/Hide password toggle.</li>
+          <li>Wake-banner state machine for the free-tier backend cold-start window.</li>
+          <li>Live theming on the landing page (click any swatch to re-skin the whole page in real time).</li>
+        </ul>
+      </div>
+    </li>
+  </ol>
+
+  <p class="release-foot">
+    Full history:
+    <a href="https://github.com/captainfredric/The-Terminal-Meridian/commits/main"
+       target="_blank" rel="noopener noreferrer">github.com/captainfredric/The-Terminal-Meridian</a>
+  </p>
+</section>
+
+<!-- ── EMAIL SIGNUP / EARLY ACCESS ────────────────────────────────── -->
+<section class="signup-wrap" id="get-early-access">
+  <div class="signup-card">
+    <div class="section-eyebrow">Early Access</div>
+    <h2 class="section-title">Be first in line for Pro.</h2>
+    <p class="section-sub">
+      Drop your email and we'll send you a launch-week trial code the moment Pro
+      goes live. One email when it's ready. No spam, ever.
+    </p>
+
+    <!--
+      Form posts to Formsubmit.co which relays to captainarmoreddude@gmail.com.
+      The first submission triggers a one-time confirmation email; after you
+      click that link, every subsequent submission lands directly in the inbox.
+      No backend required, no signup on Formsubmit, no rate-limit gotchas.
+    -->
+    <form
+      class="signup-form"
+      id="emailSignupForm"
+      action="https://formsubmit.co/captainarmoreddude@gmail.com"
+      method="POST"
+    >
       <input
-        id="commandInput"
-        class="command-input terminal-input"
-        type="text"
-        autocomplete="off"
-        spellcheck="false"
-        placeholder="Ticker, command, or ? for help. e.g. AAPL, CHART TSLA, BUY NVDA 5"
+        type="email"
+        name="email"
+        placeholder="you@email.com"
+        required
+        autocomplete="email"
+        aria-label="Email address"
       />
-      <kbd class="cmd-kbd-hint">↵ run</kbd>
-      <kbd class="cmd-kbd-hint">↑↓ history</kbd>
-      <kbd class="cmd-kbd-hint">Tab suggest</kbd>
-      <button id="runCommandButton" class="btn btn-primary" type="button">Run</button>
-      <div class="autocomplete hidden" id="autocomplete"></div>
-    </section>
+      <button type="submit" class="btn btn-primary">Get early access →</button>
+
+      <!-- Formsubmit.co control fields -->
+      <input type="hidden" name="_subject" value="🚀 New Meridian early-access signup">
+      <input type="hidden" name="_template" value="table">
+      <input type="hidden" name="_captcha" value="false">
+      <input type="hidden" name="_next" value="https://captainfredric.github.io/The-Terminal-Meridian/?signup=ok#get-early-access">
+      <!-- honeypot for bots -->
+      <input type="text" name="_honey" tabindex="-1" autocomplete="off" style="position:absolute;left:-9999px;">
+    </form>
+
+    <p class="signup-note">No credit card. No spam. Unsubscribe with one click.</p>
+
+    <div class="signup-success" id="signupSuccess" role="status" aria-live="polite">
+      ✓ You're on the list. Check your inbox for confirmation.
+    </div>
   </div>
+</section>
 
-  <div id="toast" class="toast" role="status" aria-live="polite"></div>
-
-  <aside class="notif-drawer" id="notifDrawer" aria-label="Notification history">
-    <header class="notif-drawer-head">
-      <h3>Notifications</h3>
-      <div style="display:flex;gap:8px;align-items:center;">
-        <button class="btn btn-ghost btn-sm" id="notifClearBtn" type="button">Clear all</button>
-        <button class="btn btn-icon" id="notifDrawerClose" type="button" title="Close">✕</button>
-      </div>
-    </header>
-    <ul class="notif-history" id="notifHistory" aria-live="polite"></ul>
-  </aside>
-  <div class="notif-backdrop hidden" id="notifBackdrop"></div>
-
-  <div class="modal-backdrop hidden" id="settingsModalBackdrop">
-    <section class="auth-modal settings-modal" id="settingsModal">
-      <header class="auth-head">
-        <h2>Account settings</h2>
-        <button class="icon-btn" id="closeSettingsModal" type="button">×</button>
-      </header>
-
-      <p class="auth-status error-message-container active" id="settingsStatus">Update your account details securely.</p>
-
-      <form id="updateProfileForm" class="auth-form">
-        <div class="auth-grid">
-          <label>
-            First name
-            <input name="firstName" type="text" required />
-          </label>
-          <label>
-            Last name
-            <input name="lastName" type="text" required />
-          </label>
-        </div>
-        <label>
-          Username
-          <input name="username" type="text" required />
-        </label>
-        <label>
-          Role
-          <select id="settingsRole" name="role"></select>
-        </label>
-        <button class="btn btn-primary" id="updateProfileBtn" type="submit">Update profile</button>
-      </form>
-
-      <form id="changePasswordForm" class="auth-form">
-        <label>
-          Current password
-          <input name="currentPassword" type="password" required />
-        </label>
-        <label>
-          New password
-          <input name="newPassword" type="password" minlength="8" required />
-        </label>
-        <button class="btn btn-primary" id="changePasswordBtn" type="submit">Change password</button>
-      </form>
-
-      <div class="auth-form" id="subscriptionSection">
-        <h3 style="margin: 0 0 6px; font-size: 0.95rem;">Subscription</h3>
-        <p style="margin: 0 0 10px; color: var(--muted); font-size: 0.85rem;" id="subscriptionStatusLine">Free tier</p>
-        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-          <button class="btn btn-primary" id="upgradeFromSettingsBtn" type="button">Upgrade to Pro</button>
-          <button class="btn btn-ghost hidden" id="manageSubscriptionBtn" type="button">Manage billing</button>
-        </div>
-      </div>
-
-      <form id="deleteAccountForm" class="auth-form">
-        <label>
-          Confirm password to delete account
-          <input name="password" type="password" required />
-        </label>
-        <button class="btn btn-danger" id="deleteAccountBtn" type="submit">Delete account</button>
-      </form>
-    </section>
-  </div>
-
-  <!-- Onboarding overlay -->
-  <!-- Multi-step onboarding wizard -->
-  <div class="onboarding-backdrop hidden" id="onboardingBackdrop" role="dialog" aria-modal="true" aria-label="Welcome to Meridian">
-    <div class="onboarding-wizard" id="onboardingWizard">
-
-      <!-- Step indicators -->
-      <div class="wizard-steps" id="wizardSteps" aria-label="Wizard progress">
-        <div class="wizard-step is-active" data-step-dot="1"><span></span><small>Focus</small></div>
-        <div class="wizard-step-connector"></div>
-        <div class="wizard-step" data-step-dot="2"><span></span><small>Theme</small></div>
-        <div class="wizard-step-connector"></div>
-        <div class="wizard-step" data-step-dot="3"><span></span><small>Speed</small></div>
-      </div>
-
-      <!-- ── STEP 1: Pick your focus ─────────────────────────── -->
-      <div class="wizard-pane is-active" id="wizardPane1">
-        <div class="wizard-hero">
-          <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" width="44" height="44" aria-hidden="true">
-            <rect x="2" y="2" width="36" height="36" rx="11" fill="url(#obGlow1)"/>
-            <path d="M9.8 14.4L20 20.6" stroke="url(#obDiagLeft)" stroke-width="2.4" stroke-linecap="round"/>
-            <path d="M20 20.6L30.2 14.4" stroke="url(#obDiagRight)" stroke-width="2.4" stroke-linecap="round"/>
-            <path d="M30.2 14.4L33 12.2" stroke="#2fcf84" stroke-width="2.2" stroke-linecap="round"/>
-            <rect x="8.1" y="14.2" width="3.4" height="12.4" rx="1" fill="#2fcf84"/>
-            <line x1="9.8" y1="11.6" x2="9.8" y2="14.2" stroke="#2fcf84" stroke-width="1.5" stroke-linecap="round"/>
-            <line x1="9.8" y1="26.6" x2="9.8" y2="29.2" stroke="#2fcf84" stroke-width="1.5" stroke-linecap="round"/>
-            <rect x="18.3" y="19.8" width="3.4" height="9.6" rx="1" fill="#ff5f7f"/>
-            <line x1="20" y1="17.1" x2="20" y2="19.8" stroke="#ff5f7f" stroke-width="1.5" stroke-linecap="round"/>
-            <line x1="20" y1="29.4" x2="20" y2="32" stroke="#ff5f7f" stroke-width="1.5" stroke-linecap="round"/>
-            <rect x="28.5" y="14.2" width="3.4" height="12.4" rx="1" fill="#2fcf84"/>
-            <line x1="30.2" y1="11.6" x2="30.2" y2="14.2" stroke="#2fcf84" stroke-width="1.5" stroke-linecap="round"/>
-            <line x1="30.2" y1="26.6" x2="30.2" y2="29.2" stroke="#2fcf84" stroke-width="1.5" stroke-linecap="round"/>
-            <circle cx="33" cy="12.2" r="1.8" fill="#9cb9ff"/>
+<!-- ── FOOTER ─────────────────────────────────────────────────────── -->
+<footer class="footer">
+  <div class="footer-brand">
+    <svg viewBox="0 0 40 40" fill="none" width="20" height="20">
+      <rect x="2" y="2" width="36" height="36" rx="11" fill="#172953"/>
+      <path d="M9.8 14.4L20 20.6" stroke="url(#ftDL)" stroke-width="2.4" stroke-linecap="round"/>
+      <path d="M20 20.6L30.2 14.4" stroke="url(#ftDR)" stroke-width="2.4" stroke-linecap="round"/>
+      <rect x="8.1" y="14.2" width="3.4" height="12.4" rx="1" fill="#2fcf84"/>
+      <rect x="18.3" y="19.8" width="3.4" height="9.6" rx="1" fill="#ff5f7f"/>
+      <rect x="28.5" y="14.2" width="3.4" height="12.4" rx="1" fill="#2fcf84"/>
             <defs>
-              <linearGradient id="obGlow1" x1="4" y1="4" x2="36" y2="36" gradientUnits="userSpaceOnUse">
-                <stop stop-color="#172953"/>
-                <stop offset="1" stop-color="#0d1529"/>
-              </linearGradient>
-              <linearGradient id="obDiagLeft" x1="9.8" y1="14.4" x2="20" y2="20.6" gradientUnits="userSpaceOnUse">
-                <stop offset="0%" stop-color="#2fcf84"/>
-                <stop offset="100%" stop-color="#ff5f7f"/>
-              </linearGradient>
-              <linearGradient id="obDiagRight" x1="20" y1="20.6" x2="30.2" y2="14.4" gradientUnits="userSpaceOnUse">
-                <stop offset="0%" stop-color="#ff5f7f"/>
-                <stop offset="100%" stop-color="#2fcf84"/>
-              </linearGradient>
-            </defs>
-          </svg>
-          <div>
-            <h2>Welcome to Meridian</h2>
-            <p>Bloomberg-grade terminal. No ads, no noise.</p>
-          </div>
-        </div>
-
-        <div class="wizard-step-body">
-          <h3>What do you want to track?</h3>
-          <p class="wizard-step-sub">Pick a category to seed your watchlist. You can always change it.</p>
-
-          <div class="wizard-focus-grid" id="wizardFocusGrid">
-            <button class="wizard-focus-tile" type="button" data-focus="mega">
-              <span class="wizard-focus-icon">📈</span>
-              <strong>US Mega Cap</strong>
-              <small>AAPL · MSFT · NVDA · AMZN</small>
-            </button>
-            <button class="wizard-focus-tile" type="button" data-focus="indices">
-              <span class="wizard-focus-icon">🏛</span>
-              <strong>Market Indices</strong>
-              <small>SPY · QQQ · DIA · IWM</small>
-            </button>
-            <button class="wizard-focus-tile" type="button" data-focus="tech">
-              <span class="wizard-focus-icon">💻</span>
-              <strong>Tech &amp; AI</strong>
-              <small>META · GOOGL · AMD · TSLA</small>
-            </button>
-            <button class="wizard-focus-tile" type="button" data-focus="finance">
-              <span class="wizard-focus-icon">🏦</span>
-              <strong>Finance</strong>
-              <small>JPM · GS · BAC · BRK-B</small>
-            </button>
-            <button class="wizard-focus-tile" type="button" data-focus="energy">
-              <span class="wizard-focus-icon">⚡</span>
-              <strong>Energy</strong>
-              <small>XOM · CVX · OXY · SLB</small>
-            </button>
-            <button class="wizard-focus-tile" type="button" data-focus="crypto">
-              <span class="wizard-focus-icon">🪙</span>
-              <strong>Crypto</strong>
-              <small>BTC-USD · ETH-USD · SOL-USD</small>
-            </button>
-            <button class="wizard-focus-tile" type="button" data-focus="healthcare">
-              <span class="wizard-focus-icon">⚕️</span>
-              <strong>Healthcare</strong>
-              <small>JNJ · UNH · PFE · ABBV</small>
-            </button>
-            <button class="wizard-focus-tile" type="button" data-focus="custom">
-              <span class="wizard-focus-icon">✏️</span>
-              <strong>I'll choose my own</strong>
-              <small>Start with a blank watchlist</small>
-            </button>
-          </div>
-
-          <p class="wizard-selection-note" id="wizardSelectionNote" aria-live="polite"></p>
-        </div>
-
-        <div class="wizard-actions">
-          <button class="btn btn-ghost" id="onboardingSkip" type="button">Skip setup</button>
-          <button class="btn btn-primary" id="wizardNext1" type="button" disabled>Next →</button>
-        </div>
-      </div>
-
-      <!-- ── STEP 2: Pick your theme ─────────────────────────── -->
-      <div class="wizard-pane" id="wizardPane2">
-        <div class="wizard-step-body">
-          <h3>Pick your look</h3>
-          <p class="wizard-step-sub">You can change this any time by pressing <kbd>T</kbd>.</p>
-
-          <div class="wizard-theme-grid" id="wizardThemeGrid">
-            <button class="wizard-theme-tile is-active" type="button" data-wizard-theme="dark">
-              <div class="wizard-theme-preview wizard-preview-dark">
-                <div class="wtp-bar"></div>
-                <div class="wtp-row"><div class="wtp-cell green"></div><div class="wtp-cell"></div><div class="wtp-cell red"></div></div>
-                <div class="wtp-row small"><div class="wtp-line"></div><div class="wtp-line short"></div></div>
-              </div>
-              <strong>Cosmic Dark</strong>
-              <small>Default · cool blue</small>
-            </button>
-            <button class="wizard-theme-tile" type="button" data-wizard-theme="bloomberg">
-              <div class="wizard-theme-preview wizard-preview-bloomberg">
-                <div class="wtp-bar"></div>
-                <div class="wtp-row"><div class="wtp-cell amber"></div><div class="wtp-cell"></div><div class="wtp-cell red"></div></div>
-                <div class="wtp-row small"><div class="wtp-line amber"></div><div class="wtp-line short amber"></div></div>
-              </div>
-              <strong>Bloomberg</strong>
-              <small>Pure black · amber</small>
-            </button>
-            <button class="wizard-theme-tile" type="button" data-wizard-theme="synthwave">
-              <div class="wizard-theme-preview wizard-preview-synthwave">
-                <div class="wtp-bar"></div>
-                <div class="wtp-row"><div class="wtp-cell cyan"></div><div class="wtp-cell"></div><div class="wtp-cell pink"></div></div>
-                <div class="wtp-row small"><div class="wtp-line cyan"></div><div class="wtp-line short pink"></div></div>
-              </div>
-              <strong>Synthwave</strong>
-              <small>Deep purple · neon</small>
-            </button>
-            <button class="wizard-theme-tile" type="button" data-wizard-theme="emerald">
-              <div class="wizard-theme-preview wizard-preview-emerald">
-                <div class="wtp-bar"></div>
-                <div class="wtp-row"><div class="wtp-cell gold"></div><div class="wtp-cell"></div><div class="wtp-cell red"></div></div>
-                <div class="wtp-row small"><div class="wtp-line gold"></div><div class="wtp-line short"></div></div>
-              </div>
-              <strong>Emerald</strong>
-              <small>Forest dark · gold</small>
-            </button>
-            <button class="wizard-theme-tile" type="button" data-wizard-theme="paper">
-              <div class="wizard-theme-preview wizard-preview-paper">
-                <div class="wtp-bar"></div>
-                <div class="wtp-row"><div class="wtp-cell dkgreen"></div><div class="wtp-cell"></div><div class="wtp-cell dkred"></div></div>
-                <div class="wtp-row small"><div class="wtp-line dkgreen"></div><div class="wtp-line short dkred"></div></div>
-              </div>
-              <strong>Paper</strong>
-              <small>Light · for daytime</small>
-            </button>
-          </div>
-        </div>
-
-        <div class="wizard-actions">
-          <button class="btn btn-ghost" id="wizardBack2" type="button">← Back</button>
-          <button class="btn btn-primary" id="wizardNext2" type="button">Next →</button>
-        </div>
-      </div>
-
-      <!-- ── STEP 3: Refresh speed ───────────────────────────── -->
-      <div class="wizard-pane" id="wizardPane3">
-        <div class="wizard-step-body">
-          <h3>How often should data refresh?</h3>
-          <p class="wizard-step-sub">You can change this at any time in the status bar.</p>
-
-          <div class="wizard-speed-grid" id="wizardSpeedGrid">
-            <button class="wizard-speed-tile" type="button" data-speed="10">
-              <span class="wizard-speed-badge pro-badge">⚡ Pro</span>
-              <strong>10 seconds</strong>
-              <small>Near real-time · for active traders</small>
-            </button>
-            <button class="wizard-speed-tile is-active" type="button" data-speed="30">
-              <strong>30 seconds</strong>
-              <small>Balanced · recommended for most users</small>
-            </button>
-            <button class="wizard-speed-tile" type="button" data-speed="60">
-              <strong>1 minute</strong>
-              <small>Efficient · lower battery usage</small>
-            </button>
-            <button class="wizard-speed-tile" type="button" data-speed="120">
-              <strong>2 minutes</strong>
-              <small>Relaxed · for monitoring only</small>
-            </button>
-          </div>
-
-          <div class="wizard-finish-recap" id="wizardFinishRecap">
-            <!-- JS fills this in -->
-          </div>
-        </div>
-
-        <div class="wizard-actions">
-          <button class="btn btn-ghost" id="wizardBack3" type="button">← Back</button>
-          <button class="btn btn-primary wizard-launch-btn" id="onboardingStart" type="button">
-            🚀 Launch Meridian
-          </button>
-        </div>
-      </div>
-
-    </div>
+        <linearGradient id="ftDL" x1="9.8" y1="14.4" x2="20" y2="20.6" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stop-color="#2fcf84"/><stop offset="100%" stop-color="#ff5f7f"/>
+        </linearGradient>
+        <linearGradient id="ftDR" x1="20" y1="20.6" x2="30.2" y2="14.4" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stop-color="#ff5f7f"/><stop offset="100%" stop-color="#2fcf84"/>
+        </linearGradient>
+      </defs>
+    </svg>
+    MERIDIAN
   </div>
 
-  <!-- Guided tour overlay -->
-  <div class="tour-overlay hidden" id="tourOverlay" aria-modal="true" role="dialog" aria-label="Meridian guided tour">
-    <div class="tour-spotlight" id="tourSpotlight"></div>
-    <div class="tour-card" id="tourCard">
-      <div class="tour-progress" id="tourProgress"></div>
-      <div class="tour-card-body">
-        <span class="tour-step-icon" id="tourIcon" aria-hidden="true"></span>
-        <h3 class="tour-step-title" id="tourTitle"></h3>
-        <p class="tour-step-desc" id="tourDesc"></p>
-      </div>
-      <div class="tour-actions">
-        <button class="btn btn-ghost btn-sm" id="tourSkipBtn" type="button">Skip tour</button>
-        <div style="display:flex;gap:8px;align-items:center;">
-          <button class="btn btn-outline btn-sm" id="tourPrevBtn" type="button">← Back</button>
-          <button class="btn btn-primary btn-sm" id="tourNextBtn" type="button">Next →</button>
-        </div>
-      </div>
-    </div>
+  <div class="footer-links">
+    <a href="#features">Features</a>
+    <a href="#pricing">Pricing</a>
+    <a href="#get-early-access">Early access</a>
+    <a href="https://github.com/captainfredric/The-Terminal-Meridian" target="_blank" rel="noopener">GitHub</a>
+    <a href="terminal.html">Open Terminal ↗</a>
   </div>
 
-  <!-- Pricing modal -->
-  <div class="modal-backdrop hidden" id="pricingModalBackdrop">
-    <section class="pricing-modal" id="pricingModal">
-      <header class="pricing-modal-head">
-        <div>
-          <h2 class="pricing-modal-title">Meridian Plans</h2>
-          <p class="pricing-modal-sub">Bloomberg-grade tools. Indie-friendly pricing. <strong style="color:var(--accent)">Free forever, no card required.</strong></p>
-          <div class="pricing-social-proof">
-            <span class="pricing-stars">★★★★★</span>
-            <span>Trusted by 4,200+ retail traders &amp; quant tinkerers</span>
-          </div>
-        </div>
-        <button class="icon-btn" id="closePricingModal" type="button" title="Close">✕</button>
-      </header>
+  <p class="footer-copy">© 2026 Meridian Market Terminal. Data for informational purposes only. Not investment advice.</p>
+</footer>
 
-      <!-- Annual toggle -->
-      <div class="pricing-billing-toggle">
-        <button class="pricing-billing-btn is-active" id="billingMonthly" type="button" data-billing="monthly">Monthly</button>
-        <button class="pricing-billing-btn" id="billingAnnual" type="button" data-billing="annual">
-          Annual
-          <span class="pricing-save-badge">2 months free</span>
-        </button>
-      </div>
+<!-- ── SCROLL TO TOP ──────────────────────────────────────────────── -->
+<button class="to-top" id="toTopBtn" type="button" aria-label="Scroll to top">↑</button>
 
-      <div class="pricing-grid">
-        <!-- Free -->
-        <div class="pricing-card">
-          <div class="pricing-card-header">
-            <h3>Free</h3>
-            <p class="pricing-card-desc">Everything you need to start</p>
-          </div>
-          <div class="pricing-price" id="priceMonthlyFree">$0<small>/mo</small></div>
-          <ul class="pricing-features">
-            <li>Real-time quotes &amp; charts</li>
-            <li>10-symbol watchlist</li>
-            <li>News feed &amp; briefing</li>
-            <li>3 price alerts</li>
-            <li>5 custom rules</li>
-            <li>Paper trading</li>
-            <li>30s data refresh</li>
-            <li>Local workspace save</li>
-          </ul>
-          <button class="btn btn-ghost pricing-cta" type="button" disabled>Your current plan</button>
-        </div>
+<script>
+  /* ------------------------------------------------------------------
+   * Show the scroll-to-top button after the user has scrolled past
+   * the hero. Smooth-scroll back to the top on click.
+   * ------------------------------------------------------------------ */
+  (function scrollToTopButton() {
+    const btn = document.getElementById('toTopBtn');
+    if (!btn) return;
+    const onScroll = () => {
+      if (window.scrollY > 600) btn.classList.add('is-shown');
+      else btn.classList.remove('is-shown');
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    btn.addEventListener('click', () => {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+    onScroll();
+  })();
 
-        <!-- Pro (featured) -->
-        <div class="pricing-card is-featured">
-          <span class="pricing-popular-badge">⚡ Most popular</span>
-          <div class="pricing-card-header">
-            <h3>Pro</h3>
-            <p class="pricing-card-desc">For serious market participants</p>
-          </div>
-          <div class="pricing-price">
-            <span class="pricing-amount" id="priceAmountPro">$7.99</span><small id="pricePeriodPro">/mo</small>
-            <div class="pricing-annual-note hidden" id="priceAnnualPro">$71.88/yr · billed annually</div>
-            <div class="pricing-trial-note">7-day free trial · cancel any time</div>
-          </div>
-          <ul class="pricing-features">
-            <li>Everything in Free</li>
-            <li>Unlimited watchlists &amp; alerts</li>
-            <li>Advanced indicators (MACD, Bollinger, VWAP)</li>
-            <li>Financial statements &amp; filings</li>
-            <li>Analyst ratings &amp; targets</li>
-            <li>Limit &amp; stop orders (paper)</li>
-            <li>Screener presets &amp; CSV export</li>
-            <li>10s data refresh</li>
-            <li>Cloud workspace sync</li>
-            <li>Customizable rules engine</li>
-            <li>Per-ticker notes &amp; journal</li>
-          </ul>
-          <button class="btn btn-primary pricing-cta" type="button" id="proUpgradeBtn" data-waitlist="pro">Start 7-day free trial →</button>
-        </div>
+  /* ------------------------------------------------------------------
+   * Pre-warm the Render backend on landing page load.
+   * Render's free tier sleeps after 15min idle; cold-starts cost
+   * 30-60s. Firing this fetch while the user reads the marketing copy
+   * means the API is awake by the time they click "Open Terminal".
+   * ------------------------------------------------------------------ */
+  (function preWarmBackend() {
+    try {
+      fetch("https://the-terminal-meridian.onrender.com/api/health", {
+        mode: "no-cors",
+        cache: "no-store",
+        keepalive: true,
+      }).catch(() => {});
+    } catch (e) { /* network blocked, no harm */ }
+  })();
 
-        <!-- Pro+ -->
-        <div class="pricing-card">
-          <div class="pricing-card-header">
-            <h3>Pro+</h3>
-            <p class="pricing-card-desc">Quant &amp; power-user tier</p>
-          </div>
-          <div class="pricing-price">
-            <span class="pricing-amount" id="priceAmountProPlus">$14.99</span><small id="pricePeriodProPlus">/mo</small>
-            <div class="pricing-annual-note hidden" id="priceAnnualProPlus">$143.88/yr · billed annually</div>
-          </div>
-          <ul class="pricing-features">
-            <li>Everything in Pro</li>
-            <li>AI market commentary</li>
-            <li>Webhook &amp; email alerts</li>
-            <li>REST API access</li>
-            <li>Extended hours data</li>
-            <li>Options flow &amp; unusual activity</li>
-            <li>Multi-account portfolios</li>
-            <li>Priority support</li>
-          </ul>
-          <button class="btn btn-outline pricing-cta" type="button" data-waitlist="pro-plus">Get early access →</button>
-        </div>
-      </div>
+  /* ------------------------------------------------------------------
+   * Cmd+K / Ctrl+K → jump straight to the terminal.
+   * Mirrors the in-app command palette shortcut so power users
+   * arriving from search engines or social can dive in instantly.
+   * ------------------------------------------------------------------ */
+  document.addEventListener("keydown", function (e) {
+    if ((e.metaKey || e.ctrlKey) && (e.key === "k" || e.key === "K")) {
+      e.preventDefault();
+      window.location.href = "terminal.html";
+    }
+  });
 
-      <!-- Trial CTA -->
-      <div class="pricing-waitlist" id="pricingWaitlist">
-        <p class="pricing-waitlist-label">✅ Billing is live. Start your 7-day free trial today. No card charge until day 8.</p>
-        <p class="pricing-waitlist-note" id="pricingWaitlistNote">Cancel any time before the trial ends and you won't be charged.</p>
-      </div>
+  /* ------------------------------------------------------------------
+   * Theme swatch interaction.
+   * Clicking a swatch re-skins the live landing page using the same
+   * CSS variables as the real terminal app, so visitors see exactly
+   * how the chosen theme will look on their data.
+   * ------------------------------------------------------------------ */
+  const THEMES = {
+    "sw-dark":      { bg:"#0f1117", panel:"#161a23", surface:"#1d2230", border:"#262c3b", text:"#e6e8ef", muted:"#8a96b3", accent:"#2fcf84", danger:"#ff5f7f" },
+    "sw-bloomberg": { bg:"#000000", panel:"#0a0a0a", surface:"#1a1303", border:"#3d2f10", text:"#ffb84d", muted:"#a08050", accent:"#ff9c00", danger:"#ff3344" },
+    "sw-synthwave": { bg:"#150828", panel:"#1d0e35", surface:"#2a1452", border:"#4d2a8a", text:"#f0e8ff", muted:"#b09bd8", accent:"#ff66cc", danger:"#ff4477" },
+    "sw-emerald":   { bg:"#021410", panel:"#062018", surface:"#0a3025", border:"#155040", text:"#d8f5e8", muted:"#88b8a4", accent:"#d4af37", danger:"#ff6680" },
+    "sw-paper":     { bg:"#f8f6f0", panel:"#ffffff", surface:"#f0ebe0", border:"#d5cdb8", text:"#1a1a1a", muted:"#6b6356", accent:"#c43a3a", danger:"#c92024" },
+    "sw-midnight":  { bg:"#050d1a", panel:"#0a1628", surface:"#0f2040", border:"#1e3a68", text:"#cce0ff", muted:"#7a9cc4", accent:"#3b82f6", danger:"#f87171" },
+    "sw-crimson":   { bg:"#0f0208", panel:"#1a0510", surface:"#280a1c", border:"#4d1232", text:"#fce4ec", muted:"#c48aa0", accent:"#e53e6a", danger:"#ff6b6b" },
+    "sw-slate":     { bg:"#0c1018", panel:"#141d2b", surface:"#1e2a3d", border:"#2e4060", text:"#dce8f5", muted:"#7d98b8", accent:"#60a5fa", danger:"#f87171" },
+    "sw-amber":     { bg:"#100c00", panel:"#1c1600", surface:"#2c2200", border:"#503800", text:"#fef3c7", muted:"#c49d50", accent:"#f59e0b", danger:"#f87171" },
+  };
 
-      <p class="pricing-footer-note">All prices in USD. Card charged at period start. Cancel any time. <a href="#" data-pricing-faq>FAQ &amp; refund policy</a></p>
+  function selectTheme(el) {
+    document.querySelectorAll('.theme-swatch').forEach(s => s.classList.remove('active'));
+    el.classList.add('active');
 
-      <!-- Mini FAQ accordion -->
-      <details class="pricing-faq-accordion">
-        <summary>Frequently asked questions</summary>
-        <div class="pricing-faq-grid">
-          <div class="pricing-faq-item">
-            <strong>Is the free tier actually free forever?</strong>
-            <p>Yes. No credit card, no trial expiry. We earn revenue from Pro subscriptions only.</p>
-          </div>
-          <div class="pricing-faq-item">
-            <strong>How does the 7-day trial work?</strong>
-            <p>Full Pro access. We email a reminder 2 days before it ends. Cancel any time, no charge.</p>
-          </div>
-          <div class="pricing-faq-item">
-            <strong>What happens to my data if I downgrade?</strong>
-            <p>Your watchlists, alerts &amp; positions stay. Lists exceeding the free limit become read-only until you upgrade or trim them.</p>
-          </div>
-          <div class="pricing-faq-item">
-            <strong>Do you sell my data?</strong>
-            <p>Never. No ads, no third-party trackers, no data resale. Subscriptions are our only revenue.</p>
-          </div>
-          <div class="pricing-faq-item">
-            <strong>Is the data real-time?</strong>
-            <p>Yes, quotes refresh every 30s on Free, 10s on Pro, with live price flash. Sourced from Yahoo Finance.</p>
-          </div>
-          <div class="pricing-faq-item">
-            <strong>Can I get a refund?</strong>
-            <p>Full refund within 14 days of purchase, no questions asked. Email <em>support@meridian.app</em>.</p>
-          </div>
-        </div>
-      </details>
-    </section>
-  </div>
+    // Ripple feedback. Restart the animation on every click by toggling
+    // the class with a frame in between (forces a reflow).
+    el.classList.remove('is-rippling');
+    void el.offsetWidth;
+    el.classList.add('is-rippling');
+    setTimeout(() => el.classList.remove('is-rippling'), 600);
 
-  <!-- Theme picker popover -->
-  <div class="theme-popover hidden" id="themePopover" role="menu" aria-label="Select theme">
-    <header class="theme-popover-head">
-      <strong>Theme</strong>
-      <small>Press T to toggle</small>
-    </header>
-    <div class="theme-grid">
-      <button class="theme-option" type="button" data-theme-set="dark">
-        <span class="theme-swatch theme-swatch-dark"></span>
-        <strong>Cosmic Dark</strong>
-        <small>Default · cool blue</small>
-      </button>
-      <button class="theme-option" type="button" data-theme-set="bloomberg">
-        <span class="theme-swatch theme-swatch-bloomberg"></span>
-        <strong>Bloomberg</strong>
-        <small>Pure black · amber</small>
-      </button>
-      <button class="theme-option" type="button" data-theme-set="synthwave">
-        <span class="theme-swatch theme-swatch-synthwave"></span>
-        <strong>Synthwave</strong>
-        <small>Deep purple · neon</small>
-      </button>
-      <button class="theme-option" type="button" data-theme-set="emerald">
-        <span class="theme-swatch theme-swatch-emerald"></span>
-        <strong>Emerald</strong>
-        <small>Forest · gold accents</small>
-      </button>
-      <button class="theme-option" type="button" data-theme-set="paper">
-        <span class="theme-swatch theme-swatch-paper"></span>
-        <strong>Paper</strong>
-        <small>Light · for daytime</small>
-      </button>
-      <button class="theme-option" type="button" data-theme-set="midnight">
-        <span class="theme-swatch theme-swatch-midnight"></span>
-        <strong>Midnight</strong>
-        <small>Deep navy · electric</small>
-      </button>
-      <button class="theme-option" type="button" data-theme-set="crimson">
-        <span class="theme-swatch theme-swatch-crimson"></span>
-        <strong>Crimson</strong>
-        <small>Dark wine · deep red</small>
-      </button>
-      <button class="theme-option" type="button" data-theme-set="slate">
-        <span class="theme-swatch theme-swatch-slate"></span>
-        <strong>Slate</strong>
-        <small>Steel blue · cool gray</small>
-      </button>
-      <button class="theme-option" type="button" data-theme-set="amber">
-        <span class="theme-swatch theme-swatch-amber"></span>
-        <strong>Amber</strong>
-        <small>Warm honey · dark gold</small>
-      </button>
-    </div>
-  </div>
+    // Find which theme key by checking which sw-* class is present
+    const cls = Array.from(el.classList).find(c => c.startsWith("sw-") && THEMES[c]);
+    if (!cls) return;
+    const t = THEMES[cls];
 
-  <script type="module" src="./src/clientApp.js"></script>
+    const root = document.documentElement.style;
+    root.setProperty("--bg", t.bg);
+    root.setProperty("--panel", t.panel);
+    root.setProperty("--surface", t.surface);
+    root.setProperty("--border", t.border);
+    root.setProperty("--text", t.text);
+    root.setProperty("--muted", t.muted);
+    root.setProperty("--accent", t.accent);
+    root.setProperty("--danger", t.danger);
+    document.body.style.background = t.bg;
+    document.body.style.color = t.text;
+  }
+
+  /* ------------------------------------------------------------------
+   * Email-signup success banner.
+   * Formsubmit.co bounces back to ?signup=ok after a successful submit
+   * (set via the _next hidden input). We surface a green confirmation
+   * card right where the form lived so the user knows it worked.
+   * Also persists the email locally so duplicate signups don't repeat
+   * the round-trip.
+   * ------------------------------------------------------------------ */
+  (function signupSuccessBanner() {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("signup") !== "ok") return;
+    const success = document.getElementById("signupSuccess");
+    const form = document.getElementById("emailSignupForm");
+    if (success) success.classList.add("is-shown");
+    if (form) form.style.display = "none";
+    try { localStorage.setItem("meridian.earlyAccess", "subscribed"); } catch {}
+    // Strip ?signup=ok from URL so a refresh doesn't re-show the banner forever
+    if (window.history?.replaceState) {
+      const clean = window.location.pathname + window.location.hash;
+      window.history.replaceState({}, document.title, clean);
+    }
+  })();
+
+  /* ------------------------------------------------------------------
+   * Soft client-side validation + analytics-friendly fallback.
+   * If the email field is empty, prevent submit and focus it. If the
+   * user has already subscribed in this browser, show the success card
+   * instead of re-submitting.
+   * ------------------------------------------------------------------ */
+  (function emailFormBehavior() {
+    const form = document.getElementById("emailSignupForm");
+    if (!form) return;
+
+    try {
+      if (localStorage.getItem("meridian.earlyAccess") === "subscribed") {
+        const success = document.getElementById("signupSuccess");
+        if (success) success.classList.add("is-shown");
+        form.style.display = "none";
+        return;
+      }
+    } catch {}
+
+    form.addEventListener("submit", (e) => {
+      const input = form.querySelector('input[type="email"]');
+      const value = input?.value?.trim();
+      if (!value) { e.preventDefault(); input?.focus(); return; }
+      const btn = form.querySelector('button[type="submit"]');
+      if (btn) { btn.textContent = "Sending..."; btn.disabled = true; }
+    });
+  })();
+
+  /* ------------------------------------------------------------------
+   * Scroll-spy: highlight the nav link whose section is centered in
+   * the viewport. Uses IntersectionObserver so it scales for free as
+   * we add more sections.
+   * ------------------------------------------------------------------ */
+  (function scrollSpyNav() {
+    const links = document.querySelectorAll('.nav-links a[data-spy]');
+    if (!links.length || !('IntersectionObserver' in window)) return;
+    const linkBySection = new Map();
+    links.forEach(a => {
+      const id = a.getAttribute('href')?.slice(1);
+      const section = id && document.getElementById(id);
+      if (section) linkBySection.set(section, a);
+    });
+    const io = new IntersectionObserver((entries) => {
+      // Pick the most-visible intersecting section
+      let best = null, bestRatio = 0;
+      entries.forEach(e => {
+        if (e.isIntersecting && e.intersectionRatio > bestRatio) {
+          best = e.target;
+          bestRatio = e.intersectionRatio;
+        }
+      });
+      if (!best) return;
+      links.forEach(a => a.classList.remove('is-active'));
+      const a = linkBySection.get(best);
+      if (a) a.classList.add('is-active');
+    }, { rootMargin: '-30% 0px -55% 0px', threshold: [0, 0.25, 0.5, 0.75, 1] });
+    linkBySection.forEach((_a, section) => io.observe(section));
+  })();
+
+  /* ------------------------------------------------------------------
+   * Scroll-reveal: any element with [data-reveal] fades in on first
+   * intersection. Stagger children by setting --i on each child.
+   * ------------------------------------------------------------------ */
+  (function scrollReveal() {
+    const targets = document.querySelectorAll('[data-reveal]');
+    if (!targets.length) return;
+    targets.forEach(el => {
+      if (el.hasAttribute('data-stagger')) {
+        [...el.children].forEach((child, i) => child.style.setProperty('--i', String(i)));
+      }
+    });
+    // Reveal anything already in (or above) the viewport on first paint so
+    // hero-area content never starts hidden. The observer handles the rest.
+    const revealIfInView = () => {
+      const vh = window.innerHeight || document.documentElement.clientHeight;
+      targets.forEach(el => {
+        const rect = el.getBoundingClientRect();
+        if (rect.top < vh * 0.92 && rect.bottom > 0) el.classList.add('is-visible');
+      });
+    };
+    revealIfInView();
+    if (!('IntersectionObserver' in window)) {
+      targets.forEach(el => el.classList.add('is-visible'));
+      return;
+    }
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach(e => {
+        if (e.isIntersecting) {
+          e.target.classList.add('is-visible');
+          io.unobserve(e.target);
+        }
+      });
+    }, { rootMargin: '0px 0px -8% 0px', threshold: 0.05 });
+    targets.forEach(el => io.observe(el));
+    // Belt-and-braces fallback: if IO is starved (some embedded browsers,
+    // headless previews), reveal everything after 1.2s so nothing stays
+    // permanently hidden.
+    setTimeout(() => targets.forEach(el => el.classList.add('is-visible')), 1200);
+  })();
+
+  /* ------------------------------------------------------------------
+   * Animated count-up for the hero stats. The first time the stats
+   * strip enters the viewport, $25,000 / $96 / 260 each animate from 0
+   * to their target value. Static-friendly: if JS or IO is missing,
+   * the markup still reads correctly.
+   * ------------------------------------------------------------------ */
+  (function countUp() {
+    const targets = document.querySelectorAll('[data-count]');
+    if (!targets.length || !('IntersectionObserver' in window)) return;
+    const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3);
+    const animate = (el) => {
+      const end = Number(el.dataset.count);
+      if (!Number.isFinite(end)) return;
+      const prefix = el.dataset.countPrefix || '';
+      const useGrouping = el.dataset.countGroup !== 'false';
+      const dur = Number(el.dataset.countDuration) || 1200;
+      const start = performance.now();
+      const tick = (now) => {
+        const t = Math.min(1, (now - start) / dur);
+        const v = Math.round(end * easeOutCubic(t));
+        el.textContent = prefix + (useGrouping ? v.toLocaleString() : String(v));
+        if (t < 1) requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    };
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach(e => {
+        if (e.isIntersecting) {
+          animate(e.target);
+          io.unobserve(e.target);
+        }
+      });
+    }, { threshold: 0.6 });
+    targets.forEach(el => io.observe(el));
+  })();
+
+  /* ------------------------------------------------------------------
+   * Make the terminal mockup clickable so it acts as a "live demo"
+   * entry point. Anyone who scrolls past it gets one more way in.
+   * ------------------------------------------------------------------ */
+  (function makeMockupClickable() {
+    const mock = document.querySelector(".terminal-mock");
+    if (!mock) return;
+    mock.style.cursor = "pointer";
+    mock.setAttribute("role", "link");
+    mock.setAttribute("tabindex", "0");
+    mock.setAttribute("aria-label", "Open the live Meridian terminal");
+    mock.title = "Open the live terminal";
+    const go = () => { window.location.href = "terminal.html"; };
+    mock.addEventListener("click", go);
+    mock.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(); }
+    });
+  })();
+
+  /* ------------------------------------------------------------------
+   * Mouse-tilt on the terminal mockup. Tracks mouse position over the
+   * element and applies a small rotateX/rotateY so the screen feels
+   * physical, like it's reflecting the user's gaze. Reset smoothly on
+   * leave. Disabled on touch + reduced-motion.
+   * ------------------------------------------------------------------ */
+  (function mockupMouseTilt() {
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    if (matchMedia('(hover: none)').matches) return;
+    const mock = document.querySelector(".terminal-mock");
+    if (!mock) return;
+    const MAX_TILT = 6; // degrees
+    let raf = 0;
+    let pending = null;
+    const apply = () => {
+      raf = 0;
+      if (!pending) return;
+      const { x, y } = pending;
+      mock.style.transform = `perspective(1400px) rotateX(${(-y * MAX_TILT).toFixed(2)}deg) rotateY(${(x * MAX_TILT).toFixed(2)}deg)`;
+    };
+    mock.addEventListener("mousemove", (e) => {
+      const rect = mock.getBoundingClientRect();
+      const px = (e.clientX - rect.left) / rect.width;   // 0..1
+      const py = (e.clientY - rect.top) / rect.height;   // 0..1
+      pending = { x: px - 0.5, y: py - 0.5 };            // -0.5..+0.5
+      if (!raf) raf = requestAnimationFrame(apply);
+    }, { passive: true });
+    mock.addEventListener("mouseleave", () => {
+      pending = null;
+      if (raf) { cancelAnimationFrame(raf); raf = 0; }
+      mock.style.transform = '';
+    });
+  })();
+
+  /* ------------------------------------------------------------------
+   * Hero scroll-cue: fade out once the user begins to scroll.
+   * ------------------------------------------------------------------ */
+  (function heroScrollCue() {
+    const cue = document.getElementById("heroScrollCue");
+    if (!cue) return;
+    const onScroll = () => {
+      if (window.scrollY > 24) {
+        cue.classList.add("is-faded");
+        window.removeEventListener("scroll", onScroll);
+      }
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+  })();
+</script>
 </body>
 </html>

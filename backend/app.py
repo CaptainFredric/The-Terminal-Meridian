@@ -1006,14 +1006,22 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
 
     @app.get("/")
     def serve_index() -> Any:
+        # The repo root index.html is the marketing landing page.
         return send_from_directory(ROOT, "index.html")
+
+    @app.get("/terminal")
+    def serve_terminal_clean() -> Any:
+        # Allow extension-less /terminal as a clean URL for the app.
+        return send_from_directory(ROOT, "terminal.html")
 
     @app.get("/<path:asset_path>")
     def serve_asset(asset_path: str) -> Any:
         candidate = ROOT / asset_path
         if candidate.exists() and candidate.is_file():
             return send_from_directory(ROOT, asset_path)
-        return send_from_directory(ROOT, "index.html")
+        # Unknown paths fall back to the terminal app shell so client-side
+        # navigation inside the workspace doesn't 404.
+        return send_from_directory(ROOT, "terminal.html")
 
     return app
 

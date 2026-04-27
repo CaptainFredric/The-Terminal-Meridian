@@ -1,0 +1,854 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#06080d" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>Meridian: Bloomberg-Style Market Terminal</title>
+  <meta
+    name="description"
+    content="Meridian is a free Bloomberg-style market terminal. Live stock quotes, interactive charts, options chains, AI-powered insights, portfolio tracking, and a built-in screener, all in one keyboard-driven workspace."
+  />
+  <meta name="keywords" content="stock market terminal, bloomberg alternative, free stock screener, options chain, portfolio tracker, real-time quotes, market news, AI stock insights" />
+  <link rel="canonical" href="https://captainfredric.github.io/The-Terminal-Meridian/" />
+
+  <!-- Open Graph / social sharing -->
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://captainfredric.github.io/The-Terminal-Meridian/" />
+  <meta property="og:title" content="Meridian: Bloomberg-Style Market Terminal" />
+  <meta property="og:description" content="Free Bloomberg-style market terminal. Live quotes, charts, options chains, screener, AI insights, and portfolio tracking in one keyboard-driven workspace." />
+  <meta property="og:site_name" content="Meridian" />
+  <meta property="og:image" content="https://captainfredric.github.io/The-Terminal-Meridian/og-preview.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+
+  <!-- Twitter / X card -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Meridian: Bloomberg-Style Market Terminal" />
+  <meta name="twitter:description" content="Free Bloomberg-style market terminal. Live quotes, charts, options, AI insights, and portfolio tracking. Keyboard-first, no Bloomberg price tag." />
+  <meta name="twitter:image" content="https://captainfredric.github.io/The-Terminal-Meridian/og-preview.png" />
+
+  <!-- Structured data (Google rich results) -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebApplication",
+    "name": "Meridian Market Terminal",
+    "url": "https://captainfredric.github.io/The-Terminal-Meridian/",
+    "description": "Bloomberg-style market terminal. Live stock quotes, interactive charts, options chains, AI-powered insights, portfolio tracking, and a built-in screener.",
+    "applicationCategory": "FinanceApplication",
+    "operatingSystem": "All",
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "USD"
+    },
+    "featureList": [
+      "Real-time stock quotes",
+      "Interactive candlestick charts",
+      "Options chain viewer",
+      "AI market commentary",
+      "Stock screener",
+      "Paper trading simulator",
+      "Portfolio tracker",
+      "Market news aggregator"
+    ]
+  }
+  </script>
+
+  <!-- PWA / standalone -->
+  <meta name="mobile-web-app-capable" content="yes" />
+  <link rel="manifest" href="./manifest.json" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="./src/styles.css" />
+</head>
+<body>
+  <!-- Wake-server banner: shown only when the first health check fails.
+       Render's free tier sleeps after 15min idle and takes ~30s to warm
+       up. This makes that wait state visible and reassuring instead of
+       silent. AppBootstrap.js toggles the .is-shown class. -->
+  <div class="wake-banner" id="wakeBanner" role="status" aria-live="polite">
+    <span class="wake-spinner" aria-hidden="true"></span>
+    <span class="wake-text">
+      Waking the data server (free-tier cold start, ~30s).
+      <strong>Live quotes will populate as soon as it responds.</strong>
+    </span>
+    <button class="wake-dismiss" id="wakeBannerDismiss" type="button" aria-label="Dismiss notice">×</button>
+  </div>
+  <main class="terminal-app" id="terminalApp">
+    <header class="topbar">
+      <div class="brand-block" style="flex-direction: row; align-items: center; gap: 14px;">
+        <div class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="Meridian">
+            <rect x="2" y="2" width="36" height="36" rx="11" fill="url(#tbBgGlow)"/>
+            <!-- left arm: green at left bar, transitions to red at center valley -->
+            <path d="M9.8 14.4L20 20.6" stroke="url(#tbDiagLeft)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+            <!-- right arm: red at center valley, transitions to green at right bar -->
+            <path d="M20 20.6L30.2 14.4" stroke="url(#tbDiagRight)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+            <!-- left bar (green) -->
+            <rect x="8.1" y="14.2" width="3.4" height="12.4" rx="1" fill="#2fcf84"/>
+            <line x1="9.8" y1="11.6" x2="9.8" y2="14.2" stroke="#2fcf84" stroke-width="1.5" stroke-linecap="round"/>
+            <line x1="9.8" y1="26.6" x2="9.8" y2="29.2" stroke="#2fcf84" stroke-width="1.5" stroke-linecap="round"/>
+            <!-- center bar (red) -->
+            <rect x="18.3" y="19.8" width="3.4" height="9.6" rx="1" fill="#ff5f7f"/>
+            <line x1="20" y1="17.1" x2="20" y2="19.8" stroke="#ff5f7f" stroke-width="1.5" stroke-linecap="round"/>
+            <line x1="20" y1="29.4" x2="20" y2="32" stroke="#ff5f7f" stroke-width="1.5" stroke-linecap="round"/>
+            <!-- right bar (green) -->
+            <rect x="28.5" y="14.2" width="3.4" height="12.4" rx="1" fill="#2fcf84"/>
+            <line x1="30.2" y1="11.6" x2="30.2" y2="14.2" stroke="#2fcf84" stroke-width="1.5" stroke-linecap="round"/>
+            <line x1="30.2" y1="26.6" x2="30.2" y2="29.2" stroke="#2fcf84" stroke-width="1.5" stroke-linecap="round"/>
+            <defs>
+              <linearGradient id="tbBgGlow" x1="4" y1="4" x2="36" y2="36" gradientUnits="userSpaceOnUse">
+                <stop stop-color="#172953"/>
+                <stop offset="1" stop-color="#0d1529"/>
+              </linearGradient>
+              <linearGradient id="tbDiagLeft" x1="9.8" y1="14.4" x2="20" y2="20.6" gradientUnits="userSpaceOnUse">
+                <stop offset="0%" stop-color="#2fcf84"/>
+                <stop offset="100%" stop-color="#ff5f7f"/>
+              </linearGradient>
+              <linearGradient id="tbDiagRight" x1="20" y1="20.6" x2="30.2" y2="14.4" gradientUnits="userSpaceOnUse">
+                <stop offset="0%" stop-color="#ff5f7f"/>
+                <stop offset="100%" stop-color="#2fcf84"/>
+              </linearGradient>
+            </defs>
+          </svg>
+        </div>
+        <div style="display: flex; flex-direction: row; align-items: center; gap: 12px;">
+          <a href="index.html" id="appTitle" title="About Meridian" style="font-weight:700; text-decoration:none; color:inherit; letter-spacing:0.01em; transition:opacity 150ms;" onmouseover="this.style.opacity='0.75'" onmouseout="this.style.opacity='1'">Meridian</a>
+          <div class="chip-row" style="display: flex; flex-direction: row; gap: 8px; align-items: center; margin-left: 10px;">
+            <p class="status-chip chip-phase" id="marketPhase">Market</p>
+            <p class="status-chip chip-server" id="serverStatus">Server</p>
+            <p class="status-chip chip-net" id="networkStatus">Connecting</p>
+            <p class="status-chip chip-live-users" id="liveUserCount" title="Active users right now">
+              <i class="status-chip-dot"></i>
+              <span>...</span>
+            </p>
+          </div>
+        </div>
+      </div>
+      <div class="topbar-right">
+        <div class="topbar-divider"></div>
+        <button class="btn btn-ghost mobile-only hidden" id="mobileMoreMenuBtn" type="button" aria-haspopup="true" aria-expanded="false" title="More options">⋯</button>
+        <div class="mobile-more-menu hidden" id="mobileMoreMenu" role="menu" aria-label="More options"></div>
+        <button class="btn btn-icon" id="refreshAllButton" type="button" title="Refresh live data">
+          <svg viewBox="0 0 20 20" fill="none"><path d="M3 10a7 7 0 0 1 12-4.9L17 7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M17 10a7 7 0 0 1-12 4.9L3 13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><polyline points="14,4 17,7 14,10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><polyline points="6,16 3,13 6,10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <button class="btn btn-ghost" id="openCommandPalette" type="button">Cmd+K</button>
+        <button class="btn btn-icon notif-bell-btn" id="notifBellBtn" type="button" title="Notification history">
+          <svg viewBox="0 0 20 20" fill="none" width="18" height="18"><path d="M10 2a6 6 0 0 1 6 6v3l1.5 2.5H2.5L4 11V8a6 6 0 0 1 6-6z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 16a2 2 0 0 0 4 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          <span class="notif-badge hidden" id="notifBadge"></span>
+        </button>
+        <button class="btn btn-trial" id="freeTrialBtn" type="button" title="Try Pro free for 7 days" data-open-pricing>
+          <span class="trial-badge-pulse"></span>
+          ⚡ Try Pro free
+        </button>
+        <button class="btn btn-ghost" id="shareViewBtn" type="button" title="Copy a link to this exact panel layout">🔗 Share</button>
+        <button class="btn btn-ghost" id="replayTourBtn" type="button" title="Replay the welcome tour">💡 Tour</button>
+        <button class="btn btn-ghost" id="themePickerBtn" type="button" title="Switch theme (T)">🎨 Theme</button>
+        <button class="btn btn-ghost" id="autoJumpButton" type="button" title="Auto-scroll to active panel">Auto-jump: On</button>
+        <button class="btn btn-ghost" id="resetFocusButton" type="button">Grid</button>
+        <span class="tier-badge hidden" id="userTierBadge" title="Your subscription tier">FREE</span>
+        <button class="btn btn-ghost hidden" id="openSettingsBtn" type="button">Account</button>
+        <button class="btn btn-ghost hidden" id="logoutButton" type="button">Sign out</button>
+        <button class="btn btn-primary hidden" id="openAuthBtn" type="button">Sync</button>
+      </div>
+    </header>
+
+    <nav class="function-row hidden" id="functionRow" aria-hidden="true"></nav>
+
+    <section class="ticker-tape" id="tickerTape" aria-label="Live price ticker"></section>
+
+    <section class="overview-strip" id="overviewStrip" aria-label="Live market overview"></section>
+
+    <section class="workspace-shell">
+      <aside class="left-rail">
+        <section class="rail-card">
+          <header class="rail-head">
+            <h2>Watchlist</h2>
+            <small id="watchCount">0</small>
+          </header>
+          <div class="rail-body" id="watchlistRail"></div>
+        </section>
+
+        <section class="rail-card">
+          <header class="rail-head">
+            <h2>Alerts</h2>
+            <small id="alertCount">0</small>
+          </header>
+          <div class="rail-body" id="alertRail"></div>
+        </section>
+      </aside>
+
+      <div class="workspace-main">
+        <section class="workspace-grid" id="workspaceGrid">
+          <article class="panel is-active" data-panel="1">
+            <header class="panel-head">
+              <h3 id="panelTitle1">Home</h3>
+              <div class="panel-controls">
+                <button class="panel-btn" data-panel-focus="1" type="button" title="Focus panel">⤢</button>
+                <button class="panel-btn" data-panel-cycle="1:-1" type="button">◀</button>
+                <button class="panel-btn" data-panel-cycle="1:1" type="button">▶</button>
+              </div>
+            </header>
+            <div class="panel-content" id="panelContent1"></div>
+          </article>
+
+          <article class="panel" data-panel="2">
+            <header class="panel-head">
+              <h3 id="panelTitle2">Quote</h3>
+              <div class="panel-controls">
+                <button class="panel-btn" data-panel-focus="2" type="button" title="Focus panel">⤢</button>
+                <button class="panel-btn" data-panel-cycle="2:-1" type="button">◀</button>
+                <button class="panel-btn" data-panel-cycle="2:1" type="button">▶</button>
+              </div>
+            </header>
+            <div class="panel-content" id="panelContent2"></div>
+          </article>
+
+          <article class="panel" data-panel="3">
+            <header class="panel-head">
+              <h3 id="panelTitle3">Chart</h3>
+              <div class="panel-controls">
+                <button class="panel-btn" data-panel-focus="3" type="button" title="Focus panel">⤢</button>
+                <button class="panel-btn" data-panel-cycle="3:-1" type="button">◀</button>
+                <button class="panel-btn" data-panel-cycle="3:1" type="button">▶</button>
+              </div>
+            </header>
+            <div class="panel-content" id="panelContent3"></div>
+          </article>
+
+          <article class="panel" data-panel="4">
+            <header class="panel-head">
+              <h3 id="panelTitle4">News</h3>
+              <div class="panel-controls">
+                <button class="panel-btn" data-panel-focus="4" type="button" title="Focus panel">⤢</button>
+                <button class="panel-btn" data-panel-cycle="4:-1" type="button">◀</button>
+                <button class="panel-btn" data-panel-cycle="4:1" type="button">▶</button>
+              </div>
+            </header>
+            <div class="panel-content" id="panelContent4"></div>
+          </article>
+        </section>
+
+      </div>
+    </section>
+
+    <!-- Mobile-only bottom panel nav, JS populates and updates aria labels -->
+    <nav class="mobile-panel-nav" id="mobilePanelNav" aria-label="Switch panels">
+      <button class="mobile-panel-tab is-active" data-mobile-panel="1" type="button">
+        <svg viewBox="0 0 20 20" fill="none" width="20" height="20"><rect x="3" y="3" width="6" height="6" rx="1.5" stroke="currentColor" stroke-width="1.6"/><rect x="11" y="3" width="6" height="6" rx="1.5" stroke="currentColor" stroke-width="1.6"/><rect x="3" y="11" width="6" height="6" rx="1.5" stroke="currentColor" stroke-width="1.6"/><rect x="11" y="11" width="6" height="6" rx="1.5" stroke="currentColor" stroke-width="1.6"/></svg>
+        <span id="mobileTab1Label">Home</span>
+      </button>
+      <button class="mobile-panel-tab" data-mobile-panel="2" type="button">
+        <svg viewBox="0 0 20 20" fill="none" width="20" height="20"><path d="M5 10h10M5 7h10M5 13h6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><rect x="2" y="3" width="16" height="14" rx="2" stroke="currentColor" stroke-width="1.6"/></svg>
+        <span id="mobileTab2Label">Trade</span>
+      </button>
+      <button class="mobile-panel-tab" data-mobile-panel="3" type="button">
+        <svg viewBox="0 0 20 20" fill="none" width="20" height="20"><polyline points="2,14 7,8 11,12 18,5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span id="mobileTab3Label">Chart</span>
+      </button>
+      <button class="mobile-panel-tab" data-mobile-panel="4" type="button">
+        <svg viewBox="0 0 20 20" fill="none" width="20" height="20"><path d="M4 5h12M4 9h8M4 13h10M4 17h6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+        <span id="mobileTab4Label">News</span>
+      </button>
+    </nav>
+
+    <footer class="statusbar">
+      <span>📡 Updated: <strong id="lastUpdated">...</strong></span>
+      <span>⏱ Refresh: <strong id="refreshCountdown">30s</strong></span>
+      <span class="statusbar-market-clock"><span class="market-clock-dot" id="marketClockDot"></span><strong id="marketClock">...</strong></span>
+      <span>🕐 Session: <strong id="sessionClock">00:00:00</strong></span>
+      <span class="statusbar-hint">Cmd+K to open command palette</span>
+    </footer>
+  </main>
+
+  <div class="modal-backdrop hidden" id="authModalBackdrop">
+    <section class="auth-modal" id="authModal">
+      <header class="auth-head">
+        <h2 id="authModalTitle">Welcome back</h2>
+        <button class="icon-btn" id="closeAuthModal" type="button">×</button>
+      </header>
+
+      <p class="auth-status error-message-container active" id="authStatus">Your workspace, synced across every device.</p>
+
+      <div class="auth-tabs" id="authTabs">
+        <button class="auth-tab is-active" data-auth-tab="login" type="button">Sign in</button>
+        <button class="auth-tab" data-auth-tab="signup" type="button">Create account</button>
+      </div>
+
+      <form id="loginForm" data-auth-panel="login" class="auth-form">
+        <label>
+          Email or username
+          <input name="identifier" type="text" autocomplete="username" required />
+        </label>
+        <label>
+          Password
+          <input name="password" type="password" autocomplete="current-password" required />
+        </label>
+        <button class="btn btn-primary" id="loginBtn" type="submit">Sign in</button>
+        <button class="btn btn-ghost" id="continueLocalBtn" type="button">Continue without account</button>
+      </form>
+
+      <form id="signupForm" data-auth-panel="signup" class="auth-form hidden">
+        <!--
+          Simplified signup: 4 visible fields instead of 8.
+          - "Display name" splits client-side into firstName + lastName.
+          - Role defaults to "trader" (hidden) — change in Settings later.
+          - Confirm-password removed; the show/hide toggle below covers
+            mistype prevention without doubling the field count.
+        -->
+        <label>
+          Display name
+          <input id="signupDisplayName" name="displayName" type="text" autocomplete="name" placeholder="e.g. Alex Rivera" required />
+        </label>
+        <label>
+          Email
+          <input id="signupEmail" name="email" type="email" autocomplete="email" placeholder="you@email.com" required />
+        </label>
+        <label>
+          Username
+          <input id="signupUsername" name="username" type="text" autocomplete="username" placeholder="alexr" required />
+        </label>
+        <p class="auth-hint error-message-container active" id="signupAvailability">Pick a unique email and username.</p>
+        <label>
+          Password <small style="color:var(--muted);font-weight:400;">(min. 8 characters)</small>
+          <div class="password-field" style="position:relative; display:flex;">
+            <input id="signupPassword" name="password" type="password" minlength="8" autocomplete="new-password" required style="flex:1; padding-right:60px;" />
+            <button type="button" id="signupPasswordToggle" aria-label="Show password" style="position:absolute; right:0; top:0; bottom:0; padding:0 12px; background:none; border:none; color:var(--muted); cursor:pointer; font-size:11px; font-weight:600; letter-spacing:0.04em;">SHOW</button>
+          </div>
+        </label>
+        <!-- Hidden defaults the backend still expects -->
+        <input type="hidden" name="role" value="trader" />
+        <button class="btn btn-primary" id="signupBtn" type="submit">Create account</button>
+        <button class="btn btn-ghost" id="continueLocalSignupBtn" type="button">Continue without account</button>
+      </form>
+    </section>
+  </div>
+
+  <div class="palette-backdrop hidden" id="paletteBackdrop">
+    <section class="command-shell command-palette" id="commandPalette" aria-label="Command palette">
+      <span class="cmd-prefix">⌘</span>
+      <input
+        id="commandInput"
+        class="command-input terminal-input"
+        type="text"
+        autocomplete="off"
+        spellcheck="false"
+        placeholder="Ticker, command, or ? for help. e.g. AAPL, CHART TSLA, BUY NVDA 5"
+      />
+      <kbd class="cmd-kbd-hint">↵ run</kbd>
+      <kbd class="cmd-kbd-hint">↑↓ history</kbd>
+      <kbd class="cmd-kbd-hint">Tab suggest</kbd>
+      <button id="runCommandButton" class="btn btn-primary" type="button">Run</button>
+      <div class="autocomplete hidden" id="autocomplete"></div>
+    </section>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <aside class="notif-drawer" id="notifDrawer" aria-label="Notification history">
+    <header class="notif-drawer-head">
+      <h3>Notifications</h3>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <button class="btn btn-ghost btn-sm" id="notifClearBtn" type="button">Clear all</button>
+        <button class="btn btn-icon" id="notifDrawerClose" type="button" title="Close">✕</button>
+      </div>
+    </header>
+    <ul class="notif-history" id="notifHistory" aria-live="polite"></ul>
+  </aside>
+  <div class="notif-backdrop hidden" id="notifBackdrop"></div>
+
+  <div class="modal-backdrop hidden" id="settingsModalBackdrop">
+    <section class="auth-modal settings-modal" id="settingsModal">
+      <header class="auth-head">
+        <h2>Account settings</h2>
+        <button class="icon-btn" id="closeSettingsModal" type="button">×</button>
+      </header>
+
+      <p class="auth-status error-message-container active" id="settingsStatus">Update your account details securely.</p>
+
+      <form id="updateProfileForm" class="auth-form">
+        <div class="auth-grid">
+          <label>
+            First name
+            <input name="firstName" type="text" required />
+          </label>
+          <label>
+            Last name
+            <input name="lastName" type="text" required />
+          </label>
+        </div>
+        <label>
+          Username
+          <input name="username" type="text" required />
+        </label>
+        <label>
+          Role
+          <select id="settingsRole" name="role"></select>
+        </label>
+        <button class="btn btn-primary" id="updateProfileBtn" type="submit">Update profile</button>
+      </form>
+
+      <form id="changePasswordForm" class="auth-form">
+        <label>
+          Current password
+          <input name="currentPassword" type="password" required />
+        </label>
+        <label>
+          New password
+          <input name="newPassword" type="password" minlength="8" required />
+        </label>
+        <button class="btn btn-primary" id="changePasswordBtn" type="submit">Change password</button>
+      </form>
+
+      <div class="auth-form" id="subscriptionSection">
+        <h3 style="margin: 0 0 6px; font-size: 0.95rem;">Subscription</h3>
+        <p style="margin: 0 0 10px; color: var(--muted); font-size: 0.85rem;" id="subscriptionStatusLine">Free tier</p>
+        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+          <button class="btn btn-primary" id="upgradeFromSettingsBtn" type="button">Upgrade to Pro</button>
+          <button class="btn btn-ghost hidden" id="manageSubscriptionBtn" type="button">Manage billing</button>
+        </div>
+      </div>
+
+      <form id="deleteAccountForm" class="auth-form">
+        <label>
+          Confirm password to delete account
+          <input name="password" type="password" required />
+        </label>
+        <button class="btn btn-danger" id="deleteAccountBtn" type="submit">Delete account</button>
+      </form>
+    </section>
+  </div>
+
+  <!-- Onboarding overlay -->
+  <!-- Multi-step onboarding wizard -->
+  <div class="onboarding-backdrop hidden" id="onboardingBackdrop" role="dialog" aria-modal="true" aria-label="Welcome to Meridian">
+    <div class="onboarding-wizard" id="onboardingWizard">
+
+      <!-- Step indicators -->
+      <div class="wizard-steps" id="wizardSteps" aria-label="Wizard progress">
+        <div class="wizard-step is-active" data-step-dot="1"><span></span><small>Focus</small></div>
+        <div class="wizard-step-connector"></div>
+        <div class="wizard-step" data-step-dot="2"><span></span><small>Theme</small></div>
+        <div class="wizard-step-connector"></div>
+        <div class="wizard-step" data-step-dot="3"><span></span><small>Speed</small></div>
+      </div>
+
+      <!-- ── STEP 1: Pick your focus ─────────────────────────── -->
+      <div class="wizard-pane is-active" id="wizardPane1">
+        <div class="wizard-hero">
+          <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" width="44" height="44" aria-hidden="true">
+            <rect x="2" y="2" width="36" height="36" rx="11" fill="url(#obGlow1)"/>
+            <path d="M9.8 14.4L20 20.6" stroke="url(#obDiagLeft)" stroke-width="2.4" stroke-linecap="round"/>
+            <path d="M20 20.6L30.2 14.4" stroke="url(#obDiagRight)" stroke-width="2.4" stroke-linecap="round"/>
+            <path d="M30.2 14.4L33 12.2" stroke="#2fcf84" stroke-width="2.2" stroke-linecap="round"/>
+            <rect x="8.1" y="14.2" width="3.4" height="12.4" rx="1" fill="#2fcf84"/>
+            <line x1="9.8" y1="11.6" x2="9.8" y2="14.2" stroke="#2fcf84" stroke-width="1.5" stroke-linecap="round"/>
+            <line x1="9.8" y1="26.6" x2="9.8" y2="29.2" stroke="#2fcf84" stroke-width="1.5" stroke-linecap="round"/>
+            <rect x="18.3" y="19.8" width="3.4" height="9.6" rx="1" fill="#ff5f7f"/>
+            <line x1="20" y1="17.1" x2="20" y2="19.8" stroke="#ff5f7f" stroke-width="1.5" stroke-linecap="round"/>
+            <line x1="20" y1="29.4" x2="20" y2="32" stroke="#ff5f7f" stroke-width="1.5" stroke-linecap="round"/>
+            <rect x="28.5" y="14.2" width="3.4" height="12.4" rx="1" fill="#2fcf84"/>
+            <line x1="30.2" y1="11.6" x2="30.2" y2="14.2" stroke="#2fcf84" stroke-width="1.5" stroke-linecap="round"/>
+            <line x1="30.2" y1="26.6" x2="30.2" y2="29.2" stroke="#2fcf84" stroke-width="1.5" stroke-linecap="round"/>
+            <circle cx="33" cy="12.2" r="1.8" fill="#9cb9ff"/>
+            <defs>
+              <linearGradient id="obGlow1" x1="4" y1="4" x2="36" y2="36" gradientUnits="userSpaceOnUse">
+                <stop stop-color="#172953"/>
+                <stop offset="1" stop-color="#0d1529"/>
+              </linearGradient>
+              <linearGradient id="obDiagLeft" x1="9.8" y1="14.4" x2="20" y2="20.6" gradientUnits="userSpaceOnUse">
+                <stop offset="0%" stop-color="#2fcf84"/>
+                <stop offset="100%" stop-color="#ff5f7f"/>
+              </linearGradient>
+              <linearGradient id="obDiagRight" x1="20" y1="20.6" x2="30.2" y2="14.4" gradientUnits="userSpaceOnUse">
+                <stop offset="0%" stop-color="#ff5f7f"/>
+                <stop offset="100%" stop-color="#2fcf84"/>
+              </linearGradient>
+            </defs>
+          </svg>
+          <div>
+            <h2>Welcome to Meridian</h2>
+            <p>Bloomberg-grade terminal. No ads, no noise.</p>
+          </div>
+        </div>
+
+        <div class="wizard-step-body">
+          <h3>What do you want to track?</h3>
+          <p class="wizard-step-sub">Pick a category to seed your watchlist. You can always change it.</p>
+
+          <div class="wizard-focus-grid" id="wizardFocusGrid">
+            <button class="wizard-focus-tile" type="button" data-focus="mega">
+              <span class="wizard-focus-icon">📈</span>
+              <strong>US Mega Cap</strong>
+              <small>AAPL · MSFT · NVDA · AMZN</small>
+            </button>
+            <button class="wizard-focus-tile" type="button" data-focus="indices">
+              <span class="wizard-focus-icon">🏛</span>
+              <strong>Market Indices</strong>
+              <small>SPY · QQQ · DIA · IWM</small>
+            </button>
+            <button class="wizard-focus-tile" type="button" data-focus="tech">
+              <span class="wizard-focus-icon">💻</span>
+              <strong>Tech &amp; AI</strong>
+              <small>META · GOOGL · AMD · TSLA</small>
+            </button>
+            <button class="wizard-focus-tile" type="button" data-focus="finance">
+              <span class="wizard-focus-icon">🏦</span>
+              <strong>Finance</strong>
+              <small>JPM · GS · BAC · BRK-B</small>
+            </button>
+            <button class="wizard-focus-tile" type="button" data-focus="energy">
+              <span class="wizard-focus-icon">⚡</span>
+              <strong>Energy</strong>
+              <small>XOM · CVX · OXY · SLB</small>
+            </button>
+            <button class="wizard-focus-tile" type="button" data-focus="crypto">
+              <span class="wizard-focus-icon">🪙</span>
+              <strong>Crypto</strong>
+              <small>BTC-USD · ETH-USD · SOL-USD</small>
+            </button>
+            <button class="wizard-focus-tile" type="button" data-focus="healthcare">
+              <span class="wizard-focus-icon">⚕️</span>
+              <strong>Healthcare</strong>
+              <small>JNJ · UNH · PFE · ABBV</small>
+            </button>
+            <button class="wizard-focus-tile" type="button" data-focus="custom">
+              <span class="wizard-focus-icon">✏️</span>
+              <strong>I'll choose my own</strong>
+              <small>Start with a blank watchlist</small>
+            </button>
+          </div>
+
+          <p class="wizard-selection-note" id="wizardSelectionNote" aria-live="polite"></p>
+        </div>
+
+        <div class="wizard-actions">
+          <button class="btn btn-ghost" id="onboardingSkip" type="button">Skip setup</button>
+          <button class="btn btn-primary" id="wizardNext1" type="button" disabled>Next →</button>
+        </div>
+      </div>
+
+      <!-- ── STEP 2: Pick your theme ─────────────────────────── -->
+      <div class="wizard-pane" id="wizardPane2">
+        <div class="wizard-step-body">
+          <h3>Pick your look</h3>
+          <p class="wizard-step-sub">You can change this any time by pressing <kbd>T</kbd>.</p>
+
+          <div class="wizard-theme-grid" id="wizardThemeGrid">
+            <button class="wizard-theme-tile is-active" type="button" data-wizard-theme="dark">
+              <div class="wizard-theme-preview wizard-preview-dark">
+                <div class="wtp-bar"></div>
+                <div class="wtp-row"><div class="wtp-cell green"></div><div class="wtp-cell"></div><div class="wtp-cell red"></div></div>
+                <div class="wtp-row small"><div class="wtp-line"></div><div class="wtp-line short"></div></div>
+              </div>
+              <strong>Cosmic Dark</strong>
+              <small>Default · cool blue</small>
+            </button>
+            <button class="wizard-theme-tile" type="button" data-wizard-theme="bloomberg">
+              <div class="wizard-theme-preview wizard-preview-bloomberg">
+                <div class="wtp-bar"></div>
+                <div class="wtp-row"><div class="wtp-cell amber"></div><div class="wtp-cell"></div><div class="wtp-cell red"></div></div>
+                <div class="wtp-row small"><div class="wtp-line amber"></div><div class="wtp-line short amber"></div></div>
+              </div>
+              <strong>Bloomberg</strong>
+              <small>Pure black · amber</small>
+            </button>
+            <button class="wizard-theme-tile" type="button" data-wizard-theme="synthwave">
+              <div class="wizard-theme-preview wizard-preview-synthwave">
+                <div class="wtp-bar"></div>
+                <div class="wtp-row"><div class="wtp-cell cyan"></div><div class="wtp-cell"></div><div class="wtp-cell pink"></div></div>
+                <div class="wtp-row small"><div class="wtp-line cyan"></div><div class="wtp-line short pink"></div></div>
+              </div>
+              <strong>Synthwave</strong>
+              <small>Deep purple · neon</small>
+            </button>
+            <button class="wizard-theme-tile" type="button" data-wizard-theme="emerald">
+              <div class="wizard-theme-preview wizard-preview-emerald">
+                <div class="wtp-bar"></div>
+                <div class="wtp-row"><div class="wtp-cell gold"></div><div class="wtp-cell"></div><div class="wtp-cell red"></div></div>
+                <div class="wtp-row small"><div class="wtp-line gold"></div><div class="wtp-line short"></div></div>
+              </div>
+              <strong>Emerald</strong>
+              <small>Forest dark · gold</small>
+            </button>
+            <button class="wizard-theme-tile" type="button" data-wizard-theme="paper">
+              <div class="wizard-theme-preview wizard-preview-paper">
+                <div class="wtp-bar"></div>
+                <div class="wtp-row"><div class="wtp-cell dkgreen"></div><div class="wtp-cell"></div><div class="wtp-cell dkred"></div></div>
+                <div class="wtp-row small"><div class="wtp-line dkgreen"></div><div class="wtp-line short dkred"></div></div>
+              </div>
+              <strong>Paper</strong>
+              <small>Light · for daytime</small>
+            </button>
+          </div>
+        </div>
+
+        <div class="wizard-actions">
+          <button class="btn btn-ghost" id="wizardBack2" type="button">← Back</button>
+          <button class="btn btn-primary" id="wizardNext2" type="button">Next →</button>
+        </div>
+      </div>
+
+      <!-- ── STEP 3: Refresh speed ───────────────────────────── -->
+      <div class="wizard-pane" id="wizardPane3">
+        <div class="wizard-step-body">
+          <h3>How often should data refresh?</h3>
+          <p class="wizard-step-sub">You can change this at any time in the status bar.</p>
+
+          <div class="wizard-speed-grid" id="wizardSpeedGrid">
+            <button class="wizard-speed-tile" type="button" data-speed="10">
+              <span class="wizard-speed-badge pro-badge">⚡ Pro</span>
+              <strong>10 seconds</strong>
+              <small>Near real-time · for active traders</small>
+            </button>
+            <button class="wizard-speed-tile is-active" type="button" data-speed="30">
+              <strong>30 seconds</strong>
+              <small>Balanced · recommended for most users</small>
+            </button>
+            <button class="wizard-speed-tile" type="button" data-speed="60">
+              <strong>1 minute</strong>
+              <small>Efficient · lower battery usage</small>
+            </button>
+            <button class="wizard-speed-tile" type="button" data-speed="120">
+              <strong>2 minutes</strong>
+              <small>Relaxed · for monitoring only</small>
+            </button>
+          </div>
+
+          <div class="wizard-finish-recap" id="wizardFinishRecap">
+            <!-- JS fills this in -->
+          </div>
+        </div>
+
+        <div class="wizard-actions">
+          <button class="btn btn-ghost" id="wizardBack3" type="button">← Back</button>
+          <button class="btn btn-primary wizard-launch-btn" id="onboardingStart" type="button">
+            🚀 Launch Meridian
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Guided tour overlay -->
+  <div class="tour-overlay hidden" id="tourOverlay" aria-modal="true" role="dialog" aria-label="Meridian guided tour">
+    <div class="tour-spotlight" id="tourSpotlight"></div>
+    <div class="tour-card" id="tourCard">
+      <div class="tour-progress" id="tourProgress"></div>
+      <div class="tour-card-body">
+        <span class="tour-step-icon" id="tourIcon" aria-hidden="true"></span>
+        <h3 class="tour-step-title" id="tourTitle"></h3>
+        <p class="tour-step-desc" id="tourDesc"></p>
+      </div>
+      <div class="tour-actions">
+        <button class="btn btn-ghost btn-sm" id="tourSkipBtn" type="button">Skip tour</button>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <button class="btn btn-outline btn-sm" id="tourPrevBtn" type="button">← Back</button>
+          <button class="btn btn-primary btn-sm" id="tourNextBtn" type="button">Next →</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Pricing modal -->
+  <div class="modal-backdrop hidden" id="pricingModalBackdrop">
+    <section class="pricing-modal" id="pricingModal">
+      <header class="pricing-modal-head">
+        <div>
+          <h2 class="pricing-modal-title">Meridian Plans</h2>
+          <p class="pricing-modal-sub">Bloomberg-grade tools. Indie-friendly pricing. <strong style="color:var(--accent)">Free forever, no card required.</strong></p>
+          <div class="pricing-social-proof">
+            <span class="pricing-stars">★★★★★</span>
+            <span>Trusted by 4,200+ retail traders &amp; quant tinkerers</span>
+          </div>
+        </div>
+        <button class="icon-btn" id="closePricingModal" type="button" title="Close">✕</button>
+      </header>
+
+      <!-- Annual toggle -->
+      <div class="pricing-billing-toggle">
+        <button class="pricing-billing-btn is-active" id="billingMonthly" type="button" data-billing="monthly">Monthly</button>
+        <button class="pricing-billing-btn" id="billingAnnual" type="button" data-billing="annual">
+          Annual
+          <span class="pricing-save-badge">2 months free</span>
+        </button>
+      </div>
+
+      <div class="pricing-grid">
+        <!-- Free -->
+        <div class="pricing-card">
+          <div class="pricing-card-header">
+            <h3>Free</h3>
+            <p class="pricing-card-desc">Everything you need to start</p>
+          </div>
+          <div class="pricing-price" id="priceMonthlyFree">$0<small>/mo</small></div>
+          <ul class="pricing-features">
+            <li>Real-time quotes &amp; charts</li>
+            <li>10-symbol watchlist</li>
+            <li>News feed &amp; briefing</li>
+            <li>3 price alerts</li>
+            <li>5 custom rules</li>
+            <li>Paper trading</li>
+            <li>30s data refresh</li>
+            <li>Local workspace save</li>
+          </ul>
+          <button class="btn btn-ghost pricing-cta" type="button" disabled>Your current plan</button>
+        </div>
+
+        <!-- Pro (featured) -->
+        <div class="pricing-card is-featured">
+          <span class="pricing-popular-badge">⚡ Most popular</span>
+          <div class="pricing-card-header">
+            <h3>Pro</h3>
+            <p class="pricing-card-desc">For serious market participants</p>
+          </div>
+          <div class="pricing-price">
+            <span class="pricing-amount" id="priceAmountPro">$7.99</span><small id="pricePeriodPro">/mo</small>
+            <div class="pricing-annual-note hidden" id="priceAnnualPro">$71.88/yr · billed annually</div>
+            <div class="pricing-trial-note">7-day free trial · cancel any time</div>
+          </div>
+          <ul class="pricing-features">
+            <li>Everything in Free</li>
+            <li>Unlimited watchlists &amp; alerts</li>
+            <li>Advanced indicators (MACD, Bollinger, VWAP)</li>
+            <li>Financial statements &amp; filings</li>
+            <li>Analyst ratings &amp; targets</li>
+            <li>Limit &amp; stop orders (paper)</li>
+            <li>Screener presets &amp; CSV export</li>
+            <li>10s data refresh</li>
+            <li>Cloud workspace sync</li>
+            <li>Customizable rules engine</li>
+            <li>Per-ticker notes &amp; journal</li>
+          </ul>
+          <button class="btn btn-primary pricing-cta" type="button" id="proUpgradeBtn" data-waitlist="pro">Start 7-day free trial →</button>
+        </div>
+
+        <!-- Pro+ -->
+        <div class="pricing-card">
+          <div class="pricing-card-header">
+            <h3>Pro+</h3>
+            <p class="pricing-card-desc">Quant &amp; power-user tier</p>
+          </div>
+          <div class="pricing-price">
+            <span class="pricing-amount" id="priceAmountProPlus">$14.99</span><small id="pricePeriodProPlus">/mo</small>
+            <div class="pricing-annual-note hidden" id="priceAnnualProPlus">$143.88/yr · billed annually</div>
+          </div>
+          <ul class="pricing-features">
+            <li>Everything in Pro</li>
+            <li>AI market commentary</li>
+            <li>Webhook &amp; email alerts</li>
+            <li>REST API access</li>
+            <li>Extended hours data</li>
+            <li>Options flow &amp; unusual activity</li>
+            <li>Multi-account portfolios</li>
+            <li>Priority support</li>
+          </ul>
+          <button class="btn btn-outline pricing-cta" type="button" data-waitlist="pro-plus">Get early access →</button>
+        </div>
+      </div>
+
+      <!-- Trial CTA -->
+      <div class="pricing-waitlist" id="pricingWaitlist">
+        <p class="pricing-waitlist-label">✅ Billing is live. Start your 7-day free trial today. No card charge until day 8.</p>
+        <p class="pricing-waitlist-note" id="pricingWaitlistNote">Cancel any time before the trial ends and you won't be charged.</p>
+      </div>
+
+      <p class="pricing-footer-note">All prices in USD. Card charged at period start. Cancel any time. <a href="#" data-pricing-faq>FAQ &amp; refund policy</a></p>
+
+      <!-- Mini FAQ accordion -->
+      <details class="pricing-faq-accordion">
+        <summary>Frequently asked questions</summary>
+        <div class="pricing-faq-grid">
+          <div class="pricing-faq-item">
+            <strong>Is the free tier actually free forever?</strong>
+            <p>Yes. No credit card, no trial expiry. We earn revenue from Pro subscriptions only.</p>
+          </div>
+          <div class="pricing-faq-item">
+            <strong>How does the 7-day trial work?</strong>
+            <p>Full Pro access. We email a reminder 2 days before it ends. Cancel any time, no charge.</p>
+          </div>
+          <div class="pricing-faq-item">
+            <strong>What happens to my data if I downgrade?</strong>
+            <p>Your watchlists, alerts &amp; positions stay. Lists exceeding the free limit become read-only until you upgrade or trim them.</p>
+          </div>
+          <div class="pricing-faq-item">
+            <strong>Do you sell my data?</strong>
+            <p>Never. No ads, no third-party trackers, no data resale. Subscriptions are our only revenue.</p>
+          </div>
+          <div class="pricing-faq-item">
+            <strong>Is the data real-time?</strong>
+            <p>Yes, quotes refresh every 30s on Free, 10s on Pro, with live price flash. Sourced from Yahoo Finance.</p>
+          </div>
+          <div class="pricing-faq-item">
+            <strong>Can I get a refund?</strong>
+            <p>Full refund within 14 days of purchase, no questions asked. Email <em>support@meridian.app</em>.</p>
+          </div>
+        </div>
+      </details>
+    </section>
+  </div>
+
+  <!-- Theme picker popover -->
+  <div class="theme-popover hidden" id="themePopover" role="menu" aria-label="Select theme">
+    <header class="theme-popover-head">
+      <strong>Theme</strong>
+      <small>Press T to toggle</small>
+    </header>
+    <div class="theme-grid">
+      <button class="theme-option" type="button" data-theme-set="dark">
+        <span class="theme-swatch theme-swatch-dark"></span>
+        <strong>Cosmic Dark</strong>
+        <small>Default · cool blue</small>
+      </button>
+      <button class="theme-option" type="button" data-theme-set="bloomberg">
+        <span class="theme-swatch theme-swatch-bloomberg"></span>
+        <strong>Bloomberg</strong>
+        <small>Pure black · amber</small>
+      </button>
+      <button class="theme-option" type="button" data-theme-set="synthwave">
+        <span class="theme-swatch theme-swatch-synthwave"></span>
+        <strong>Synthwave</strong>
+        <small>Deep purple · neon</small>
+      </button>
+      <button class="theme-option" type="button" data-theme-set="emerald">
+        <span class="theme-swatch theme-swatch-emerald"></span>
+        <strong>Emerald</strong>
+        <small>Forest · gold accents</small>
+      </button>
+      <button class="theme-option" type="button" data-theme-set="paper">
+        <span class="theme-swatch theme-swatch-paper"></span>
+        <strong>Paper</strong>
+        <small>Light · for daytime</small>
+      </button>
+      <button class="theme-option" type="button" data-theme-set="midnight">
+        <span class="theme-swatch theme-swatch-midnight"></span>
+        <strong>Midnight</strong>
+        <small>Deep navy · electric</small>
+      </button>
+      <button class="theme-option" type="button" data-theme-set="crimson">
+        <span class="theme-swatch theme-swatch-crimson"></span>
+        <strong>Crimson</strong>
+        <small>Dark wine · deep red</small>
+      </button>
+      <button class="theme-option" type="button" data-theme-set="slate">
+        <span class="theme-swatch theme-swatch-slate"></span>
+        <strong>Slate</strong>
+        <small>Steel blue · cool gray</small>
+      </button>
+      <button class="theme-option" type="button" data-theme-set="amber">
+        <span class="theme-swatch theme-swatch-amber"></span>
+        <strong>Amber</strong>
+        <small>Warm honey · dark gold</small>
+      </button>
+    </div>
+  </div>
+
+  <script type="module" src="./src/clientApp.js"></script>
+</body>
+</html>

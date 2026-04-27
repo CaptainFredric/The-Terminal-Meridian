@@ -37,6 +37,79 @@
 
     html { scroll-behavior: smooth; }
 
+    /* ── Fluid motion primitives ─────────────────────────────────
+       Scroll-reveal: any element with [data-reveal] starts slightly
+       offset and faded; an IntersectionObserver toggles .is-visible
+       which animates it into place. Stagger is opt-in via data-stagger.
+       Honors prefers-reduced-motion. */
+    @keyframes reveal-in {
+      from { opacity: 0; transform: translate3d(0, 18px, 0); }
+      to   { opacity: 1; transform: translate3d(0, 0, 0); }
+    }
+    @keyframes reveal-child-in {
+      from { opacity: 0; transform: translate3d(0, 14px, 0); }
+      to   { opacity: 1; transform: translate3d(0, 0, 0); }
+    }
+    [data-reveal] {
+      opacity: 0;
+      transform: translate3d(0, 18px, 0);
+      will-change: opacity, transform;
+    }
+    [data-reveal].is-visible {
+      /* End-state set directly so the element is visible even if the
+         keyframe animation gets starved (eg. background tab, paused
+         document timeline). The animation paints the motion. */
+      opacity: 1;
+      transform: translate3d(0, 0, 0);
+      animation: reveal-in 680ms cubic-bezier(0.2, 0.7, 0.3, 1) forwards;
+    }
+    [data-reveal][data-stagger] > * {
+      opacity: 0;
+      transform: translate3d(0, 14px, 0);
+    }
+    [data-reveal][data-stagger].is-visible > * {
+      opacity: 1;
+      transform: translate3d(0, 0, 0);
+      animation: reveal-child-in 580ms cubic-bezier(0.2, 0.7, 0.3, 1) forwards;
+      animation-delay: calc(var(--stagger, 60ms) * var(--i, 0));
+    }
+
+    /* Card lift micro-interaction. Uses transform so it never reflows
+       layout — works on any block with the hover-lift class. */
+    .hover-lift {
+      transition: transform 280ms cubic-bezier(0.2, 0.7, 0.3, 1),
+                  box-shadow 280ms ease,
+                  border-color 220ms ease;
+      will-change: transform;
+    }
+    .hover-lift:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.4), 0 14px 32px rgba(0,0,0,0.4);
+    }
+
+    /* Subtle attention-pull on the primary CTA without it being garish. */
+    @keyframes pulse-accent {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(47, 207, 132, 0.0); }
+      50%      { box-shadow: 0 0 0 8px rgba(47, 207, 132, 0.10); }
+    }
+    .btn-primary { animation: pulse-accent 3.6s ease-in-out infinite; }
+    .btn-primary:hover { animation-play-state: paused; }
+
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      [data-reveal],
+      [data-reveal].is-visible,
+      [data-reveal][data-stagger] > *,
+      [data-reveal][data-stagger].is-visible > * {
+        opacity: 1 !important;
+        transform: none !important;
+        transition: none !important;
+      }
+      .hover-lift:hover { transform: none; }
+      .btn-primary { animation: none; }
+      .ticker-track { animation: none !important; }
+    }
+
     body {
       background: var(--bg);
       color: var(--text);
@@ -574,6 +647,47 @@
       max-width: 580px;
       margin: 0 auto 60px;
       line-height: 1.7;
+    }
+
+    /* ── Claim strip: the single distinguishing-line answer ──── */
+    .claim-strip {
+      max-width: 880px;
+      margin: 0 auto;
+      padding: 56px 28px 32px;
+      text-align: center;
+    }
+    .claim-line {
+      font-size: clamp(20px, 2.6vw, 28px);
+      font-weight: 600;
+      line-height: 1.45;
+      letter-spacing: -0.012em;
+      color: var(--text);
+      margin: 0 0 14px;
+    }
+    .claim-line strong {
+      font-weight: 700;
+      background: linear-gradient(180deg, var(--accent) 0%, #4ee2a3 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: transparent;
+      color: transparent;
+    }
+    .claim-sep {
+      display: inline-block;
+      margin: 0 6px;
+      color: var(--text-faint);
+      font-weight: 400;
+    }
+    .claim-foot {
+      font-family: var(--font-mono);
+      font-size: 12.5px;
+      color: var(--text-faint);
+      letter-spacing: 0.02em;
+      margin: 0;
+    }
+    @media (max-width: 600px) {
+      .claim-strip { padding: 40px 20px 24px; }
+      .claim-sep { display: block; margin: 4px 0; opacity: 0; height: 0; }
     }
 
     .features-grid {
@@ -1267,9 +1381,9 @@
 </section>
 
 <!-- ── STATS — Quantified value claim ─────────────────────────────── -->
-<div class="stats">
+<div class="stats" data-reveal data-stagger style="--stagger:90ms">
   <div class="stat">
-    <span class="stat-num">$25,000<span class="stat-yr">/yr</span></span>
+    <span class="stat-num"><span data-count="25000" data-count-prefix="$">$25,000</span><span class="stat-yr">/yr</span></span>
     <span class="stat-label">Bloomberg Terminal</span>
   </div>
   <div class="stat stat-vs">
@@ -1277,13 +1391,25 @@
     <span class="stat-label">Same job, retail price</span>
   </div>
   <div class="stat stat-featured">
-    <span class="stat-num">$96<span class="stat-yr">/yr</span></span>
+    <span class="stat-num"><span data-count="96" data-count-prefix="$">$96</span><span class="stat-yr">/yr</span></span>
     <span class="stat-label">Meridian Pro (annual)</span>
   </div>
   <div class="stat">
-    <span class="stat-num">260<span class="stat-yr">×</span></span>
+    <span class="stat-num"><span data-count="260">260</span><span class="stat-yr">×</span></span>
     <span class="stat-label">Cheaper. Same data.</span>
   </div>
+</div>
+
+<!-- ── ONE-LINE CLAIM ─────────────────────────────────────────────── -->
+<div class="claim-strip" data-reveal>
+  <p class="claim-line">
+    The only <strong>open-source</strong>, <strong>AI-native</strong> market terminal
+    <span class="claim-sep">·</span>
+    at <strong>retail price</strong>.
+  </p>
+  <p class="claim-foot">
+    Audit the source. Fork it. Self-host it. Or just use it for $0 in your browser.
+  </p>
 </div>
 
 <!-- ── WHY MERIDIAN — comparison table ───────────────────────────── -->
@@ -1296,7 +1422,7 @@
     pro tooling, modern UX, retail price.
   </p>
 
-  <div class="compare-wrap">
+  <div class="compare-wrap" data-reveal>
     <table class="compare-table">
       <thead>
         <tr>
@@ -1375,33 +1501,33 @@
     who want Bloomberg-grade tools without the $25,000 per year subscription.
   </p>
 
-  <div class="features-grid">
-    <div class="feature-card">
+  <div class="features-grid" data-reveal data-stagger style="--stagger:80ms">
+    <div class="feature-card hover-lift">
       <div class="feature-icon">🤖</div>
       <div class="feature-title">AI Insights</div>
       <p class="feature-desc">Analyst-style commentary on any ticker, powered by GPT and Claude. Price action, volume conviction, 52-week positioning, and key levels to watch.</p>
     </div>
-    <div class="feature-card">
+    <div class="feature-card hover-lift">
       <div class="feature-icon red">📊</div>
       <div class="feature-title">Options Chain</div>
       <p class="feature-desc">Full strike and expiry grid with bid/ask, implied volatility, volume, and open interest. Updated live. Spot unusual flow instantly.</p>
     </div>
-    <div class="feature-card">
+    <div class="feature-card hover-lift">
       <div class="feature-icon">💼</div>
       <div class="feature-title">Portfolio Tracker</div>
       <p class="feature-desc">Track positions, cost basis, and P&L across your entire watchlist. Session summaries keep you oriented at a glance.</p>
     </div>
-    <div class="feature-card">
+    <div class="feature-card hover-lift">
       <div class="feature-icon blue">🎨</div>
       <div class="feature-title">9 Visual Themes</div>
       <p class="feature-desc">From classic Bloomberg amber to neon Synthwave and clean Paper mode for daytime. Switch your entire workspace aesthetic in one click.</p>
     </div>
-    <div class="feature-card">
+    <div class="feature-card hover-lift">
       <div class="feature-icon red">🔔</div>
       <div class="feature-title">Smart Alerts</div>
       <p class="feature-desc">Set price targets, RSI thresholds, volume spikes, and custom conditions. Get notified in-browser or by email the moment something triggers.</p>
     </div>
-    <div class="feature-card">
+    <div class="feature-card hover-lift">
       <div class="feature-icon">📰</div>
       <div class="feature-title">News with Sentiment</div>
       <p class="feature-desc">Real-time headlines filtered by your watchlist. Every story scored bullish, bearish, or neutral so you can triage in seconds.</p>
@@ -1588,26 +1714,26 @@
     account.
   </p>
 
-  <div class="personas-grid">
-    <div class="persona">
+  <div class="personas-grid" data-reveal data-stagger style="--stagger:90ms">
+    <div class="persona hover-lift">
       <div class="persona-icon">📈</div>
       <h3>The Active Trader</h3>
       <p>Real-time quotes, options chains with full Greeks, custom alerts on price,
         RSI, and volume. Built for swing setups and day-trade triage.</p>
     </div>
-    <div class="persona">
+    <div class="persona hover-lift">
       <div class="persona-icon">🎓</div>
       <h3>The Finance Student</h3>
       <p>Practice with paper accounts. Learn from AI commentary on real tickers.
         The free tier covers an entire investments course without spending a cent.</p>
     </div>
-    <div class="persona">
+    <div class="persona hover-lift">
       <div class="persona-icon">💼</div>
       <h3>The Independent RIA</h3>
       <p>Manage client watchlists, run sector heatmaps, generate AI briefings for
         end-of-week notes. Pay for the data you actually use, not a per-seat license.</p>
     </div>
-    <div class="persona">
+    <div class="persona hover-lift">
       <div class="persona-icon">🔬</div>
       <h3>The Analyst &amp; Writer</h3>
       <p>Newsletter writers, podcasters, independent researchers. Pull AI-summarized
@@ -1625,9 +1751,9 @@
     Upgrade for live data, AI, and unlimited access.
   </p>
 
-  <div class="pricing-grid">
+  <div class="pricing-grid" data-reveal data-stagger style="--stagger:120ms">
     <!-- FREE -->
-    <div class="price-card">
+    <div class="price-card hover-lift">
       <div class="price-tier">Free</div>
       <div class="price-amount">$0 <span>/ forever</span></div>
       <p class="price-tagline">A real terminal, not a watered-down demo.</p>
@@ -1669,7 +1795,7 @@
     </div>
 
     <!-- PRO+ -->
-    <div class="price-card">
+    <div class="price-card hover-lift">
       <div class="price-tier">Pro+</div>
       <div class="price-amount">$14.99 <span>/ mo</span></div>
       <p class="price-tagline">For power users, teams, and builders. <span style="color:var(--accent); font-size:12px;">$11.99/mo billed annually</span></p>
@@ -1761,8 +1887,8 @@
     public Git history, and the full source is on GitHub.
   </p>
 
-  <ol class="release-feed">
-    <li class="release-entry">
+  <ol class="release-feed" data-reveal data-stagger style="--stagger:80ms">
+    <li class="release-entry hover-lift">
       <div class="release-meta">
         <span class="release-tag">v0.7</span>
         <time>Latest</time>
@@ -1779,7 +1905,7 @@
         </ul>
       </div>
     </li>
-    <li class="release-entry">
+    <li class="release-entry hover-lift">
       <div class="release-meta">
         <span class="release-tag">v0.6</span>
         <time>Apr 26</time>
@@ -1794,7 +1920,7 @@
         </ul>
       </div>
     </li>
-    <li class="release-entry">
+    <li class="release-entry hover-lift">
       <div class="release-meta">
         <span class="release-tag">v0.5</span>
         <time>Earlier</time>
@@ -2070,6 +2196,84 @@
       if (a) a.classList.add('is-active');
     }, { rootMargin: '-30% 0px -55% 0px', threshold: [0, 0.25, 0.5, 0.75, 1] });
     linkBySection.forEach((_a, section) => io.observe(section));
+  })();
+
+  /* ------------------------------------------------------------------
+   * Scroll-reveal: any element with [data-reveal] fades in on first
+   * intersection. Stagger children by setting --i on each child.
+   * ------------------------------------------------------------------ */
+  (function scrollReveal() {
+    const targets = document.querySelectorAll('[data-reveal]');
+    if (!targets.length) return;
+    targets.forEach(el => {
+      if (el.hasAttribute('data-stagger')) {
+        [...el.children].forEach((child, i) => child.style.setProperty('--i', String(i)));
+      }
+    });
+    // Reveal anything already in (or above) the viewport on first paint so
+    // hero-area content never starts hidden. The observer handles the rest.
+    const revealIfInView = () => {
+      const vh = window.innerHeight || document.documentElement.clientHeight;
+      targets.forEach(el => {
+        const rect = el.getBoundingClientRect();
+        if (rect.top < vh * 0.92 && rect.bottom > 0) el.classList.add('is-visible');
+      });
+    };
+    revealIfInView();
+    if (!('IntersectionObserver' in window)) {
+      targets.forEach(el => el.classList.add('is-visible'));
+      return;
+    }
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach(e => {
+        if (e.isIntersecting) {
+          e.target.classList.add('is-visible');
+          io.unobserve(e.target);
+        }
+      });
+    }, { rootMargin: '0px 0px -8% 0px', threshold: 0.05 });
+    targets.forEach(el => io.observe(el));
+    // Belt-and-braces fallback: if IO is starved (some embedded browsers,
+    // headless previews), reveal everything after 1.2s so nothing stays
+    // permanently hidden.
+    setTimeout(() => targets.forEach(el => el.classList.add('is-visible')), 1200);
+  })();
+
+  /* ------------------------------------------------------------------
+   * Animated count-up for the hero stats. The first time the stats
+   * strip enters the viewport, $25,000 / $96 / 260 each animate from 0
+   * to their target value. Static-friendly: if JS or IO is missing,
+   * the markup still reads correctly.
+   * ------------------------------------------------------------------ */
+  (function countUp() {
+    const targets = document.querySelectorAll('[data-count]');
+    if (!targets.length || !('IntersectionObserver' in window)) return;
+    const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3);
+    const animate = (el) => {
+      const end = Number(el.dataset.count);
+      if (!Number.isFinite(end)) return;
+      const prefix = el.dataset.countPrefix || '';
+      const useGrouping = el.dataset.countGroup !== 'false';
+      const dur = Number(el.dataset.countDuration) || 1200;
+      const start = performance.now();
+      const tick = (now) => {
+        const t = Math.min(1, (now - start) / dur);
+        const v = Math.round(end * easeOutCubic(t));
+        el.textContent = prefix + (useGrouping ? v.toLocaleString() : String(v));
+        if (t < 1) requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    };
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach(e => {
+        if (e.isIntersecting) {
+          animate(e.target);
+          io.unobserve(e.target);
+        }
+      });
+    }, { threshold: 0.6 });
+    targets.forEach(el => io.observe(el));
   })();
 
   /* ------------------------------------------------------------------

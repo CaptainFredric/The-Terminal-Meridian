@@ -822,28 +822,48 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         symbols = [symbol.strip() for symbol in symbols_param.split(",") if symbol.strip()]
         if not symbols:
             return jsonify({"quotes": []})
-        return jsonify({"quotes": fetch_quotes(symbols)})
+        try:
+            return jsonify({"quotes": fetch_quotes(symbols)})
+        except Exception as exc:
+            # Returning 500 forces the frontend into its error state and
+            # blocks all downstream renders. Returning an empty list lets
+            # the client fall back to its cached/seed data gracefully.
+            _log.warning("fetch_quotes failed for %s: %s", symbols, exc)
+            return jsonify({"quotes": [], "error": str(exc)}), 200
 
     @app.get("/api/market/overview")
     def market_overview() -> Any:
         symbols_param = request.args.get("symbols", "")
         symbols = [symbol.strip() for symbol in symbols_param.split(",") if symbol.strip()] or OVERVIEW_SYMBOLS
+        try:
+            quotes = fetch_quotes(symbols)
+        except Exception as exc:
+            _log.warning("fetch_quotes failed for overview %s: %s", symbols, exc)
+            quotes = []
         return jsonify({
             "generatedAt": utc_now_iso(),
             "phase": market_phase(),
-            "quotes": fetch_quotes(symbols),
+            "quotes": quotes,
         })
 
     @app.get("/api/market/chart/<symbol>")
     def market_chart(symbol: str) -> Any:
         range_value = request.args.get("range", "1mo")
         interval = request.args.get("interval", "1d")
-        return jsonify({"points": fetch_chart(symbol, range_value, interval)})
+        try:
+            return jsonify({"points": fetch_chart(symbol, range_value, interval)})
+        except Exception as exc:
+            _log.warning("fetch_chart failed for %s/%s/%s: %s", symbol, range_value, interval, exc)
+            return jsonify({"points": [], "error": str(exc)}), 200
 
     @app.get("/api/market/options/<symbol>")
     def market_options(symbol: str) -> Any:
         expiration = request.args.get("date")
-        return jsonify(fetch_options(symbol, expiration))
+        try:
+            return jsonify(fetch_options(symbol, expiration))
+        except Exception as exc:
+            _log.warning("fetch_options failed for %s/%s: %s", symbol, expiration, exc)
+            return jsonify({"expirations": [], "calls": [], "puts": [], "error": str(exc)}), 200
 
     @app.get("/api/market/news")
     def market_news() -> Any:

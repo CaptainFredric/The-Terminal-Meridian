@@ -1547,7 +1547,6 @@
     <a href="#who" data-spy>Built for</a>
     <a href="#pricing" data-spy>Pricing</a>
     <a href="#faq" data-spy>FAQ</a>
-    <a href="#whats-new" data-spy>What's new</a>
     <a href="terminal.html">Terminal ↗</a>
   </nav>
 
@@ -2117,89 +2116,6 @@
         rent your watchlist to anyone.</p>
     </details>
   </div>
-</section>
-
-<!-- ── WHAT'S NEW / RELEASE NOTES ─────────────────────────────────── -->
-<section class="section section-center" id="whats-new">
-  <div class="section-eyebrow">What's New</div>
-  <h2 class="section-title">Built in the open. Shipped weekly.</h2>
-  <p class="section-sub">
-    The latest improvements, in the order they landed. Every change is in the
-    public Git history, and the full source is on GitHub.
-  </p>
-
-  <ol class="release-feed" data-reveal data-stagger style="--stagger:80ms">
-    <li class="release-entry hover-lift">
-      <div class="release-meta">
-        <span class="release-tag">v0.8</span>
-        <time>Latest</time>
-      </div>
-      <div class="release-body">
-        <h3>Backend resilience, fluid motion, sharper claim</h3>
-        <ul>
-          <li>Live backend (Render) was 500-ing on quotes. Pinned <code>yfinance</code> in the build, wrapped quote/overview/chart routes so a future fetch failure degrades to cached data instead of a hard error.</li>
-          <li>Every panel now skips its DOM rewrite when the rendered HTML hasn't actually changed. Stops the workspace from visibly reflashing every 5 seconds even when nothing on screen moved.</li>
-          <li>Scroll-reveal + count-up + hover-lift across the whole landing page, with a <code>prefers-reduced-motion</code> guard.</li>
-          <li>Smooth mount transitions on terminal panels, stat-card lift on hover, function-key press feedback, focus-mode pulls forward.</li>
-          <li>Site restructured: the landing page now lives at the root URL; the live terminal moved to <code>/terminal.html</code>.</li>
-          <li>One-line claim above the comparison table: the only open-source, AI-native market terminal at retail price.</li>
-        </ul>
-      </div>
-    </li>
-    <li class="release-entry hover-lift">
-      <div class="release-meta">
-        <span class="release-tag">v0.7</span>
-        <time>Apr 26</time>
-      </div>
-      <div class="release-body">
-        <h3>Quality + responsiveness pass</h3>
-        <ul>
-          <li>Fixed the notification drawer close button (a stray CSS animation kept it pinned to the screen).</li>
-          <li>News panel no longer flickers every 5s. The DOM only re-mounts when the headlines actually change.</li>
-          <li>Wake-server banner now auto-dismisses after 45s instead of camping forever during cold starts.</li>
-          <li>Alerts in the sidebar are now editable inline and have a per-row delete button.</li>
-          <li>Headlines on widescreen now flow into a 2 or 3-column grid (container queries) instead of leaving a half-empty page.</li>
-          <li>Cleaner logo. Mobile nav fits properly at 375px. Em-dashes removed from all user-visible copy.</li>
-        </ul>
-      </div>
-    </li>
-    <li class="release-entry hover-lift">
-      <div class="release-meta">
-        <span class="release-tag">v0.6</span>
-        <time>Apr 26</time>
-      </div>
-      <div class="release-body">
-        <h3>Disruption thesis + strategy memo</h3>
-        <ul>
-          <li>Comparison table: side-by-side Yahoo Finance vs Meridian Pro vs Bloomberg Terminal.</li>
-          <li>"Built for" personas: Active Trader, Finance Student, Independent RIA, Analyst &amp; Writer.</li>
-          <li>FAQ section, scroll-spy nav, and a scroll-to-top button.</li>
-          <li>One-page strategy memo for the business case behind the product.</li>
-        </ul>
-      </div>
-    </li>
-    <li class="release-entry hover-lift">
-      <div class="release-meta">
-        <span class="release-tag">v0.5</span>
-        <time>Earlier</time>
-      </div>
-      <div class="release-body">
-        <h3>Real email signup + simpler accounts</h3>
-        <ul>
-          <li>Static-site email relay (Formsubmit). No backend required for early-access list.</li>
-          <li>Signup form reduced from 8 fields to 4 with a Show/Hide password toggle.</li>
-          <li>Wake-banner state machine for the free-tier backend cold-start window.</li>
-          <li>Live theming on the landing page (click any swatch to re-skin the whole page in real time).</li>
-        </ul>
-      </div>
-    </li>
-  </ol>
-
-  <p class="release-foot">
-    Full history:
-    <a href="https://github.com/captainfredric/The-Terminal-Meridian/commits/main"
-       target="_blank" rel="noopener noreferrer">github.com/captainfredric/The-Terminal-Meridian</a>
-  </p>
 </section>
 
 <!-- ── EMAIL SIGNUP / EARLY ACCESS ────────────────────────────────── -->

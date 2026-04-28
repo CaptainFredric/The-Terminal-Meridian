@@ -116,6 +116,32 @@ _log = _logging.getLogger("meridian.backend")
 
 _rl_store: dict[str, list[float]] = {}
 
+
+def _ensure_subscription_tables(conn) -> None:
+    """Create the subscriptions + pending_tier_grants tables if missing.
+    Safe to call repeatedly (CREATE TABLE IF NOT EXISTS).
+    Used by both the admin endpoint and the signup/login pending-grant
+    apply path so we don't have to assume one ran first."""
+    conn.execute(
+        """CREATE TABLE IF NOT EXISTS subscriptions (
+            user_id TEXT PRIMARY KEY,
+            tier TEXT NOT NULL DEFAULT 'free',
+            stripe_customer_id TEXT,
+            stripe_subscription_id TEXT,
+            status TEXT,
+            current_period_end TEXT,
+            updated_at TEXT NOT NULL
+        )"""
+    )
+    conn.execute(
+        """CREATE TABLE IF NOT EXISTS pending_tier_grants (
+            email TEXT PRIMARY KEY,
+            tier TEXT NOT NULL,
+            status TEXT,
+            updated_at TEXT NOT NULL
+        )"""
+    )
+
 def _rate_limited(key: str, max_calls: int, window_sec: float) -> bool:
     """Return True if the caller should be throttled.
 
@@ -227,6 +253,71 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
     # cookie to cross-site fetches. Toggled via env var so local dev (which
     # serves over plain http://127.0.0.1) keeps working with `Lax`.
     app.config["CROSS_SITE_COOKIES"] = os.environ.get("CROSS_SITE_COOKIES", "0") == "1"
+
+    # ── Pre-provisioned tier grants from env ─────────────────────────────
+    # Parse PRE_PROVISIONED_PRO_PLUS / PRE_PROVISIONED_PRO env vars (comma-
+    # separated emails) and queue Pro+/Pro grants in pending_tier_grants on
+    # boot. Lets ops stamp founder + beta-tester accounts via a single
+    # Render env var instead of curl-ing the admin endpoint after every
+    # cold start. The grant is harmless if the user never signs up.
+    def _seed_env_grants() -> None:
+        try:
+            db_path = Path(app.config["DATABASE"])
+            db_path.parent.mkdir(parents=True, exist_ok=True)
+            conn = sqlite3.connect(str(db_path))
+            try:
+                _ensure_subscription_tables(conn)
+                now = datetime.now(timezone.utc).isoformat()
+                for env_var, tier in (
+                    ("PRE_PROVISIONED_PRO_PLUS", "pro_plus"),
+                    ("PRE_PROVISIONED_PRO", "pro"),
+                ):
+                    raw = os.environ.get(env_var, "").strip()
+                    if not raw:
+                        continue
+                    for email in (e.strip().lower() for e in raw.split(",") if e.strip()):
+                        # Don't downgrade an existing higher tier; only seed
+                        # if the user hasn't signed up yet (pending) or has
+                        # no subscription record.
+                        existing_user = conn.execute(
+                            "SELECT id FROM users WHERE lower(email) = ?", (email,)
+                        ).fetchone()
+                        if existing_user:
+                            uid = existing_user[0]
+                            sub = conn.execute(
+                                "SELECT tier FROM subscriptions WHERE user_id = ?", (uid,)
+                            ).fetchone()
+                            if sub and sub[0] in ("pro", "pro_plus"):
+                                continue  # already paid; respect Stripe
+                            if sub:
+                                conn.execute(
+                                    "UPDATE subscriptions SET tier=?, status=?, updated_at=? WHERE user_id=?",
+                                    (tier, "active", now, uid),
+                                )
+                            else:
+                                conn.execute(
+                                    "INSERT INTO subscriptions (user_id, tier, status, updated_at) VALUES (?,?,?,?)",
+                                    (uid, tier, "active", now),
+                                )
+                        else:
+                            conn.execute(
+                                """INSERT INTO pending_tier_grants (email, tier, status, updated_at)
+                                   VALUES (?, ?, ?, ?)
+                                   ON CONFLICT(email) DO UPDATE SET
+                                     tier=excluded.tier,
+                                     status=excluded.status,
+                                     updated_at=excluded.updated_at""",
+                                (email, tier, "active", now),
+                            )
+                conn.commit()
+            finally:
+                conn.close()
+        except Exception as exc:  # noqa: BLE001
+            _log.warning("env-based tier seeding failed: %s", exc)
+
+    # Run after we have DATABASE configured but before billing module
+    # registers its own subscriptions table (idempotent either way).
+    _seed_env_grants()
 
     # Stripe billing tables + routes — split into backend/billing.py to keep
     # this file focused. Loaded lazily so the app still boots if the import
@@ -386,6 +477,9 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         save_workspace_state(app, user_id, default_workspace_state())
         session_token = create_session(app, user_id)
         db.commit()
+        # Apply any pre-provisioned tier grant queued by /api/admin/set-tier
+        # before this account existed. No-op if no grant pending.
+        _apply_pending_tier_grant(user_id, email)
         user = serialize_user(app, user_id)
         response = jsonify({
             "user": user,
@@ -417,6 +511,10 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
 
         session_token = create_session(app, user["id"])
         db.commit()
+        # Apply any pre-provisioned tier grant. Free for ordinary users,
+        # but lets ops pre-grant Pro+ to founder/test accounts via the
+        # admin endpoint without requiring the user's password.
+        _apply_pending_tier_grant(user["id"], user["email"] or "")
         response = jsonify({
             "user": row_to_user(user),
             "workspace": get_workspace_state(app, user["id"]),
@@ -445,6 +543,43 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         except Exception as exc:  # noqa: BLE001
             _log.warning("get_subscription failed for user %s: %s", user_id, exc)
             return {"tier": "free", "status": None}
+
+    def _apply_pending_tier_grant(user_id: str, email: str) -> None:
+        """If admin_set_tier was called with this user's email before they
+        signed up, the grant lives in pending_tier_grants. Apply it the
+        first time we see this user (signup or login) and clear the row."""
+        if not email:
+            return
+        try:
+            db = get_db(app)
+            _ensure_subscription_tables(db)
+            row = db.execute(
+                "SELECT tier, status FROM pending_tier_grants WHERE email = ?",
+                (email.lower(),),
+            ).fetchone()
+            if not row:
+                return
+            tier = row["tier"] if row["tier"] in ("free", "pro", "pro_plus") else "free"
+            status_val = row["status"]
+            now = datetime.now(timezone.utc).isoformat()
+            existing = db.execute(
+                "SELECT user_id FROM subscriptions WHERE user_id = ?", (user_id,)
+            ).fetchone()
+            if existing:
+                db.execute(
+                    "UPDATE subscriptions SET tier=?, status=?, updated_at=? WHERE user_id=?",
+                    (tier, status_val if tier != "free" else None, now, user_id),
+                )
+            else:
+                db.execute(
+                    "INSERT INTO subscriptions (user_id, tier, status, updated_at) VALUES (?,?,?,?)",
+                    (user_id, tier, status_val if tier != "free" else None, now),
+                )
+            db.execute("DELETE FROM pending_tier_grants WHERE email = ?", (email.lower(),))
+            db.commit()
+            _log.info("Applied queued tier grant: %s → %s", email, tier)
+        except Exception as exc:  # noqa: BLE001
+            _log.warning("apply pending grant failed for %s: %s", email, exc)
 
     @app.get("/api/auth/session")
     def session_info() -> Any:
@@ -936,6 +1071,12 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
     # Protected by the server secret (TERMINAL_SECRET env var).  Used to
     # manually grant/modify subscription tiers for test accounts.  Do NOT
     # expose in any public client code — bearer token is server-side only.
+    #
+    # Accepts EITHER `username` or `email`. If the targeted user does not
+    # yet exist and an email was provided, the grant is queued in
+    # pending_tier_grants and applied automatically on first signup or
+    # login. That lets the operator pre-provision tiers (e.g. for the
+    # founder, beta testers, friends) without coordinating sign-up timing.
     @app.post("/api/admin/set-tier")
     def admin_set_tier() -> Any:
         try:
@@ -945,35 +1086,53 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
                 return error_response("Unauthorized", 401)
             data = request.get_json(silent=True) or {}
             username = data.get("username")
+            email = (data.get("email") or "").strip().lower() or None
             tier = data.get("tier", "free")
             status_val = data.get("status", "active")
-            if not username:
-                return error_response("username required", 400)
+            if not username and not email:
+                return error_response("username or email required", 400)
             if tier not in ("free", "pro", "pro_plus"):
                 return error_response("invalid tier", 400)
             db_path = Path(app.config["DATABASE"])
             conn = sqlite3.connect(str(db_path))
             conn.row_factory = sqlite3.Row
             try:
-                user = conn.execute(
-                    "SELECT id FROM users WHERE username = ?", (username,)
-                ).fetchone()
-                if not user:
-                    return error_response("user not found", 404)
-                uid = user["id"]
+                _ensure_subscription_tables(conn)
+                user = None
+                if username:
+                    user = conn.execute(
+                        "SELECT id, email FROM users WHERE username = ?", (username,)
+                    ).fetchone()
+                if user is None and email:
+                    user = conn.execute(
+                        "SELECT id, email FROM users WHERE lower(email) = ?", (email,)
+                    ).fetchone()
+
                 now = datetime.now(timezone.utc).isoformat()
-                # Ensure subscriptions table exists (may be absent on fresh DB)
-                conn.execute(
-                    """CREATE TABLE IF NOT EXISTS subscriptions (
-                        user_id TEXT PRIMARY KEY,
-                        tier TEXT NOT NULL DEFAULT 'free',
-                        stripe_customer_id TEXT,
-                        stripe_subscription_id TEXT,
-                        status TEXT,
-                        current_period_end TEXT,
-                        updated_at TEXT NOT NULL
-                    )"""
-                )
+
+                if user is None:
+                    # User hasn't signed up yet. Queue the grant by email.
+                    if not email:
+                        return error_response("user not found and no email to queue grant", 404)
+                    conn.execute(
+                        """INSERT INTO pending_tier_grants (email, tier, status, updated_at)
+                           VALUES (?, ?, ?, ?)
+                           ON CONFLICT(email) DO UPDATE SET
+                             tier=excluded.tier,
+                             status=excluded.status,
+                             updated_at=excluded.updated_at""",
+                        (email, tier, status_val if tier != "free" else None, now),
+                    )
+                    conn.commit()
+                    return jsonify({
+                        "ok": True,
+                        "queued": True,
+                        "email": email,
+                        "tier": tier,
+                        "note": "User does not exist yet; grant queued and applied on first signup/login.",
+                    })
+
+                uid = user["id"]
                 existing = conn.execute(
                     "SELECT user_id FROM subscriptions WHERE user_id = ?", (uid,)
                 ).fetchone()
@@ -987,8 +1146,21 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
                         "INSERT INTO subscriptions (user_id, tier, status, updated_at) VALUES (?,?,?,?)",
                         (uid, tier, status_val if tier != "free" else None, now),
                     )
+                # Clear any pending grant for this email so the same record
+                # doesn't reapply with a stale tier on next login.
+                if user["email"]:
+                    conn.execute(
+                        "DELETE FROM pending_tier_grants WHERE email = ?",
+                        (user["email"].lower(),),
+                    )
                 conn.commit()
-                return jsonify({"ok": True, "username": username, "tier": tier, "status": status_val})
+                return jsonify({
+                    "ok": True,
+                    "username": username,
+                    "email": user["email"],
+                    "tier": tier,
+                    "status": status_val,
+                })
             finally:
                 conn.close()
         except Exception as exc:  # noqa: BLE001

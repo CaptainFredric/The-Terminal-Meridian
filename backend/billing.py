@@ -366,6 +366,26 @@ def register_billing_routes(
         if interval not in ("monthly", "annual"):
             return jsonify({"error": "Invalid interval."}), 400
 
+        # Disposable-email gate, applied only at the trial-start moment.
+        # Free tier signup is unrestricted (no friction, biggest funnel),
+        # but to begin a 7-day Pro trial the user must have a permanent
+        # email so we can reach them for billing-failed / past-due
+        # dunning and so the trial can't be farmed via mailinator+N.
+        # We import lazily to keep this module decoupled from app.py.
+        try:
+            from .app import is_disposable_email  # type: ignore
+        except Exception:  # noqa: BLE001
+            is_disposable_email = lambda _e: False  # noqa: E731 — graceful no-op
+        if is_disposable_email(user.get("email", "") or ""):
+            return jsonify({
+                "error": (
+                    "To start a Pro trial, please use a permanent email "
+                    "address. Update your account email in Settings and "
+                    "try again — your free-tier workspace is unaffected."
+                ),
+                "code": "disposable_email_trial_block",
+            }), 400
+
         price_id = _price_id(plan, interval)
         if not price_id:
             env_key = f"STRIPE_PRICE_{plan.upper()}_{interval.upper()}"

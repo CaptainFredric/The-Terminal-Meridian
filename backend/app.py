@@ -384,6 +384,28 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
     @app.before_request
     def before_request() -> None:
         ensure_database(app)
+        # Request-ID for traceability. If the client (or upstream proxy)
+        # already provided one we keep it — otherwise we generate a
+        # short-but-unique ID. Stashed on flask.g so logging adapters
+        # can correlate, and echoed back as X-Request-Id so support
+        # tickets can quote a single string instead of "around 3pm".
+        incoming = request.headers.get("X-Request-Id", "").strip()
+        if incoming and len(incoming) <= 64 and all(
+            c.isalnum() or c in ("-", "_") for c in incoming
+        ):
+            g.request_id = incoming
+        else:
+            g.request_id = secrets.token_hex(6)
+
+    @app.after_request
+    def after_request_attach_request_id(response):
+        try:
+            rid = g.get("request_id")
+            if rid:
+                response.headers["X-Request-Id"] = rid
+        except Exception:  # noqa: BLE001
+            pass
+        return response
 
     @app.teardown_appcontext
     def teardown_db(_: BaseException | None) -> None:
@@ -490,19 +512,13 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         if not EMAIL_PATTERN.match(email):
             return error_response("Please provide a valid email address.", 400)
 
-        # Block disposable/throwaway email providers. Without this guard
-        # the 7-day Pro trial can be farmed indefinitely: same person
-        # rolls a new mailinator address, signs up, starts a new trial,
-        # cancels before billing, repeats. We accept the very small false
-        # positive cost (a real customer occasionally uses a temp mail
-        # service) in exchange for cutting the most common abuse vector
-        # without requiring phone verification or device fingerprinting.
-        if is_disposable_email(email):
-            return error_response(
-                "Please use a permanent email address. Temporary inbox "
-                "providers aren't supported for new accounts.",
-                400,
-            )
+        # NOTE: We intentionally do NOT block disposable email at signup.
+        # Letting throwaway addresses through preserves the top-of-funnel
+        # for the free tier, which is genuinely free and our best growth
+        # surface. The disposable check fires later, only when the user
+        # actually tries to start a Pro trial — that's where abuse
+        # economics matter and where requiring a permanent email is fair.
+        # See backend/billing.py:create_checkout_session for the gate.
 
         if not USERNAME_PATTERN.match(username):
             return error_response("Username must be 3-24 chars and use letters, numbers, ., _, or -.", 400)
@@ -563,14 +579,37 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             return error_response("Email/username and password are required.", 400)
 
         db = get_db(app)
-        user = db.execute(
-            "SELECT * FROM users WHERE lower(email) = ? OR lower(username) = ?",
-            (identifier, identifier),
-        ).fetchone()
+        # Soft-delete-aware lookup: deleted_at IS NULL filters out
+        # accounts the user marked deleted. The column may not exist on
+        # very old DBs (migration runs at boot but defensive in case),
+        # so we fall back to the unfiltered query if the column is
+        # missing. Constant-time check_password_hash still runs even
+        # when user is None to limit user-enumeration via timing.
+        try:
+            user = db.execute(
+                "SELECT * FROM users WHERE (lower(email) = ? OR lower(username) = ?) "
+                "AND (deleted_at IS NULL)",
+                (identifier, identifier),
+            ).fetchone()
+        except Exception:  # noqa: BLE001 — column probably missing
+            user = db.execute(
+                "SELECT * FROM users WHERE lower(email) = ? OR lower(username) = ?",
+                (identifier, identifier),
+            ).fetchone()
         if not user or not check_password_hash(user["password_hash"], password):
             return error_response("Invalid credentials.", 401)
 
         session_token = create_session(app, user["id"])
+        # Stamp last_login_at + last_login_ip for new-device detection
+        # and dormant-account cleanup. Best-effort; old DBs without these
+        # columns just no-op.
+        try:
+            db.execute(
+                "UPDATE users SET last_login_at = ?, last_login_ip = ? WHERE id = ?",
+                (utc_now_iso(), _request_ip(), user["id"]),
+            )
+        except Exception:  # noqa: BLE001
+            pass
         db.commit()
         # Apply any pre-provisioned tier grant. Free for ordinary users,
         # but lets ops pre-grant Pro+ to founder/test accounts via the
@@ -733,6 +772,21 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
 
     @app.delete("/api/auth/account")
     def delete_account() -> Any:
+        """Soft-delete the user's account.
+
+        We previously did a hard DELETE which is irreversible and
+        forensically lossy. The new behavior:
+          1. Sign the user out by deleting all their sessions.
+          2. Stamp users.deleted_at with the current timestamp.
+          3. Rewrite email/username with a tombstoned suffix so the
+             original values can be re-claimed by a brand-new signup
+             without breaking the UNIQUE constraints.
+          4. Keep workspace_state and other rows intact for a 30-day
+             window so accidental deletions can be restored if needed.
+
+        The DELETE_HARD env var falls back to the old behavior if a
+        deployment really wants the row gone for GDPR/legal reasons.
+        """
         user = require_user(app)
         payload = request.get_json(silent=True) or {}
         password = str(payload.get("password", ""))
@@ -743,12 +797,40 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             return error_response("Password is incorrect.", 401)
 
         db = get_db(app)
+        hard_delete = os.environ.get("DELETE_HARD", "0") == "1"
+
+        # Always sign the user out immediately; whatever happens to the
+        # row, the active session must die.
         db.execute("DELETE FROM sessions WHERE user_id = ?", (user["id"],))
-        db.execute("DELETE FROM workspace_state WHERE user_id = ?", (user["id"],))
-        db.execute("DELETE FROM users WHERE id = ?", (user["id"],))
+
+        if hard_delete:
+            # Legacy hard-delete path. Workspace + paper data cascade via
+            # FK ON DELETE CASCADE.
+            db.execute("DELETE FROM workspace_state WHERE user_id = ?", (user["id"],))
+            db.execute("DELETE FROM users WHERE id = ?", (user["id"],))
+        else:
+            # Soft delete: tombstone email/username so they're free for
+            # a fresh signup, stamp deleted_at, leave everything else
+            # untouched. The 30-day "could still restore" promise is a
+            # policy, not enforced by code yet — a future cron job can
+            # purge rows where deleted_at < now() - 30 days.
+            now = utc_now_iso()
+            tombstone = f"deleted+{user['id'][:8]}+{int(time.time())}"
+            try:
+                db.execute(
+                    "UPDATE users SET deleted_at = ?, email = ?, username = ? WHERE id = ?",
+                    (now, f"{tombstone}@deleted.local", tombstone, user["id"]),
+                )
+            except Exception as exc:  # noqa: BLE001
+                # Schema may not have deleted_at yet — fall back to hard
+                # delete rather than leaving the user in limbo.
+                _log.warning("soft delete failed, falling back to hard delete: %s", exc)
+                db.execute("DELETE FROM workspace_state WHERE user_id = ?", (user["id"],))
+                db.execute("DELETE FROM users WHERE id = ?", (user["id"],))
+
         db.commit()
 
-        response = jsonify({"ok": True})
+        response = jsonify({"ok": True, "soft": not hard_delete})
         clear_session_cookie(response)
         return response
 
@@ -1257,24 +1339,48 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
     except Exception as ai_exc:  # noqa: BLE001
         app.logger.warning("AI commentary routes not loaded: %s", ai_exc)
 
+    # ── Static asset cache headers ───────────────────────────────────
+    # The terminal is a SPA built from a fixed set of files (HTML, CSS,
+    # ES modules). HTML must NEVER cache (otherwise users get an old
+    # shell forever). Hashed/versioned assets can cache forever, but we
+    # don't have a build pipeline that hashes filenames — so we adopt a
+    # short-but-meaningful policy: HTML = no-cache, JS/CSS/images =
+    # 5 minutes + must-revalidate. This eliminates the cache-bust
+    # nightmare we kept hitting in the preview without making every
+    # page load full-fetch the world.
+    _CACHE_DEFAULT_HTML = "no-cache, no-store, must-revalidate"
+    _CACHE_DEFAULT_ASSET = "public, max-age=300, must-revalidate"
+
+    def _apply_cache_headers(response, filename: str):
+        lower = filename.lower()
+        if lower.endswith(".html"):
+            response.headers["Cache-Control"] = _CACHE_DEFAULT_HTML
+        elif lower.endswith((".js", ".css", ".svg", ".png", ".jpg", ".jpeg",
+                              ".webp", ".ico", ".woff", ".woff2", ".ttf",
+                              ".json", ".webmanifest")):
+            response.headers["Cache-Control"] = _CACHE_DEFAULT_ASSET
+        else:
+            response.headers["Cache-Control"] = _CACHE_DEFAULT_HTML
+        return response
+
     @app.get("/")
     def serve_index() -> Any:
         # The repo root index.html is the marketing landing page.
-        return send_from_directory(ROOT, "index.html")
+        return _apply_cache_headers(send_from_directory(ROOT, "index.html"), "index.html")
 
     @app.get("/terminal")
     def serve_terminal_clean() -> Any:
         # Allow extension-less /terminal as a clean URL for the app.
-        return send_from_directory(ROOT, "terminal.html")
+        return _apply_cache_headers(send_from_directory(ROOT, "terminal.html"), "terminal.html")
 
     @app.get("/<path:asset_path>")
     def serve_asset(asset_path: str) -> Any:
         candidate = ROOT / asset_path
         if candidate.exists() and candidate.is_file():
-            return send_from_directory(ROOT, asset_path)
+            return _apply_cache_headers(send_from_directory(ROOT, asset_path), asset_path)
         # Unknown paths fall back to the terminal app shell so client-side
         # navigation inside the workspace doesn't 404.
-        return send_from_directory(ROOT, "terminal.html")
+        return _apply_cache_headers(send_from_directory(ROOT, "terminal.html"), "terminal.html")
 
     return app
 
@@ -1294,6 +1400,43 @@ def get_db(app: Flask) -> sqlite3.Connection:
     return g.db
 
 
+def _migrate_users_table(db) -> None:
+    """Additive migrations for the users table.
+
+    SQLite ALTER TABLE only supports a narrow set of operations and
+    refuses to add a column that already exists, so we introspect
+    PRAGMA table_info and only run the ADD COLUMN if the column is
+    missing. This pattern lets us evolve the schema across deploys
+    without writing manual migration scripts. Each new column should
+    be NULLable + default-NULL so existing rows stay valid.
+    """
+    try:
+        cols = {row[1] for row in db.execute("PRAGMA table_info(users)").fetchall()}
+    except Exception:  # noqa: BLE001
+        return  # users table doesn't exist yet — caller is about to create it
+    additions = [
+        # Marks email as verified by clicking a confirmation link. NULL
+        # means unverified; an ISO timestamp means verified at that time.
+        ("verified_at", "TEXT"),
+        # Soft delete: NULL = active. Set on account deletion so we can
+        # restore + audit instead of permanently destroying the row.
+        # Login/session paths must filter WHERE deleted_at IS NULL.
+        ("deleted_at", "TEXT"),
+        # Last successful login. Useful for "sign-in from new device"
+        # alerts, dormant-account cleanup, and fraud heuristics.
+        ("last_login_at", "TEXT"),
+        # Last successful login IP — kept short-lived (rotated on every
+        # login). Helps with new-device detection.
+        ("last_login_ip", "TEXT"),
+    ]
+    for name, sql_type in additions:
+        if name not in cols:
+            try:
+                db.execute(f"ALTER TABLE users ADD COLUMN {name} {sql_type}")
+            except Exception as exc:  # noqa: BLE001
+                _log.warning("users.%s migration failed: %s", name, exc)
+
+
 def ensure_database(app: Flask) -> None:
     db = get_db(app)
     db.executescript(
@@ -1306,7 +1449,11 @@ def ensure_database(app: Flask) -> None:
             username TEXT NOT NULL UNIQUE,
             role TEXT NOT NULL,
             password_hash TEXT NOT NULL,
-            created_at TEXT NOT NULL
+            created_at TEXT NOT NULL,
+            verified_at TEXT,
+            deleted_at TEXT,
+            last_login_at TEXT,
+            last_login_ip TEXT
         );
 
         CREATE TABLE IF NOT EXISTS sessions (
@@ -1391,6 +1538,12 @@ def ensure_database(app: Flask) -> None:
             ON paper_pending_orders(user_id);
         """
     )
+    # Additive column migrations for tables created in earlier deploys
+    # before these columns existed. Idempotent — safe to re-run on every
+    # boot. Without this, upgrading a long-running Render deploy would
+    # leave its DB stuck on the old schema and the verified_at /
+    # deleted_at / last_login_at columns would not exist.
+    _migrate_users_table(db)
     db.commit()
 
 

@@ -104,16 +104,55 @@ const AUTH_ENABLED = true;
 // get the new layout but keep their watchlist/positions/alerts/rules.
 const WORKSPACE_LAYOUT_VERSION = 2;
 
+// Bump for ANY breaking change to the persisted state shape (renamed
+// keys, removed fields whose absence breaks the new app code, etc.).
+// readPersistedMeridianState walks each registered migration in order
+// from the persisted version up to STATE_SCHEMA_VERSION, then writes
+// the upgraded blob back. New migrations append to STATE_MIGRATIONS;
+// never edit an old one (you'd silently rewrite live users' state).
+const STATE_SCHEMA_VERSION = 1;
+const STATE_MIGRATIONS = {
+  // Example shape — none ship today. When you need to migrate from v1
+  // to v2, add: 2: (state) => { state.workspace.something = ...; return state; }
+};
+
+function _migratePersistedState(parsed) {
+  let v = Number(parsed?.schemaVersion || 1);
+  while (v < STATE_SCHEMA_VERSION) {
+    const next = v + 1;
+    const migration = STATE_MIGRATIONS[next];
+    if (typeof migration === "function") {
+      try {
+        parsed = migration(parsed) || parsed;
+      } catch (err) {
+        // A failed migration is worse than a fresh start — wipe and
+        // log so the user gets a clean app shell instead of a half-
+        // upgraded zombie.
+        console.warn("[Meridian] state migration", next, "failed; resetting", err);
+        return null;
+      }
+    }
+    v = next;
+  }
+  parsed.schemaVersion = STATE_SCHEMA_VERSION;
+  return parsed;
+}
+
 function readPersistedMeridianState() {
   if (typeof window === "undefined") return null;
   try {
     const raw = window.localStorage.getItem(MERIDIAN_STATE_KEY);
     if (!raw) return null;
-    const parsed = JSON.parse(raw);
+    let parsed = JSON.parse(raw);
+    parsed = _migratePersistedState(parsed);
+    if (!parsed) {
+      window.localStorage.removeItem(MERIDIAN_STATE_KEY);
+      return null;
+    }
     // Layout migration: older saves used quote/chart/news/rules as defaults.
     // If the stored layout predates the newcomer-friendly defaults, drop the
     // saved panelModules/panelSymbols so initial state falls back to the new
-    // defaults — but preserve watchlist, alerts, positions, rules, etc.
+    // defaults but preserve watchlist, alerts, positions, rules, etc.
     if ((parsed?.layoutVersion || 1) < WORKSPACE_LAYOUT_VERSION && parsed?.workspace) {
       delete parsed.workspace.panelModules;
       delete parsed.workspace.panelSymbols;
@@ -725,6 +764,7 @@ function applyPriceTones(rootNode = document) {
 function snapshotMeridianState() {
   return {
     version: 1,
+    schemaVersion: STATE_SCHEMA_VERSION,
     layoutVersion: WORKSPACE_LAYOUT_VERSION,
     updatedAt: Date.now(),
     ui: {

@@ -2752,6 +2752,22 @@ async function triggerAICommentary(symbol, panel) {
   }
 }
 
+/**
+ * Cheap, allocation-light 32-bit string hash. Not cryptographic — purely
+ * for "did this generated HTML change since last paint?" equality checks.
+ * Faster than full string comparison for the ~20–60KB blobs renderers
+ * produce, and an order of magnitude smaller to stash on a dataset.
+ */
+function simpleStringHash(input) {
+  let h = 5381;
+  const str = String(input);
+  for (let i = 0; i < str.length; i++) {
+    h = ((h << 5) + h) ^ str.charCodeAt(i);
+  }
+  // Force unsigned and base36 so the dataset string stays short.
+  return (h >>> 0).toString(36) + ":" + str.length.toString(36);
+}
+
 async function renderPanel(panel) {
   const panelNode = document.querySelector(`[data-panel="${panel}"]`);
   const title = document.querySelector(`#panelTitle${panel}`);
@@ -2816,7 +2832,9 @@ async function renderPanel(panel) {
   }
 
   const renderer = moduleRegistry?.get(moduleName) || moduleRegistry?.get("home");
-  panelNode.dataset.moduleKey = String(moduleName || "").toUpperCase();
+  const previousModuleKey = panelNode.dataset.moduleKey;
+  const newModuleKey = String(moduleName || "").toUpperCase();
+  panelNode.dataset.moduleKey = newModuleKey;
   let html = "";
   try {
     if (!renderer) throw new Error(`No renderer for module: ${moduleName}`);
@@ -2826,6 +2844,27 @@ async function renderPanel(panel) {
     html = `<div class="empty-state" style="color:var(--danger)">Render error: ${renderError.message}</div>`;
   }
   if (html == null) html = "";
+
+  // Universal HTML-equality skip. Every renderer is deterministic given
+  // the state inputs it reads. If the produced HTML is byte-identical
+  // to the last paint AND the module didn't change AND the panel still
+  // has content mounted, the innerHTML write is pure overhead. Without
+  // this guard, the 5s refreshLiveQuotes tick → scheduleUiRefresh →
+  // renderAllPanels visibly reflashes every panel even when nothing
+  // they show actually changed. String comparison on ~50KB is
+  // microseconds; a full innerHTML replace + reflow + paint is much
+  // more expensive AND it loses scroll position, focus, and selection.
+  const sameModule = previousModuleKey === newModuleKey;
+  if (sameModule && content.dataset.lastHtmlHash && content.firstElementChild) {
+    const newHash = simpleStringHash(html);
+    if (newHash === content.dataset.lastHtmlHash) {
+      return;
+    }
+    content.dataset.lastHtmlHash = newHash;
+  } else {
+    content.dataset.lastHtmlHash = simpleStringHash(html);
+  }
+
   content.innerHTML = html;
   applyTerminalInputClass(content);
   applyPriceTones(content);

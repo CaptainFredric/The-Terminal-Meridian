@@ -2131,8 +2131,25 @@
   <ol class="release-feed" data-reveal data-stagger style="--stagger:80ms">
     <li class="release-entry hover-lift">
       <div class="release-meta">
-        <span class="release-tag">v0.7</span>
+        <span class="release-tag">v0.8</span>
         <time>Latest</time>
+      </div>
+      <div class="release-body">
+        <h3>Backend resilience, fluid motion, sharper claim</h3>
+        <ul>
+          <li>Live backend (Render) was 500-ing on quotes. Pinned <code>yfinance</code> in the build, wrapped quote/overview/chart routes so a future fetch failure degrades to cached data instead of a hard error.</li>
+          <li>Every panel now skips its DOM rewrite when the rendered HTML hasn't actually changed. Stops the workspace from visibly reflashing every 5 seconds even when nothing on screen moved.</li>
+          <li>Scroll-reveal + count-up + hover-lift across the whole landing page, with a <code>prefers-reduced-motion</code> guard.</li>
+          <li>Smooth mount transitions on terminal panels, stat-card lift on hover, function-key press feedback, focus-mode pulls forward.</li>
+          <li>Site restructured: the landing page now lives at the root URL; the live terminal moved to <code>/terminal.html</code>.</li>
+          <li>One-line claim above the comparison table: the only open-source, AI-native market terminal at retail price.</li>
+        </ul>
+      </div>
+    </li>
+    <li class="release-entry hover-lift">
+      <div class="release-meta">
+        <span class="release-tag">v0.7</span>
+        <time>Apr 26</time>
       </div>
       <div class="release-body">
         <h3>Quality + responsiveness pass</h3>
@@ -2169,7 +2186,7 @@
       <div class="release-body">
         <h3>Real email signup + simpler accounts</h3>
         <ul>
-          <li>Static-site email relay (Formsubmit) — no backend required for early-access list.</li>
+          <li>Static-site email relay (Formsubmit). No backend required for early-access list.</li>
           <li>Signup form reduced from 8 fields to 4 with a Show/Hide password toggle.</li>
           <li>Wake-banner state machine for the free-tier backend cold-start window.</li>
           <li>Live theming on the landing page (click any swatch to re-skin the whole page in real time).</li>

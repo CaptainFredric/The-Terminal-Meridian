@@ -2,7 +2,7 @@
   "name": "Meridian Market Workspace",
   "short_name": "Meridian",
   "description": "Bloomberg-style market terminal: quotes, charts, screener, and portfolio in one workspace.",
-  "start_url": "/The-Terminal-Meridian/",
+  "start_url": "/The-Terminal-Meridian/terminal.html",
   "display": "standalone",
   "background_color": "#06080d",
   "theme_color": "#06080d",

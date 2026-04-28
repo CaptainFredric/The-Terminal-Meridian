@@ -20,7 +20,8 @@
 - `src/api.js` — fetch wrapper for auth, workspace, market, and health endpoints
 - `src/data.js` — command catalog, module metadata, defaults, and product copy
 - `src/styles.css` — terminal-inspired visual system and cockpit layout
-- `index.html` — landing view, auth forms, workspace shell, panel layout, and command surface
+- `index.html` — public landing page (marketing surface, served at the root URL)
+- `terminal.html` — workspace shell: auth forms, panel layout, and command surface for the live app
 - `scripts/smoke_test.py` — structural and behavioral smoke test for the current stack
 - `requirements.txt` — Python dependency manifest
 

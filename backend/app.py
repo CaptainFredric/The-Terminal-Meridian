@@ -103,6 +103,41 @@ PASSWORD_HASH_METHOD = "pbkdf2:sha256"
 OVERVIEW_SYMBOLS = ["SPY", "QQQ", "IWM", "TLT", "BTC-USD", "NVDA"]
 EMAIL_PATTERN = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
 USERNAME_PATTERN = re.compile(r"^[A-Za-z0-9._-]{3,24}$")
+
+# Disposable / throwaway email domains. Blocking these protects the
+# 7-day Pro trial from being farmed: someone can sign up with
+# example+1@mailinator.com, +2@..., +3@... and roll new trials forever.
+# Conservative list — only well-known temp-mail services. Not
+# exhaustive (no list ever is) but raises the cost of abuse from
+# "trivial" to "you have to bring your own domain". Extendable via the
+# DISPOSABLE_EMAIL_EXTRA env var for emergencies.
+DISPOSABLE_EMAIL_DOMAINS: set[str] = {
+    "mailinator.com", "guerrillamail.com", "guerrillamail.info",
+    "guerrillamail.biz", "guerrillamail.org", "guerrillamail.net",
+    "sharklasers.com", "tempmail.com", "temp-mail.org", "10minutemail.com",
+    "10minutemail.net", "throwawaymail.com", "trashmail.com",
+    "yopmail.com", "yopmail.fr", "yopmail.net", "fakeinbox.com",
+    "getairmail.com", "getnada.com", "maildrop.cc", "dispostable.com",
+    "tempinbox.com", "mintemail.com", "emailondeck.com", "mailnesia.com",
+    "spam4.me", "spamgourmet.com", "incognitomail.com", "harakirimail.com",
+    "mvrht.com", "tempmailaddress.com", "sogetthis.com", "fakemail.net",
+    "moakt.com", "mohmal.com", "fast-mail.fr", "tempr.email",
+    "mailbox.org", "mt2015.com", "burnermail.io",
+}
+_extra_disposable = os.environ.get("DISPOSABLE_EMAIL_EXTRA", "").strip()
+if _extra_disposable:
+    for _d in _extra_disposable.split(","):
+        _d = _d.strip().lower()
+        if _d:
+            DISPOSABLE_EMAIL_DOMAINS.add(_d)
+
+
+def _email_domain(email: str) -> str:
+    return (email.rsplit("@", 1)[-1] if "@" in email else "").strip().lower()
+
+
+def is_disposable_email(email: str) -> bool:
+    return _email_domain(email) in DISPOSABLE_EMAIL_DOMAINS
 RAPIDAPI_KEY = os.environ.get("RAPIDAPI_KEY", "").strip()
 RAPIDAPI_HOST = os.environ.get("RAPIDAPI_HOST", "yahoo-finance15.p.rapidapi.com").strip() or "yahoo-finance15.p.rapidapi.com"
 RAPIDAPI_BASE = f"https://{RAPIDAPI_HOST}"
@@ -267,6 +302,14 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             conn = sqlite3.connect(str(db_path))
             try:
                 _ensure_subscription_tables(conn)
+                # The users table is created later by init_database(). It
+                # may or may not exist when we run. Use sqlite_master to
+                # check rather than risking a "no such table" error that
+                # aborts the whole seed.
+                users_exists = conn.execute(
+                    "SELECT 1 FROM sqlite_master WHERE type='table' AND name='users'"
+                ).fetchone() is not None
+
                 now = datetime.now(timezone.utc).isoformat()
                 for env_var, tier in (
                     ("PRE_PROVISIONED_PRO_PLUS", "pro_plus"),
@@ -276,19 +319,20 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
                     if not raw:
                         continue
                     for email in (e.strip().lower() for e in raw.split(",") if e.strip()):
-                        # Don't downgrade an existing higher tier; only seed
-                        # if the user hasn't signed up yet (pending) or has
-                        # no subscription record.
-                        existing_user = conn.execute(
-                            "SELECT id FROM users WHERE lower(email) = ?", (email,)
-                        ).fetchone()
+                        existing_user = None
+                        if users_exists:
+                            existing_user = conn.execute(
+                                "SELECT id FROM users WHERE lower(email) = ?", (email,)
+                            ).fetchone()
                         if existing_user:
                             uid = existing_user[0]
                             sub = conn.execute(
                                 "SELECT tier FROM subscriptions WHERE user_id = ?", (uid,)
                             ).fetchone()
+                            # Respect existing paid tier so a env reseed
+                            # doesn't quietly downgrade real Stripe customers.
                             if sub and sub[0] in ("pro", "pro_plus"):
-                                continue  # already paid; respect Stripe
+                                continue
                             if sub:
                                 conn.execute(
                                     "UPDATE subscriptions SET tier=?, status=?, updated_at=? WHERE user_id=?",
@@ -300,6 +344,9 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
                                     (uid, tier, "active", now),
                                 )
                         else:
+                            # User hasn't signed up yet (or users table
+                            # doesn't exist yet on a fresh boot). Queue
+                            # the grant; it'll apply on first signup/login.
                             conn.execute(
                                 """INSERT INTO pending_tier_grants (email, tier, status, updated_at)
                                    VALUES (?, ?, ?, ?)
@@ -443,6 +490,20 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         if not EMAIL_PATTERN.match(email):
             return error_response("Please provide a valid email address.", 400)
 
+        # Block disposable/throwaway email providers. Without this guard
+        # the 7-day Pro trial can be farmed indefinitely: same person
+        # rolls a new mailinator address, signs up, starts a new trial,
+        # cancels before billing, repeats. We accept the very small false
+        # positive cost (a real customer occasionally uses a temp mail
+        # service) in exchange for cutting the most common abuse vector
+        # without requiring phone verification or device fingerprinting.
+        if is_disposable_email(email):
+            return error_response(
+                "Please use a permanent email address. Temporary inbox "
+                "providers aren't supported for new accounts.",
+                400,
+            )
+
         if not USERNAME_PATTERN.match(username):
             return error_response("Username must be 3-24 chars and use letters, numbers, ., _, or -.", 400)
 
@@ -535,14 +596,34 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         return response
 
     def _subscription_for(user_id: int) -> dict[str, Any]:
-        """Return the user's subscription tier/status, defaulting to free."""
-        if _billing_get_subscription is None:
-            return {"tier": "free", "status": None}
+        """Return the user's subscription tier/status, defaulting to free.
+
+        Primary path: backend/billing.py's get_subscription(). If that
+        module failed to load (relative-import in tests, partial deploy),
+        fall back to a direct read of the subscriptions table so
+        pre-granted tiers still surface to the client. The fallback is
+        intentionally minimal — billing.py adds Stripe-specific fields,
+        but for the basic tier check that gates Pro features, this is
+        enough.
+        """
+        if _billing_get_subscription is not None:
+            try:
+                return _billing_get_subscription(get_db(app), user_id)
+            except Exception as exc:  # noqa: BLE001
+                _log.warning("get_subscription failed for user %s: %s", user_id, exc)
+        # Fallback: read tier straight from the subscriptions table.
         try:
-            return _billing_get_subscription(get_db(app), user_id)
+            db = get_db(app)
+            _ensure_subscription_tables(db)
+            row = db.execute(
+                "SELECT tier, status FROM subscriptions WHERE user_id = ?",
+                (user_id,),
+            ).fetchone()
+            if row:
+                return {"tier": row["tier"] or "free", "status": row["status"]}
         except Exception as exc:  # noqa: BLE001
-            _log.warning("get_subscription failed for user %s: %s", user_id, exc)
-            return {"tier": "free", "status": None}
+            _log.warning("subscription fallback read failed for %s: %s", user_id, exc)
+        return {"tier": "free", "status": None}
 
     def _apply_pending_tier_grant(user_id: str, email: str) -> None:
         """If admin_set_tier was called with this user's email before they

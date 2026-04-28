@@ -395,8 +395,22 @@ def register_billing_routes(
                 line_items=[{"price": price_id, "quantity": 1}],
                 subscription_data={
                     "trial_period_days": _trial_days(),
+                    # On trial expiry, ask Stripe to attempt billing
+                    # immediately. If the card is invalid or declines,
+                    # Stripe transitions the sub to past_due/unpaid
+                    # which our get_subscription() reads as not Pro.
+                    "trial_settings": {
+                        "end_behavior": {"missing_payment_method": "cancel"},
+                    },
                     "metadata": {"meridian_user_id": user["id"], "plan": plan},
                 },
+                # Card upfront, even during the trial. Without this,
+                # Stripe's default lets people start a trial without
+                # entering payment info. That makes one-trial-per-email
+                # the only friction, which a $0-cost mailinator address
+                # defeats. Requiring a card forces a chargeable
+                # fingerprint Stripe Radar can match against.
+                payment_method_collection="always",
                 success_url=f"{base}/?billing=success&session_id={{CHECKOUT_SESSION_ID}}",
                 cancel_url=f"{base}/?billing=canceled",
                 allow_promotion_codes=True,

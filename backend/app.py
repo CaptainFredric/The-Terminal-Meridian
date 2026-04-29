@@ -2272,13 +2272,17 @@ def fetch_quotes(symbols: list[str]) -> list[dict[str, Any]]:
             tickers = yf.Tickers(" ".join(clean_symbols))
             quotes = []
             for symbol in clean_symbols:
+                entry: dict[str, Any] | None = None
                 try:
                     t = tickers.tickers.get(symbol) or yf.Ticker(symbol)
                     info = t.fast_info
                     prev_close = float(getattr(info, "previous_close", 0) or 0)
                     price = float(getattr(info, "last_price", 0) or getattr(info, "regular_market_price", 0) or 0)
+                    if price <= 0:
+                        # fast_info returned nothing usable. Skip to history fallback.
+                        raise ValueError("fast_info returned no price")
                     change_pct = ((price - prev_close) / prev_close * 100) if prev_close else 0
-                    entry: dict[str, Any] = {
+                    entry = {
                         "symbol": symbol,
                         "name": getattr(info, "name", None) or symbol,
                         "exchange": getattr(info, "exchange", "N/A") or "N/A",
@@ -2312,9 +2316,49 @@ def fetch_quotes(symbols: list[str]) -> list[dict[str, Any]]:
                             entry["marketCap"] = float(full.get("marketCap") or 0)
                     except Exception:
                         pass
-                    quotes.append(entry)
                 except Exception:
-                    continue
+                    entry = None
+                # ── history() fallback ────────────────────────────────────────
+                # fast_info / info are blocked by Yahoo for ETFs (SPY/QQQ/TLT),
+                # crypto (BTC-USD), and intermittently for individual stocks.
+                # The chart endpoint behind history() uses different infra and
+                # is far more reliable. Worth the extra call when fast_info
+                # gave us nothing.
+                if entry is None:
+                    try:
+                        t = yf.Ticker(symbol)
+                        df = t.history(period="5d", interval="1d", auto_adjust=False)
+                        if df is not None and not df.empty and "Close" in df.columns:
+                            closes = [float(c) for c in df["Close"].tolist() if c == c]  # NaN check
+                            highs = [float(h) for h in df["High"].tolist() if h == h]
+                            lows = [float(low) for low in df["Low"].tolist() if low == low]
+                            vols = [float(v) for v in df["Volume"].tolist() if v == v]
+                            if closes:
+                                price = closes[-1]
+                                prev_close = closes[-2] if len(closes) >= 2 else price
+                                change = price - prev_close
+                                change_pct = (change / prev_close * 100) if prev_close else 0
+                                entry = {
+                                    "symbol": symbol,
+                                    "name": symbol,
+                                    "exchange": "N/A",
+                                    "price": price,
+                                    "changePct": round(change_pct, 4),
+                                    "change": round(change, 4),
+                                    "marketCap": 0,
+                                    "volume": vols[-1] if vols else 0,
+                                    "averageVolume": (sum(vols) / len(vols)) if vols else 0,
+                                    "dayHigh": highs[-1] if highs else price,
+                                    "dayLow": lows[-1] if lows else price,
+                                    "previousClose": prev_close,
+                                    "fiftyTwoWeekHigh": max(highs) if highs else 0,
+                                    "fiftyTwoWeekLow": min(lows) if lows else 0,
+                                    "currency": "USD",
+                                }
+                    except Exception:
+                        pass
+                if entry is not None:
+                    quotes.append(entry)
             if quotes:
                 return quotes
         except Exception:

@@ -4501,10 +4501,14 @@ async function refreshLiveQuotes() {
 }
 
 async function refreshOverview() {
-  // Check cache first — 30s TTL means stale data only for slow ticks.
-  // Reduces API calls by ~85% without noticeable staleness on 5s refresh.
+  // Serve cache only when it covers every currently-watched overview symbol.
+  // Reduces API calls ~85% on the 5s refresh tick without going stale when
+  // the user customizes their overview strip.
   const cached = _getCached("overview");
-  if (cached) {
+  const covers = cached?.quotes && state.overviewSymbols.every(
+    (sym) => cached.quotes.some((q) => q.symbol === sym),
+  );
+  if (covers) {
     state.overviewQuotes = cached.quotes;
     if (cached.phase) state.marketPhase = cached.phase;
     return;
@@ -4538,11 +4542,15 @@ async function refreshOverview() {
 }
 
 async function refreshQuotes(symbols) {
-  // Check cache first — avoid redundant fetches on every tick.
+  // Cache hit only if the cached payload covers every requested symbol.
+  // Otherwise a watchlist add would silently leave the new ticker blank
+  // for up to 30s while the cache lives. Always re-evaluate alerts since
+  // the user may have added rules between ticks.
   const cached = _getCached("quotes");
-  if (cached) {
-    // Restore cached quotes without triggering alerts (already evaluated).
+  const covers = cached && symbols.every((sym) => cached.some((q) => q.symbol === sym));
+  if (covers) {
     cached.forEach((q) => state.quotes.set(q.symbol, q));
+    evaluateAlerts();
     return;
   }
 
@@ -4557,7 +4565,7 @@ async function refreshQuotes(symbols) {
     evaluateAlerts();
     return;
   } catch {
-    // backend unavailable — try direct
+    // backend unavailable, try direct
   }
   try {
     const results = await fetchQuotes(symbols);

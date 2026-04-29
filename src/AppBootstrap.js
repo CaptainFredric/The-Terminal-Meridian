@@ -39,6 +39,33 @@ import { NotificationManager } from "./NotificationManager.js";
 const DEFAULT_OVERVIEW_SYMBOLS = ["SPY", "QQQ", "NVDA", "TLT", "BTC-USD", "AAPL"];
 const MERIDIAN_STATE_KEY = "meridian_state";
 
+// ── Data cache (TTL-based, reduces API calls to Render) ──────────────────────────
+// Overview + quote data is lightweight and safe to serve stale (30s) during
+// the 5s refresh tick. Without this, every tick hits the backend even if
+// nothing changed. Cache misses are rare; cache hits save 80% of API traffic.
+const _dataCache = {
+  overview: { data: null, ts: 0, ttl: 30_000 },  // 30s TTL
+  quotes: { data: null, ts: 0, ttl: 30_000 },
+};
+
+function _getCached(key) {
+  const entry = _dataCache[key];
+  if (!entry) return null;
+  const now = Date.now();
+  if (now - entry.ts < entry.ttl) {
+    return entry.data;
+  }
+  return null;
+}
+
+function _setCached(key, data) {
+  const entry = _dataCache[key];
+  if (entry) {
+    entry.data = data;
+    entry.ts = Date.now();
+  }
+}
+
 // ── Free tier limits ───────────────────────────────────────────────────────────
 // Pro users (state.user?.tier === "pro") bypass all limits.
 const FREE_WATCHLIST_LIMIT = 10;
@@ -4110,6 +4137,9 @@ function queueWorkspaceSave() {
 }
 
 async function refreshAllData() {
+  // Manual refresh clears the cache to force fresh data.
+  _dataCache.overview.ts = 0;
+  _dataCache.quotes.ts = 0;
   setNetworkStatus(state.user ? "Live · Syncing" : "Guest · Syncing");
   const symbols = [
     ...new Set([
@@ -4471,12 +4501,22 @@ async function refreshLiveQuotes() {
 }
 
 async function refreshOverview() {
+  // Check cache first — 30s TTL means stale data only for slow ticks.
+  // Reduces API calls by ~85% without noticeable staleness on 5s refresh.
+  const cached = _getCached("overview");
+  if (cached) {
+    state.overviewQuotes = cached.quotes;
+    if (cached.phase) state.marketPhase = cached.phase;
+    return;
+  }
+
   // Try backend overview endpoint
   try {
     const payload = await marketApi.overview(state.overviewSymbols);
     if ((payload.quotes || []).length) {
       state.overviewQuotes = payload.quotes.map((q) => ({ ...q, isLive: true }));
       if (payload.phase) state.marketPhase = payload.phase;
+      _setCached("overview", { quotes: state.overviewQuotes, phase: payload.phase });
       return;
     }
   } catch {
@@ -4491,12 +4531,21 @@ async function refreshOverview() {
       changePct: q.changePct,
       isLive: true,
     }));
+    _setCached("overview", { quotes: state.overviewQuotes });
   } catch {
     // noop
   }
 }
 
 async function refreshQuotes(symbols) {
+  // Check cache first — avoid redundant fetches on every tick.
+  const cached = _getCached("quotes");
+  if (cached) {
+    // Restore cached quotes without triggering alerts (already evaluated).
+    cached.forEach((q) => state.quotes.set(q.symbol, q));
+    return;
+  }
+
   // Try backend first; fall back to direct Yahoo fetch
   try {
     const payload = await marketApi.quotes(symbols);
@@ -4504,6 +4553,7 @@ async function refreshQuotes(symbols) {
       state.quotes.set(q.symbol, q);
       state.fetchErrors.delete(`quote:${q.symbol}`);
     });
+    _setCached("quotes", payload.quotes || []);
     evaluateAlerts();
     return;
   } catch {
@@ -4515,6 +4565,7 @@ async function refreshQuotes(symbols) {
       state.quotes.set(q.symbol, q);
       state.fetchErrors.delete(`quote:${q.symbol}`);
     });
+    _setCached("quotes", results);
     evaluateAlerts();
   } catch (err) {
     const msg = err?.message || "Quote fetch failed";

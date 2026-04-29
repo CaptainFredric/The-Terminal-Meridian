@@ -68,8 +68,8 @@ export const commandCatalog = [
   { cmd: "AAPL CHART", desc: "Open chart for AAPL" },
   { cmd: "CHART AAPL 2Y", desc: "Open chart with inline range" },
   { cmd: "WATCH TSLA", desc: "Add TSLA to watchlist" },
-  { cmd: "ALERT NVDA 950", desc: "Create an alert level" },
-  { cmd: "ADDPOS MSFT 5 410", desc: "Add a portfolio position (symbol, shares, avg cost)" },
+  { cmd: "ALERT NVDA 130", desc: "Create an alert level" },
+  { cmd: "ADDPOS MSFT 5 385", desc: "Add a portfolio position (symbol, shares, avg cost)" },
   { cmd: "REMOVEPOS MSFT", desc: "Remove a position from portfolio" },
   { cmd: "REMOVEALERT NVDA", desc: "Remove all alerts for a symbol" },
   { cmd: "CLEARRULES", desc: "Clear all active IF/THEN rules" },
@@ -100,21 +100,21 @@ export const defaultPositions = [
 ];
 
 export const defaultAlerts = [
-  { symbol: "NVDA", operator: ">=", threshold: 950, status: "watching" },
-  { symbol: "TSLA", operator: "<=", threshold: 180, status: "watching" },
+  { symbol: "NVDA", operator: ">=", threshold: 130, status: "watching" },
+  { symbol: "TSLA", operator: "<=", threshold: 200, status: "watching" },
 ];
 
 export const macroDefaults = {
   currencies: ["EUR", "GBP", "JPY", "CAD", "CHF", "AUD"],
   curve: [
-    { tenor: "1M", yield: 5.31 },
-    { tenor: "3M", yield: 5.26 },
-    { tenor: "6M", yield: 5.17 },
-    { tenor: "1Y", yield: 4.95 },
-    { tenor: "2Y", yield: 4.58 },
-    { tenor: "5Y", yield: 4.23 },
-    { tenor: "10Y", yield: 4.18 },
-    { tenor: "30Y", yield: 4.29 },
+    { tenor: "1M", yield: 4.32 },
+    { tenor: "3M", yield: 4.28 },
+    { tenor: "6M", yield: 4.19 },
+    { tenor: "1Y", yield: 4.06 },
+    { tenor: "2Y", yield: 3.94 },
+    { tenor: "5Y", yield: 4.12 },
+    { tenor: "10Y", yield: 4.38 },
+    { tenor: "30Y", yield: 4.72 },
   ],
 };
 

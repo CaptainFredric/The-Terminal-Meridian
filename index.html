@@ -2438,8 +2438,20 @@
    * ------------------------------------------------------------------ */
   (function countUp() {
     const targets = document.querySelectorAll('[data-count]');
-    if (!targets.length || !('IntersectionObserver' in window)) return;
+    if (!targets.length) return;
     const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3);
+    const finalize = (el) => {
+      const end = Number(el.dataset.count);
+      if (!Number.isFinite(end)) return;
+      const prefix = el.dataset.countPrefix || '';
+      const useGrouping = el.dataset.countGroup !== 'false';
+      el.textContent = prefix + (useGrouping ? end.toLocaleString() : String(end));
+    };
+    const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reduceMotion || !('IntersectionObserver' in window)) {
+      targets.forEach(finalize);
+      return;
+    }
     const animate = (el) => {
       const end = Number(el.dataset.count);
       if (!Number.isFinite(end)) return;
@@ -2447,15 +2459,21 @@
       const useGrouping = el.dataset.countGroup !== 'false';
       const dur = Number(el.dataset.countDuration) || 1200;
       const start = performance.now();
+      let done = false;
       const tick = (now) => {
+        if (done) return;
         const t = Math.min(1, (now - start) / dur);
         const v = Math.round(end * easeOutCubic(t));
         el.textContent = prefix + (useGrouping ? v.toLocaleString() : String(v));
         if (t < 1) requestAnimationFrame(tick);
+        else done = true;
       };
       requestAnimationFrame(tick);
+      // Watchdog: rAF can stall (background tab, automation harness,
+      // throttled timer). Force the final value after dur + 250ms so the
+      // hero strip never sits frozen at a partial number.
+      setTimeout(() => { done = true; finalize(el); }, dur + 250);
     };
-    if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     const io = new IntersectionObserver((entries) => {
       entries.forEach(e => {
         if (e.isIntersecting) {
@@ -2463,7 +2481,7 @@
           io.unobserve(e.target);
         }
       });
-    }, { threshold: 0.6 });
+    }, { threshold: 0.4 });
     targets.forEach(el => io.observe(el));
   })();
 

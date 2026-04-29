@@ -198,6 +198,38 @@ def _rate_limited(key: str, max_calls: int, window_sec: float) -> bool:
     return False
 
 
+# ── Market data cache (TTL + stale-on-error fallback) ─────────────────
+# Yahoo Finance heavily rate-limits frequent requests (HTTP 429),
+# especially for ETFs (SPY/QQQ/etc), crypto (BTC-USD), and bonds (TLT).
+# Without server-side caching, every client poll hits Yahoo fresh, gets
+# throttled, and the user sees seed data forever. With this cache:
+#   - Hits within TTL serve cached data (no Yahoo call).
+#   - On fetch failure, fall back to last-known-good if < STALE_MAX age.
+# Single-process, single-worker friendly. Render free tier runs 2
+# workers but each maintains its own cache, which is fine since the
+# whole point is to soak up local repeat-traffic from the 5s tick.
+_MARKET_CACHE: dict[str, tuple[float, Any]] = {}
+_MARKET_CACHE_TTL_SEC = 25.0  # Fresh window
+_MARKET_CACHE_STALE_MAX_SEC = 300.0  # Serve stale up to 5 min on error
+
+
+def _market_cache_get(key: str, allow_stale: bool = False):
+    entry = _MARKET_CACHE.get(key)
+    if not entry:
+        return None
+    ts, data = entry
+    age = time.time() - ts
+    if age < _MARKET_CACHE_TTL_SEC:
+        return data
+    if allow_stale and age < _MARKET_CACHE_STALE_MAX_SEC:
+        return data
+    return None
+
+
+def _market_cache_set(key: str, data: Any) -> None:
+    _MARKET_CACHE[key] = (time.time(), data)
+
+
 def _request_ip() -> str:
     """Extract client IP from X-Forwarded-For (rightmost trusted proxy strategy)."""
     fwd = request.headers.get("X-Forwarded-For", "").strip()
@@ -1114,35 +1146,72 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             "universe": build_universe_payload(),
         })
 
+    def _serve_cached_quotes(symbols: list[str]) -> tuple[list[dict[str, Any]], bool]:
+        """Per-symbol TTL cache with stale-on-failure fallback.
+
+        Each symbol gets its own cache entry. We split the requested list
+        into "fresh in cache" vs "needs fetch", call fetch_quotes only on
+        the latter, then merge. Any symbol that comes back empty AND has
+        a stale cache entry gets served stale instead of dropping out.
+        Returns (quotes, any_stale). Symbols that have neither fresh nor
+        stale entries silently drop — the client falls back to its own
+        seed data for those.
+        """
+        upper = [s.upper() for s in symbols]
+        fresh: dict[str, dict[str, Any]] = {}
+        to_fetch: list[str] = []
+        for sym in upper:
+            cached = _market_cache_get(f"q:{sym}")
+            if cached is not None:
+                fresh[sym] = cached
+            else:
+                to_fetch.append(sym)
+        any_stale = False
+        if to_fetch:
+            try:
+                fetched = fetch_quotes(to_fetch)
+            except Exception as exc:
+                _log.warning("fetch_quotes failed for %s: %s", to_fetch, exc)
+                fetched = []
+            returned = {q.get("symbol", "").upper(): q for q in fetched if q.get("symbol")}
+            for sym in to_fetch:
+                if sym in returned:
+                    _market_cache_set(f"q:{sym}", returned[sym])
+                    fresh[sym] = returned[sym]
+                else:
+                    stale = _market_cache_get(f"q:{sym}", allow_stale=True)
+                    if stale is not None:
+                        fresh[sym] = stale
+                        any_stale = True
+        # Preserve original request order
+        ordered = [fresh[s] for s in upper if s in fresh]
+        return ordered, any_stale
+
     @app.get("/api/market/quotes")
     def market_quotes() -> Any:
         symbols_param = request.args.get("symbols", "")
         symbols = [symbol.strip() for symbol in symbols_param.split(",") if symbol.strip()]
         if not symbols:
             return jsonify({"quotes": []})
-        try:
-            return jsonify({"quotes": fetch_quotes(symbols)})
-        except Exception as exc:
-            # Returning 500 forces the frontend into its error state and
-            # blocks all downstream renders. Returning an empty list lets
-            # the client fall back to its cached/seed data gracefully.
-            _log.warning("fetch_quotes failed for %s: %s", symbols, exc)
-            return jsonify({"quotes": [], "error": str(exc)}), 200
+        quotes, stale = _serve_cached_quotes(symbols)
+        body: dict[str, Any] = {"quotes": quotes}
+        if stale:
+            body["stale"] = True
+        return jsonify(body)
 
     @app.get("/api/market/overview")
     def market_overview() -> Any:
         symbols_param = request.args.get("symbols", "")
         symbols = [symbol.strip() for symbol in symbols_param.split(",") if symbol.strip()] or OVERVIEW_SYMBOLS
-        try:
-            quotes = fetch_quotes(symbols)
-        except Exception as exc:
-            _log.warning("fetch_quotes failed for overview %s: %s", symbols, exc)
-            quotes = []
-        return jsonify({
+        quotes, stale = _serve_cached_quotes(symbols)
+        body: dict[str, Any] = {
             "generatedAt": utc_now_iso(),
             "phase": market_phase(),
             "quotes": quotes,
-        })
+        }
+        if stale:
+            body["stale"] = True
+        return jsonify(body)
 
     @app.get("/api/market/chart/<symbol>")
     def market_chart(symbol: str) -> Any:

@@ -667,7 +667,13 @@ function init() {
 
   setInterval(updateSessionClock, 1000);
   setInterval(handleRefreshCountdown, 1000);
-  setInterval(checkHealth, 60000);
+  setInterval(() => {
+    if (document.hidden) return;
+    void checkHealth();
+  }, 120000);
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) void checkHealth();
+  });
   // Fast tick: refresh overview + watchlist quotes every 5s for a live-feed feel.
   // Skip while tab is hidden or a full refresh just happened to avoid duplicate work.
   setInterval(() => {
@@ -927,14 +933,12 @@ function bindEvents() {
     event.preventDefault();
     const data = new FormData(el.signupForm);
     const password = String(data.get("password") || "");
-    const confirmPassword = String(data.get("confirmPassword") || "");
+    const displayName = String(data.get("displayName") || "").trim();
+    const [firstName, ...rest] = displayName.split(/\s+/);
+    const lastName = rest.join(" ") || firstName || "";
 
     if (password.length < 8) {
       setAuthMessage("Password must be at least 8 characters.", "error");
-      return;
-    }
-    if (password !== confirmPassword) {
-      setAuthMessage("Passwords do not match.", "error");
       return;
     }
 
@@ -959,8 +963,8 @@ function bindEvents() {
     setButtonLoading(el.signupBtn, true, "Creating…");
     try {
       const payload = await authApi.signup({
-        firstName: String(data.get("firstName") || ""),
-        lastName: String(data.get("lastName") || ""),
+        firstName,
+        lastName,
         email: String(data.get("email") || ""),
         username: String(data.get("username") || ""),
         password,
@@ -979,6 +983,15 @@ function bindEvents() {
 
   el.signupEmail?.addEventListener("input", scheduleAvailabilityCheck);
   el.signupUsername?.addEventListener("input", scheduleAvailabilityCheck);
+
+  const signupPasswordInput = document.querySelector("#signupPassword");
+  const signupPasswordToggle = document.querySelector("#signupPasswordToggle");
+  signupPasswordToggle?.addEventListener("click", () => {
+    if (!signupPasswordInput) return;
+    const showing = signupPasswordInput.type === "text";
+    signupPasswordInput.type = showing ? "password" : "text";
+    signupPasswordToggle.textContent = showing ? "SHOW" : "HIDE";
+  });
 
   el.updateProfileForm?.addEventListener("submit", async (event) => {
     event.preventDefault();

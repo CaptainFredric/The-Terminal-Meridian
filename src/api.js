@@ -146,7 +146,7 @@ export const marketApi = {
     return apiRequest("/api/market/fx");
   },
   health() {
-    return apiRequest("/api/health");
+    return apiRequest("/api/ready");
   },
   screenerUniverse() {
     return apiRequest("/api/screener/universe");

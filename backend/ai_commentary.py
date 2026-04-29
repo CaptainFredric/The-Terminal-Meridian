@@ -334,7 +334,7 @@ def _try_anthropic(quote: dict[str, Any]) -> dict[str, Any] | None:
 
         client = anthropic.Anthropic(api_key=key)
         response = client.messages.create(
-            model="claude-3-5-haiku-latest",
+            model="claude-haiku-4-5-20251001",
             system=_COMMENTARY_SYSTEM
             + "\n\nReturn ONLY a JSON object — no markdown fences, no prose.",
             messages=[{"role": "user", "content": _build_user_prompt(quote)}],
@@ -353,7 +353,7 @@ def _try_anthropic(quote: dict[str, Any]) -> dict[str, Any] | None:
             "tone": payload.get("tone", "neutral"),
             "source": "anthropic",
             "generatedAt": datetime.now(timezone.utc).isoformat(),
-            "model": "claude-3-5-haiku",
+            "model": "claude-haiku-4-5",
         }
     except Exception:  # noqa: BLE001
         return None

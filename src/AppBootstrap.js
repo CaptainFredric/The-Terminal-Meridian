@@ -3798,7 +3798,7 @@ function ensureShortcutsOverlay() {
           <div class="shortcut-row"><code>AAPL CHART</code><span>Open chart for AAPL</span></div>
           <div class="shortcut-row"><code>CHART SPY 2Y</code><span>Chart with inline range (1M to 5Y / ALL)</span></div>
           <div class="shortcut-row"><code>WATCH TSLA</code><span>Add to watchlist</span></div>
-          <div class="shortcut-row"><code>ALERT NVDA &gt;= 950</code><span>Price alert (≥ or ≤)</span></div>
+          <div class="shortcut-row"><code>ALERT NVDA &gt;= 130</code><span>Price alert (≥ or ≤)</span></div>
           <div class="shortcut-row"><code>ANALYZE MSFT</code><span>Deep research view</span></div>
           <div class="shortcut-row"><code>OPTIONS NVDA</code><span>Options chain</span></div>
           <div class="shortcut-row"><code>CALC</code><span>Black-Scholes &amp; bond calculator</span></div>

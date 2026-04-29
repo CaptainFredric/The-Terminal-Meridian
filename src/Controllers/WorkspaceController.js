@@ -8,9 +8,9 @@ export function normalizePanelMap(source, fallback) {
 }
 
 const LIVE_DEFAULT_RULES = [
-  { symbol: "NVDA", op: ">", limit: 950, msg: "NVIDIA Price Target Hit" },
-  { symbol: "AAPL", op: "<", limit: 180, msg: "Apple Value Zone" },
-  { symbol: "BTC-USD", op: ">", limit: 75000, msg: "Crypto Breakout" },
+  { symbol: "NVDA", op: ">", limit: 130, msg: "NVIDIA Price Target Hit" },
+  { symbol: "AAPL", op: "<", limit: 185, msg: "Apple Value Zone" },
+  { symbol: "BTC-USD", op: ">", limit: 90000, msg: "Crypto Breakout" },
 ];
 
 export function seedLiveRules(activeRules) {

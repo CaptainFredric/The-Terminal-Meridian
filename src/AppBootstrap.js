@@ -3429,6 +3429,33 @@ function handleDocumentClick(event) {
     return;
   }
 
+  // Chart replay slider: scrub through historical data
+  const replaySlider = event.target.closest("[data-chart-replay-slider]");
+  if (replaySlider) {
+    const panel = Number(replaySlider.dataset.chartReplaySlider);
+    const index = Number(replaySlider.value);
+    state.chartReplayIndex = state.chartReplayIndex || {};
+    state.chartReplayIndex[panel] = index;
+    state.chartReplayIsPlaying = state.chartReplayIsPlaying || {};
+    state.chartReplayIsPlaying[panel] = false; // Pause on manual scrub
+    renderPanel(panel);
+    return;
+  }
+
+  // Chart replay play/pause button
+  const replayToggle = event.target.closest("[data-chart-replay-toggle]");
+  if (replayToggle) {
+    const panel = Number(replayToggle.dataset.chartReplayToggle);
+    state.chartReplayIsPlaying = state.chartReplayIsPlaying || {};
+    const isCurrentlyPlaying = state.chartReplayIsPlaying[panel];
+    state.chartReplayIsPlaying[panel] = !isCurrentlyPlaying;
+    replayToggle.textContent = state.chartReplayIsPlaying[panel] ? "⏸ Pause" : "▶ Play";
+    if (state.chartReplayIsPlaying[panel]) {
+      animateChartReplay(panel);
+    }
+    return;
+  }
+
   const refreshChartTrigger = event.target.closest("[data-refresh-chart]");
   if (refreshChartTrigger) {
     const [panel, symbol, range] = refreshChartTrigger.dataset.refreshChart.split(":");
@@ -4977,6 +5004,50 @@ async function loadLightweightChartsModule() {
   return lightweightChartsModulePromise;
 }
 
+function animateChartReplay(panel) {
+  const replayIndex = (state.chartReplayIndex = state.chartReplayIndex || {});
+  const replayIsPlaying = (state.chartReplayIsPlaying = state.chartReplayIsPlaying || {});
+  const symbol = state.panelSymbols[panel] || "AAPL";
+  const range = state.chartRanges[panel] || "1mo";
+  const interval = chartIntervalForRange(range);
+  const cacheKey = chartKey(symbol, range, interval);
+  const points = state.chartCache.get(cacheKey) || [];
+
+  if (!points.length || !replayIsPlaying[panel]) return;
+
+  // Advance one candle every 50ms
+  const currentIndex = replayIndex[panel] || 0;
+  const nextIndex = Math.min(currentIndex + 1, points.length - 1);
+
+  replayIndex[panel] = nextIndex;
+
+  // Update slider and label
+  const slider = document.querySelector(`[data-chart-replay-slider="${panel}"]`);
+  const label = document.querySelector(`[data-chart-replay-label="${panel}"]`);
+  if (slider) slider.value = nextIndex;
+  if (label && points[nextIndex]) {
+    label.textContent = new Date(points[nextIndex].timestamp || points[nextIndex].time || Date.now()).toLocaleDateString();
+  }
+
+  // Re-render chart with filtered candles
+  const chartView = chartViews.get(panel);
+  if (chartView?.chart && chartView?.series) {
+    const filteredCandles = toCandlestickData(points.slice(0, nextIndex + 1));
+    chartView.series.setData(filteredCandles);
+    chartView.chart.timeScale()?.fitContent?.();
+  }
+
+  // Continue animation if still playing
+  if (nextIndex < points.length - 1 && replayIsPlaying[panel]) {
+    window.setTimeout(() => animateChartReplay(panel), 50);
+  } else {
+    // Stop at the end
+    replayIsPlaying[panel] = false;
+    const toggle = document.querySelector(`[data-chart-replay-toggle="${panel}"]`);
+    if (toggle) toggle.textContent = "▶ Play";
+  }
+}
+
 async function mountCandlestickChart(panel, points) {
   const candles = toCandlestickData(points);
   clearPanelChart(panel);
@@ -5064,7 +5135,10 @@ async function mountCandlestickChart(panel, points) {
     return;
   }
 
-  series.setData(candles);
+  // Apply replay filter if active
+  const replayIndex = (state.chartReplayIndex = state.chartReplayIndex || {})[panel];
+  const candlesToDisplay = replayIndex != null ? candles.slice(0, replayIndex + 1) : candles;
+  series.setData(candlesToDisplay);
 
   const ind = state.chartIndicators || {};
 

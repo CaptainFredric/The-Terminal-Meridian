@@ -154,6 +154,8 @@ export class WorkspaceController {
       focusedPanel: this.state.focusedPanel,
       autoJumpToPanel: this.state.autoJumpToPanel,
       chartRanges: this.state.chartRanges,
+      chartReplayIndex: this.state.chartReplayIndex,
+      chartReplayIsPlaying: this.state.chartReplayIsPlaying,
       newsFilter: this.state.newsFilter,
       compactMode: this.state.compactMode,
       theme: this.state.theme,

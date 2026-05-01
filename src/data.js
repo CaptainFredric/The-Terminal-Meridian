@@ -76,6 +76,7 @@ export const commandCatalog = [
   { cmd: "OPTIONS NVDA", desc: "Open options for NVDA" },
   { cmd: "RULES", desc: "Open the rules manager" },
   { cmd: "IF AAPL > 220 THEN Breakout", desc: "Create an active rule (supports >, <, >=, <=, ==)" },
+  { cmd: "IF @WATCHLIST > 5pct THEN Watchlist mover", desc: "Apply rule to all watchlist symbols (alerts each when condition is met)" },
   { cmd: "IF AAPL > 250 AND RSI >= 70 THEN Overbought", desc: "Multi-condition rule: price AND indicator (RSI, SMA20, EMA9, MACD)" },
   { cmd: "CALC", desc: "Open the option & bond calculator" },
   { cmd: "HEAT", desc: "Open the sector heatmap" },

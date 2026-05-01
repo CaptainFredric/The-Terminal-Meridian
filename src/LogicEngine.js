@@ -13,18 +13,21 @@ export class LogicEngine {
 
   parseRule(input) {
     const source = String(input || "").trim();
-    // Updated regex to support optional AND RSI/SMA condition
+    // Updated regex to support optional AND RSI/SMA condition and @WATCHLIST
     const match = source.match(
-      /^IF\s+([A-Z0-9.-]+)\s*(>=|<=|>|<|==)\s*([0-9]+(?:\.[0-9]+)?)\s+(?:AND\s+(RSI|SMA20|EMA9|MACD)\s*(>=|<=|>|<|==)\s*([0-9]+(?:\.[0-9]+)?)\s+)?THEN\s+(.+)$/i
+      /^IF\s+(@WATCHLIST|[A-Z0-9.-]+)\s*(>=|<=|>|<|==)\s*([0-9]+(?:\.[0-9]+)?)\s+(?:AND\s+(RSI|SMA20|EMA9|MACD)\s*(>=|<=|>|<|==)\s*([0-9]+(?:\.[0-9]+)?)\s+)?THEN\s+(.+)$/i
     );
     if (!match) {
       throw new Error(
         "Invalid rule syntax. Use: IF [ticker] [operator] [value] THEN [message]" +
+        " or: IF @WATCHLIST [op] [value] THEN [message]" +
         " or: IF [ticker] [op] [value] AND [indicator] [op] [value] THEN [message]"
       );
     }
 
-    const symbol = String(match[1] || "").toUpperCase();
+    const symbolOrWatchlist = String(match[1] || "").toUpperCase();
+    const applyToWatchlist = symbolOrWatchlist === "@WATCHLIST";
+    const symbol = applyToWatchlist ? null : symbolOrWatchlist;
     const op = String(match[2] || "");
     const limit = Number(match[3]);
     const indicatorType = match[4] ? String(match[4]).toUpperCase() : null;
@@ -55,7 +58,6 @@ export class LogicEngine {
     const conditions = [
       {
         type: "price",
-        symbol,
         op,
         limit,
       },
@@ -73,6 +75,7 @@ export class LogicEngine {
     return {
       id: `rule-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       symbol,
+      applyToWatchlist,
       conditions,
       msg,
       createdAt: Date.now(),
@@ -83,70 +86,77 @@ export class LogicEngine {
     const triggers = [];
     const activeRules = Array.isArray(state.activeRules) ? state.activeRules : [];
     const activeIds = new Set(activeRules.map((rule) => rule.id));
+    const watchlist = Array.isArray(state.watchlist) ? state.watchlist : [];
 
     for (const cachedId of this.lastMatches.keys()) {
       if (!activeIds.has(cachedId)) this.lastMatches.delete(cachedId);
     }
 
     for (const rule of activeRules) {
-      // For legacy rules with op/limit at top level, convert to conditions format
-      const conditions = rule.conditions || [
-        {
-          type: "price",
-          symbol: rule.symbol,
-          op: rule.op,
-          limit: rule.limit,
-        },
-      ];
+      // Expand watchlist rules to each symbol
+      const symbols = rule.applyToWatchlist ? watchlist : [rule.symbol];
 
-      const quote = state.quotes?.get?.(rule.symbol);
-      const price = Number(quote?.price);
-      if (!Number.isFinite(price)) {
-        this.lastMatches.set(rule.id, false);
-        continue;
-      }
+      for (const symbol of symbols) {
+        // For legacy rules with op/limit at top level, convert to conditions format
+        const conditions = rule.conditions || [
+          {
+            type: "price",
+            op: rule.op,
+            limit: rule.limit,
+          },
+        ];
 
-      let matched = true;
+        const quote = state.quotes?.get?.(symbol);
+        const price = Number(quote?.price);
+        if (!Number.isFinite(price)) {
+          const matchKey = `${rule.id}-${symbol}`;
+          this.lastMatches.set(matchKey, false);
+          continue;
+        }
 
-      // Check all conditions
-      for (const condition of conditions) {
-        if (condition.type === "price") {
-          const comparator = COMPARATORS[condition.op];
-          if (!comparator) {
-            matched = false;
-            break;
-          }
-          if (!comparator(price, Number(condition.limit))) {
-            matched = false;
-            break;
-          }
-        } else if (condition.type === "indicator") {
-          const indicatorValue = this._getIndicatorValue(state, rule.symbol, condition.indicator);
-          if (!Number.isFinite(indicatorValue)) {
-            matched = false;
-            break;
-          }
-          const comparator = COMPARATORS[condition.op];
-          if (!comparator || !comparator(indicatorValue, Number(condition.limit))) {
-            matched = false;
-            break;
+        let matched = true;
+
+        // Check all conditions
+        for (const condition of conditions) {
+          if (condition.type === "price") {
+            const comparator = COMPARATORS[condition.op];
+            if (!comparator) {
+              matched = false;
+              break;
+            }
+            if (!comparator(price, Number(condition.limit))) {
+              matched = false;
+              break;
+            }
+          } else if (condition.type === "indicator") {
+            const indicatorValue = this._getIndicatorValue(state, symbol, condition.indicator);
+            if (!Number.isFinite(indicatorValue)) {
+              matched = false;
+              break;
+            }
+            const comparator = COMPARATORS[condition.op];
+            if (!comparator || !comparator(indicatorValue, Number(condition.limit))) {
+              matched = false;
+              break;
+            }
           }
         }
+
+        const matchKey = `${rule.id}-${symbol}`;
+        const previouslyMatched = Boolean(this.lastMatches.get(matchKey));
+
+        if (matched && !previouslyMatched) {
+          triggers.push({
+            ruleId: rule.id,
+            symbol,
+            msg: rule.msg,
+            price,
+            triggeredAt: Date.now(),
+          });
+        }
+
+        this.lastMatches.set(matchKey, matched);
       }
-
-      const previouslyMatched = Boolean(this.lastMatches.get(rule.id));
-
-      if (matched && !previouslyMatched) {
-        triggers.push({
-          ruleId: rule.id,
-          symbol: rule.symbol,
-          msg: rule.msg,
-          price,
-          triggeredAt: Date.now(),
-        });
-      }
-
-      this.lastMatches.set(rule.id, matched);
     }
 
     return triggers;

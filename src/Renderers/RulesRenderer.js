@@ -30,42 +30,76 @@ export function createRulesRenderer(context) {
 
     // Compute live status for each rule
     const rulesWithStatus = rows.map((rule) => {
-      const quote = buildQuote(rule.symbol);
-      const price = quote?.price;
-
       // Support both legacy (rule.op/rule.limit) and new (rule.conditions) formats
       const conditions = rule.conditions || [
         {
           type: "price",
-          symbol: rule.symbol,
           op: rule.op,
           limit: rule.limit,
         },
       ];
 
-      const isMatched = price != null && (() => {
-        // For now, check the price condition (first condition is always price)
-        const priceCondition = conditions.find((c) => c.type === "price");
-        if (!priceCondition) return false;
-        const op = priceCondition.op;
-        const limit = priceCondition.limit;
-        if (op === ">")  return price > limit;
-        if (op === ">=") return price >= limit;
-        if (op === "<")  return price < limit;
-        if (op === "<=") return price <= limit;
-        if (op === "==") return Math.abs(price - limit) < 0.01;
-        return false;
-      })();
-
-      // Use first price condition for distance calculation
+      // For watchlist rules, check if ANY symbol in watchlist matches
+      // For single-symbol rules, check that symbol
       const priceCondition = conditions.find((c) => c.type === "price");
-      const distance = price != null && priceCondition ? ((price - priceCondition.limit) / priceCondition.limit * 100) : null;
+      const op = priceCondition?.op;
+      const limit = priceCondition?.limit;
+
+      let isMatched = false;
+      let price = null;
+      let distance = null;
+      let symbolsMatched = [];
+
+      if (rule.applyToWatchlist && Array.isArray(state.watchlist)) {
+        // Check each watchlist symbol
+        for (const sym of state.watchlist) {
+          const q = buildQuote(sym);
+          const p = q?.price;
+          if (!Number.isFinite(p)) continue;
+
+          const matches = op && (() => {
+            if (op === ">")  return p > limit;
+            if (op === ">=") return p >= limit;
+            if (op === "<")  return p < limit;
+            if (op === "<=") return p <= limit;
+            if (op === "==") return Math.abs(p - limit) < 0.01;
+            return false;
+          })();
+
+          if (matches) {
+            symbolsMatched.push(sym);
+            isMatched = true;
+          }
+        }
+        // Use first symbol's price for display (or average if multiple)
+        const firstMatch = state.watchlist.find((s) => symbolsMatched.includes(s));
+        if (firstMatch) {
+          price = buildQuote(firstMatch)?.price;
+        }
+      } else {
+        // Single symbol rule
+        const quote = buildQuote(rule.symbol);
+        price = quote?.price;
+
+        isMatched = price != null && (() => {
+          if (!op) return false;
+          if (op === ">")  return price > limit;
+          if (op === ">=") return price >= limit;
+          if (op === "<")  return price < limit;
+          if (op === "<=") return price <= limit;
+          if (op === "==") return Math.abs(price - limit) < 0.01;
+          return false;
+        })();
+      }
+
+      // Distance calculation
+      distance = price != null && priceCondition ? ((price - priceCondition.limit) / priceCondition.limit * 100) : null;
       // Proximity 0-100%: 100 = touching threshold, 0 = very far
       const proximityPct = distance != null
         ? Math.min(100, Math.max(0, 100 - Math.min(Math.abs(distance) * 5, 100)))
         : 0;
       const isClose = !isMatched && proximityPct >= 80; // within ~4%
-      return { ...rule, price, isMatched, distance, proximityPct, isClose, conditions };
+      return { ...rule, price, isMatched, distance, proximityPct, isClose, conditions, symbolsMatched };
     });
 
     const matchedCount = rulesWithStatus.filter((r) => r.isMatched).length;
@@ -79,8 +113,8 @@ export function createRulesRenderer(context) {
       { label: "🍎 AAPL above 210", cmd: "IF AAPL > 210 THEN Apple above 210" },
       { label: "📉 QQQ sell-off",   cmd: "IF QQQ < 400 THEN QQQ selling off, below 400" },
       { label: "🔥 NVDA momentum",  cmd: "IF NVDA > 130 AND RSI >= 70 THEN NVDA overbought breakout" },
+      { label: "🎯 Watchlist scan", cmd: "IF @WATCHLIST > 5pct THEN Watchlist symbol moving up 5% daily" },
       { label: "⚡ VIX spike",      cmd: "IF VIX > 25 THEN Volatility spike, hedge accordingly" },
-      { label: "₿ BTC above 90k",  cmd: "IF BTC-USD > 90000 THEN Bitcoin above 90k, risk-on" },
     ];
 
     const ALERT_TEMPLATES = [
@@ -147,7 +181,8 @@ export function createRulesRenderer(context) {
                     const conditionDisplays = rule.conditions ? rule.conditions.map((cond) => {
                       if (cond.type === "price") {
                         const dirLabel = { ">": "above", ">=": "≥", "<": "below", "<=": "≤", "==": "equals" }[cond.op] || cond.op;
-                        return `${cond.symbol} ${dirLabel} ${Number(cond.limit).toLocaleString()}`;
+                        const symbolDisplay = rule.applyToWatchlist ? "* All Watchlist *" : (cond.symbol || rule.symbol);
+                        return `${symbolDisplay} ${dirLabel} ${Number(cond.limit).toLocaleString()}`;
                       } else if (cond.type === "indicator") {
                         const dirLabel = { ">": ">", ">=": "≥", "<": "<", "<=": "≤", "==": "=" }[cond.op] || cond.op;
                         return `${cond.indicator} ${dirLabel} ${Number(cond.limit).toFixed(1)}`;
@@ -162,11 +197,12 @@ export function createRulesRenderer(context) {
                     const pctLabel = rule.distance != null ? `${rule.distance > 0 ? "+" : ""}${rule.distance.toFixed(1)}%` : "--";
                     const statusClass = rule.isMatched ? "rule-status-matched" : rule.isClose ? "rule-status-close" : "rule-status-watching";
                     const statusLabel = rule.isMatched ? "✅ TRIGGERED" : rule.isClose ? "🔶 CLOSE" : "⏳ watching";
+                    const watchlistLabel = rule.applyToWatchlist ? ` <span style="font-size: 0.85rem; color: var(--text-muted);">(${rule.symbolsMatched.length}/${state.watchlist.length} matching)</span>` : "";
                     return `
                       <div class="rule-live-row ${statusClass}">
                         <div class="rule-live-header">
                           <div class="rule-live-title">
-                            <span class="rule-condition-text">${conditionText || `${rule.symbol} ${directionLabel} ${Number(rule.limit).toLocaleString()}`}</span>
+                            <span class="rule-condition-text">${conditionText || `${rule.symbol} ${directionLabel} ${Number(rule.limit).toLocaleString()}`}${watchlistLabel}</span>
                           </div>
                           <div class="rule-live-status ${statusClass}">${statusLabel}</div>
                           <button class="btn btn-ghost btn-inline btn-danger" type="button" data-remove-rule="${rule.id}" title="Remove rule">✕</button>
@@ -195,6 +231,8 @@ export function createRulesRenderer(context) {
                   <p class="rules-syntax-hint">
                     <strong>Syntax:</strong>
                     <code>IF [SYMBOL] [&gt; / &lt; / ==] [VALUE] THEN [MESSAGE]</code>
+                    <br>
+                    <code>IF @WATCHLIST [OP] [VALUE] THEN [MESSAGE]</code>
                     <br>
                     <code>IF [SYMBOL] [OP] [VALUE] AND [RSI/SMA20/EMA9] [OP] [VALUE] THEN [MESSAGE]</code>
                   </p>

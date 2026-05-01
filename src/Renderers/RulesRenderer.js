@@ -32,21 +32,40 @@ export function createRulesRenderer(context) {
     const rulesWithStatus = rows.map((rule) => {
       const quote = buildQuote(rule.symbol);
       const price = quote?.price;
+
+      // Support both legacy (rule.op/rule.limit) and new (rule.conditions) formats
+      const conditions = rule.conditions || [
+        {
+          type: "price",
+          symbol: rule.symbol,
+          op: rule.op,
+          limit: rule.limit,
+        },
+      ];
+
       const isMatched = price != null && (() => {
-        if (rule.op === ">")  return price > rule.limit;
-        if (rule.op === ">=") return price >= rule.limit;
-        if (rule.op === "<")  return price < rule.limit;
-        if (rule.op === "<=") return price <= rule.limit;
-        if (rule.op === "==") return Math.abs(price - rule.limit) < 0.01;
+        // For now, check the price condition (first condition is always price)
+        const priceCondition = conditions.find((c) => c.type === "price");
+        if (!priceCondition) return false;
+        const op = priceCondition.op;
+        const limit = priceCondition.limit;
+        if (op === ">")  return price > limit;
+        if (op === ">=") return price >= limit;
+        if (op === "<")  return price < limit;
+        if (op === "<=") return price <= limit;
+        if (op === "==") return Math.abs(price - limit) < 0.01;
         return false;
       })();
-      const distance = price != null ? ((price - rule.limit) / rule.limit * 100) : null;
+
+      // Use first price condition for distance calculation
+      const priceCondition = conditions.find((c) => c.type === "price");
+      const distance = price != null && priceCondition ? ((price - priceCondition.limit) / priceCondition.limit * 100) : null;
       // Proximity 0-100%: 100 = touching threshold, 0 = very far
       const proximityPct = distance != null
         ? Math.min(100, Math.max(0, 100 - Math.min(Math.abs(distance) * 5, 100)))
         : 0;
       const isClose = !isMatched && proximityPct >= 80; // within ~4%
-      return { ...rule, price, isMatched, distance, proximityPct, isClose };
+      return { ...rule, price, isMatched, distance, proximityPct, isClose, conditions };
     });
 
     const matchedCount = rulesWithStatus.filter((r) => r.isMatched).length;
@@ -59,7 +78,7 @@ export function createRulesRenderer(context) {
       { label: "📈 SPY breakout",   cmd: "IF SPY > 540 THEN SPY breakout, above 540" },
       { label: "🍎 AAPL above 210", cmd: "IF AAPL > 210 THEN Apple above 210" },
       { label: "📉 QQQ sell-off",   cmd: "IF QQQ < 400 THEN QQQ selling off, below 400" },
-      { label: "🔥 NVDA momentum",  cmd: "IF NVDA > 130 THEN NVDA above 130, momentum play" },
+      { label: "🔥 NVDA momentum",  cmd: "IF NVDA > 130 AND RSI >= 70 THEN NVDA overbought breakout" },
       { label: "⚡ VIX spike",      cmd: "IF VIX > 25 THEN Volatility spike, hedge accordingly" },
       { label: "₿ BTC above 90k",  cmd: "IF BTC-USD > 90000 THEN Bitcoin above 90k, risk-on" },
     ];
@@ -124,8 +143,22 @@ export function createRulesRenderer(context) {
               ? `
                 <div class="rules-live-list">
                   ${rulesWithStatus.map((rule) => {
-                    const directionLabel = { ">": "above", ">=": "≥", "<": "below", "<=": "≤", "==": "equals" }[rule.op] || rule.op;
-                    const thresholdClass = (rule.op === ">" || rule.op === ">=") ? "positive" : (rule.op === "<" || rule.op === "<=") ? "negative" : "";
+                    // Format conditions for display
+                    const conditionDisplays = rule.conditions ? rule.conditions.map((cond) => {
+                      if (cond.type === "price") {
+                        const dirLabel = { ">": "above", ">=": "≥", "<": "below", "<=": "≤", "==": "equals" }[cond.op] || cond.op;
+                        return `${cond.symbol} ${dirLabel} ${Number(cond.limit).toLocaleString()}`;
+                      } else if (cond.type === "indicator") {
+                        const dirLabel = { ">": ">", ">=": "≥", "<": "<", "<=": "≤", "==": "=" }[cond.op] || cond.op;
+                        return `${cond.indicator} ${dirLabel} ${Number(cond.limit).toFixed(1)}`;
+                      }
+                      return "";
+                    }).filter(Boolean) : [];
+                    const conditionText = conditionDisplays.join(" AND ");
+
+                    // Legacy rule support
+                    const directionLabel = rule.op ? ({ ">": "above", ">=": "≥", "<": "below", "<=": "≤", "==": "equals" }[rule.op] || rule.op) : "";
+                    const thresholdClass = rule.op ? ((rule.op === ">" || rule.op === ">=") ? "positive" : (rule.op === "<" || rule.op === "<=") ? "negative" : "") : "";
                     const pctLabel = rule.distance != null ? `${rule.distance > 0 ? "+" : ""}${rule.distance.toFixed(1)}%` : "--";
                     const statusClass = rule.isMatched ? "rule-status-matched" : rule.isClose ? "rule-status-close" : "rule-status-watching";
                     const statusLabel = rule.isMatched ? "✅ TRIGGERED" : rule.isClose ? "🔶 CLOSE" : "⏳ watching";
@@ -133,9 +166,7 @@ export function createRulesRenderer(context) {
                       <div class="rule-live-row ${statusClass}">
                         <div class="rule-live-header">
                           <div class="rule-live-title">
-                            <strong>${rule.symbol}</strong>
-                            <span class="rule-live-op">${directionLabel}</span>
-                            <strong class="${thresholdClass}">${Number(rule.limit).toLocaleString()}</strong>
+                            <span class="rule-condition-text">${conditionText || `${rule.symbol} ${directionLabel} ${Number(rule.limit).toLocaleString()}`}</span>
                           </div>
                           <div class="rule-live-status ${statusClass}">${statusLabel}</div>
                           <button class="btn btn-ghost btn-inline btn-danger" type="button" data-remove-rule="${rule.id}" title="Remove rule">✕</button>
@@ -164,6 +195,8 @@ export function createRulesRenderer(context) {
                   <p class="rules-syntax-hint">
                     <strong>Syntax:</strong>
                     <code>IF [SYMBOL] [&gt; / &lt; / ==] [VALUE] THEN [MESSAGE]</code>
+                    <br>
+                    <code>IF [SYMBOL] [OP] [VALUE] AND [RSI/SMA20/EMA9] [OP] [VALUE] THEN [MESSAGE]</code>
                   </p>
                   <div class="rules-template-section">
                     <span class="rules-template-label">Quick-add a template</span>

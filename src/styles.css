@@ -2218,6 +2218,88 @@ html {
   color: var(--accent, #2fcf84);
 }
 
+/* ── Options Strategy P&L Card ─────────────────────────────────────────── */
+.pnl-strategy-card {
+  position: relative;
+}
+.pnl-strategy-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border, #1e2d4a);
+  background: rgba(13, 21, 37, 0.4);
+}
+.pnl-control {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 130px;
+}
+.pnl-control label {
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted, #7b91b5);
+}
+.pnl-control select {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  padding: 5px 8px;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--border, #1e2d4a);
+  border-radius: 4px;
+  color: var(--text, #e8f0fe);
+  cursor: pointer;
+}
+.pnl-control select:hover {
+  border-color: var(--accent, #2fcf84);
+}
+.pnl-strategy-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0;
+  border-bottom: 1px solid var(--border, #1e2d4a);
+}
+.pnl-stat {
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  border-right: 1px solid var(--border, #1e2d4a);
+}
+.pnl-stat:last-child { border-right: none; }
+.pnl-stat span {
+  font-size: 0.62rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted, #7b91b5);
+  font-weight: 600;
+}
+.pnl-stat strong {
+  font-family: var(--mono);
+  font-size: 1rem;
+  font-variant-numeric: tabular-nums;
+}
+.pnl-chart-wrap {
+  padding: 12px 14px 4px;
+  background: rgba(0, 0, 0, 0.15);
+}
+.pnl-chart {
+  width: 100%;
+  height: auto;
+  max-height: 260px;
+  display: block;
+}
+.pnl-disclaimer {
+  display: block;
+  padding: 6px 14px 10px;
+  font-size: 0.68rem;
+  color: var(--muted, #7b91b5);
+  font-style: italic;
+}
+
 .legend-swatch {
   display: inline-block;
   width: 10px;

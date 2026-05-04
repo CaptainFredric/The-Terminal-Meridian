@@ -3747,6 +3747,32 @@ function handleDocumentInput(event) {
     _updateRuleBuilderPreview();
   }
 
+  // Options Strategy P&L: change strategy or strike picker
+  const stratEl = event.target.closest("[data-pnl-strategy]");
+  if (stratEl) {
+    const panel = Number(stratEl.dataset.pnlStrategy);
+    state.optionsStrategy = state.optionsStrategy || {};
+    state.optionsStrategy[panel] = { ...(state.optionsStrategy[panel] || {}), strategy: stratEl.value, k1: null, k2: null };
+    renderPanel(panel);
+    return;
+  }
+  const k1El = event.target.closest("[data-pnl-k1]");
+  if (k1El) {
+    const panel = Number(k1El.dataset.pnlK1);
+    state.optionsStrategy = state.optionsStrategy || {};
+    state.optionsStrategy[panel] = { ...(state.optionsStrategy[panel] || {}), k1: Number(k1El.value) };
+    renderPanel(panel);
+    return;
+  }
+  const k2El = event.target.closest("[data-pnl-k2]");
+  if (k2El) {
+    const panel = Number(k2El.dataset.pnlK2);
+    state.optionsStrategy = state.optionsStrategy || {};
+    state.optionsStrategy[panel] = { ...(state.optionsStrategy[panel] || {}), k2: Number(k2El.value) };
+    renderPanel(panel);
+    return;
+  }
+
   // Chart replay slider: scrub through historical data (fires during drag)
   const replaySlider = event.target.closest("[data-chart-replay-slider]");
   if (replaySlider) {

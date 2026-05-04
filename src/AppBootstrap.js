@@ -1415,6 +1415,22 @@ function bindEvents() {
     }
   });
 
+  // ── Version pill / What's New modal ───────────────────────────────────────
+  const versionPill = document.getElementById("versionPill");
+  if (versionPill) {
+    versionPill.addEventListener("click", showWhatsNewModal);
+    // Auto-show once for new visitors who haven't seen this version yet
+    try {
+      const seen = window.localStorage.getItem("meridian_v2_whats_new");
+      if (!seen) {
+        setTimeout(() => {
+          showWhatsNewModal();
+          window.localStorage.setItem("meridian_v2_whats_new", "1");
+        }, 6500);
+      }
+    } catch {}
+  }
+
   // ── Replay Tour button (header) ────────────────────────────────────────────
   // Always-on access to the welcome wizard so users who dismissed it (or
   // returning visitors who didn't notice it the first time) can replay it.
@@ -5101,6 +5117,81 @@ function normalizeCandle(point, previousClose = null) {
     low,
     close,
   };
+}
+
+function showWhatsNewModal() {
+  // Create or reuse modal
+  let modal = document.getElementById("whatsNewModal");
+  if (!modal) {
+    modal = document.createElement("div");
+    modal.id = "whatsNewModal";
+    modal.className = "whats-new-backdrop";
+    modal.innerHTML = `
+      <div class="whats-new-card" role="dialog" aria-labelledby="whatsNewTitle" aria-modal="true">
+        <button class="whats-new-close" aria-label="Close">×</button>
+        <div class="whats-new-header">
+          <span class="whats-new-version">v2.0</span>
+          <h2 id="whatsNewTitle">What's New in Meridian</h2>
+          <p class="whats-new-subtitle">Bloomberg-grade tools just got more powerful. Here's what shipped this release:</p>
+        </div>
+        <div class="whats-new-grid">
+          <article class="whats-new-feature">
+            <div class="whats-new-icon">⏯</div>
+            <h3>Bar Replay</h3>
+            <p>Scrub through 5 years of historical data candle-by-candle. Press <kbd>Space</kbd> to play, <kbd>← →</kbd> to step.</p>
+          </article>
+          <article class="whats-new-feature">
+            <div class="whats-new-icon">🛠</div>
+            <h3>Visual Rule Builder</h3>
+            <p>Click "Build Rule" in the Rules panel: dropdowns instead of syntax. Multi-condition AND chains supported.</p>
+          </article>
+          <article class="whats-new-feature">
+            <div class="whats-new-icon">📊</div>
+            <h3>Options P&amp;L Diagrams</h3>
+            <p>Pick a strategy, pick a strike, see the payoff curve, breakevens, and max profit/loss instantly.</p>
+          </article>
+          <article class="whats-new-feature">
+            <div class="whats-new-icon">★</div>
+            <h3>Pin Rules</h3>
+            <p>Star important rules to keep them at the top of your list as the others rotate.</p>
+          </article>
+          <article class="whats-new-feature">
+            <div class="whats-new-icon">🎯</div>
+            <h3>Watchlist Alerts</h3>
+            <p>One rule, every symbol: <code>IF @WATCHLIST &gt; 5pct THEN ...</code> fires per ticker.</p>
+          </article>
+          <article class="whats-new-feature">
+            <div class="whats-new-icon">💾</div>
+            <h3>Export / Import</h3>
+            <p>Backup your entire workspace as JSON. Settings → Workspace Backup. Bring it to another browser, restore in seconds.</p>
+          </article>
+        </div>
+        <footer class="whats-new-footer">
+          <small>Press <kbd>?</kbd> anytime to see all shortcuts.</small>
+          <button class="btn btn-primary" data-whats-new-dismiss>Got it →</button>
+        </footer>
+      </div>
+    `;
+    document.body.appendChild(modal);
+
+    const close = () => {
+      modal.classList.remove("is-open");
+      setTimeout(() => modal.remove(), 200);
+    };
+    modal.querySelector(".whats-new-close")?.addEventListener("click", close);
+    modal.querySelector("[data-whats-new-dismiss]")?.addEventListener("click", close);
+    modal.addEventListener("click", (e) => {
+      if (e.target === modal) close();
+    });
+    document.addEventListener("keydown", function escClose(e) {
+      if (e.key === "Escape") {
+        close();
+        document.removeEventListener("keydown", escClose);
+      }
+    });
+  }
+  // Trigger animation
+  requestAnimationFrame(() => modal.classList.add("is-open"));
 }
 
 function exportWorkspaceJson() {

@@ -127,13 +127,19 @@ export function createSettingsRenderer(context) {
 
     // ── Keyboard shortcuts ───────────────────────────────────────────────────
     const shortcuts = [
+      ["1 / 2 / 3 / 4", "Jump to panel 1-4"],
+      ["Tab", "Cycle through panels"],
+      ["F", "Toggle focus mode (single panel)"],
+      ["G", "Return to grid view"],
+      ["F1 to F11", "Load module in active panel"],
       ["T", "Cycle themes"],
-      ["F1 to F4", "Jump to panel module"],
-      ["Alt + 1 to 4", "Focus / unfocus panel"],
-      ["Enter", "Load ticker in active panel"],
       ["?", "Show keyboard shortcuts"],
       ["Cmd/Ctrl + K", "Open command palette"],
-      ["SETTINGS (cmd)", "Open this settings panel"],
+      ["/", "Open command palette"],
+      ["Space", "Play/pause chart replay (chart panel)"],
+      ["←  / →", "Step replay one candle (Shift = 10)"],
+      ["R", "Reset chart replay to live (chart panel)"],
+      ["Esc", "Close any open dialog"],
     ];
     const shortcutRows = shortcuts.map(([key, desc]) =>
       `<tr><td><kbd>${key}</kbd></td><td>${desc}</td></tr>`

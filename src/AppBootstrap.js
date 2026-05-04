@@ -2791,6 +2791,27 @@ function cycleModule(panel, direction) {
 
 function loadModule(moduleName, panel, options = {}) {
   appCore?.loadModule(moduleName, panel, options);
+  // First-time hint for chart replay
+  if (moduleName === "chart") {
+    try {
+      if (!window.localStorage.getItem("meridian_replay_hint_shown")) {
+        setTimeout(() => {
+          showToast("⏯ New: scrub the chart timeline at the bottom, or press Space to replay candles.", "neutral", 6000);
+          window.localStorage.setItem("meridian_replay_hint_shown", "1");
+        }, 1200);
+      }
+    } catch {}
+  }
+  if (moduleName === "options") {
+    try {
+      if (!window.localStorage.getItem("meridian_pnl_hint_shown")) {
+        setTimeout(() => {
+          showToast("📊 New: scroll past the Greeks for a Strategy P&L diagram.", "neutral", 5000);
+          window.localStorage.setItem("meridian_pnl_hint_shown", "1");
+        }, 1500);
+      }
+    } catch {}
+  }
 }
 
 function syncPanelData(panel) {
@@ -4173,6 +4194,27 @@ function handleGlobalHotkeys(event) {
 
   if (event.key.toUpperCase() === "F") {
     setFocusedPanel(state.activePanel);
+    return;
+  }
+
+  // Number keys 1-4: jump directly to that panel (Bloomberg-style)
+  // Skip when modifier is held so we don't hijack Cmd+1 / Ctrl+1 (browser tab navigation)
+  if (["1", "2", "3", "4"].includes(event.key) && !event.shiftKey && !event.altKey && !cmdOrCtrl) {
+    event.preventDefault();
+    const targetPanel = Number(event.key);
+    setActivePanel(targetPanel);
+    return;
+  }
+
+  // R: reset replay to live (end of timeline) on active chart panel
+  if (event.key.toUpperCase() === "R" && activeModule === "chart") {
+    const panel = activePanel;
+    state.chartReplayIndex = state.chartReplayIndex || {};
+    state.chartReplayIsPlaying = state.chartReplayIsPlaying || {};
+    delete state.chartReplayIndex[panel];
+    state.chartReplayIsPlaying[panel] = false;
+    renderPanel(panel);
+    showToast("Chart replay reset to live data.", "neutral", 1500);
     return;
   }
 

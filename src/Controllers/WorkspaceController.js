@@ -160,6 +160,7 @@ export class WorkspaceController {
       compactMode: this.state.compactMode,
       theme: this.state.theme,
       rulesActiveTab: this.state.rulesActiveTab,
+      watchlistSortMode: this.state.watchlistSortMode,
     });
   }
 

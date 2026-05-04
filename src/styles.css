@@ -8259,6 +8259,52 @@ body[data-theme="light"] .tile {
   margin-bottom: 4px;
   border-bottom: 1px solid rgba(80, 100, 160, 0.10);
 }
+
+/* Sort cycle button */
+.watchlist-sort-bar {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0 4px 6px;
+}
+
+.wl-sort-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 9px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.66rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: rgba(15, 22, 42, 0.55);
+  border: 1px solid rgba(80, 100, 160, 0.18);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all 120ms ease;
+}
+
+.wl-sort-btn:hover {
+  border-color: rgba(120, 160, 255, 0.45);
+  color: #c8d4f0;
+}
+
+.wl-sort-btn.is-active {
+  border-color: rgba(120, 160, 255, 0.55);
+  background: rgba(120, 160, 255, 0.12);
+  color: #c8d4f0;
+}
+
+.wl-sort-icon {
+  font-weight: 700;
+  font-size: 0.78rem;
+  line-height: 1;
+}
+
+.rail-row.is-sorted .rail-drag-handle {
+  cursor: not-allowed;
+  opacity: 0.35;
+}
 .wl-group-chip {
   display: inline-flex;
   align-items: stretch;

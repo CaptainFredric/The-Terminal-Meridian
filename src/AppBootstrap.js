@@ -421,6 +421,7 @@ const initialState = {
   commandPaletteOpen: false,
   rulesActiveTab: String(uiSnapshot.rulesActiveTab || "rules"),
   compactMode: Boolean(uiSnapshot.compactMode),
+  watchlistSortMode: String(uiSnapshot.watchlistSortMode || "manual"),
   theme: String(uiSnapshot.theme || "dark"),
   lastDataFetchedAt: Number(uiSnapshot.lastDataFetchedAt || 0),
   paperAccount: null,
@@ -2721,14 +2722,41 @@ function renderRails() {
       </div>
     `;
 
-    const itemsHtml = state.watchlist
+    // Sort mode: manual | gain | loss | alpha. Cycles via the toolbar button.
+    const sortMode = state.watchlistSortMode || "manual";
+    const sortLabels = { manual: "Manual", gain: "Top gainers", loss: "Top losers", alpha: "A → Z" };
+    const sortIcons = { manual: "⋮⋮", gain: "▲", loss: "▼", alpha: "Az" };
+    const sortBarHtml = state.watchlist.length > 1
+      ? `<div class="watchlist-sort-bar">
+           <button type="button" class="wl-sort-btn ${sortMode !== "manual" ? "is-active" : ""}" data-watchlist-sort title="Sort: ${sortLabels[sortMode]}">
+             <span class="wl-sort-icon">${sortIcons[sortMode]}</span>
+             <span class="wl-sort-label">${sortLabels[sortMode]}</span>
+           </button>
+         </div>`
+      : "";
+
+    // Compute display order based on sort mode (without mutating canonical list)
+    const displaySymbols = state.watchlist.slice();
+    if (sortMode !== "manual") {
+      displaySymbols.sort((a, b) => {
+        if (sortMode === "alpha") return a.localeCompare(b);
+        const qa = buildQuote(a);
+        const qb = buildQuote(b);
+        const pa = Number(qa?.changePct || 0);
+        const pb = Number(qb?.changePct || 0);
+        return sortMode === "gain" ? pb - pa : pa - pb;
+      });
+    }
+
+    const itemsHtml = displaySymbols
       .map((symbol, idx) => {
         const quote = buildQuote(symbol);
         const changePct = Number(quote?.changePct || 0);
         const arrow = changePct >= 0 ? "▲" : "▼";
+        const isDraggable = sortMode === "manual";
         return `
-          <div class="rail-row" draggable="true" data-watchlist-symbol="${symbol}" data-watchlist-index="${idx}">
-            <span class="rail-drag-handle" aria-hidden="true" title="Drag to reorder">⋮⋮</span>
+          <div class="rail-row${isDraggable ? "" : " is-sorted"}" ${isDraggable ? `draggable="true"` : ""} data-watchlist-symbol="${symbol}" data-watchlist-index="${idx}">
+            <span class="rail-drag-handle" aria-hidden="true" title="${isDraggable ? "Drag to reorder" : "Switch to manual sort to reorder"}">⋮⋮</span>
             <button class="rail-item" type="button" data-broadcast-symbol="${symbol}" data-context-symbol="${symbol}">
               <div class="rail-item-head">
                 <div>
@@ -2752,7 +2780,7 @@ function renderRails() {
       ? ""
       : `<div class="empty-inline" style="margin:8px 4px;color:var(--muted);font-size:0.78rem">No symbols in this list yet. Use <code>WATCH AAPL</code> or click <em>+ Watchlist</em> from any quote.</div>`;
 
-    el.watchlistRail.innerHTML = groupChipsHtml + itemsHtml + emptyHtml;
+    el.watchlistRail.innerHTML = groupChipsHtml + sortBarHtml + itemsHtml + emptyHtml;
   }
 
   if (el.alertRail) {
@@ -3577,6 +3605,25 @@ function handleDocumentClick(event) {
     if (group && window.confirm(`Delete watchlist "${group.name}"? Symbols are not deleted from quotes.`)) {
       deleteWatchlistGroup(id);
     }
+    return;
+  }
+
+  // Watchlist sort cycle: manual → gain → loss → alpha → manual
+  if (event.target.closest("[data-watchlist-sort]")) {
+    const order = ["manual", "gain", "loss", "alpha"];
+    const cur = state.watchlistSortMode || "manual";
+    const nxt = order[(order.indexOf(cur) + 1) % order.length];
+    state.watchlistSortMode = nxt;
+    syncUiCache?.();
+    renderRails();
+    showToast?.(
+      nxt === "manual" ? "Watchlist: manual order (drag to reorder)"
+      : nxt === "gain" ? "Watchlist: top gainers first"
+      : nxt === "loss" ? "Watchlist: top losers first"
+      : "Watchlist: A → Z",
+      "neutral",
+      1500,
+    );
     return;
   }
 

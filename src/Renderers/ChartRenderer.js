@@ -57,6 +57,13 @@ export function createChartRenderer(context) {
 
     const compareSymbol = state.chartCompareSymbol?.[panel] || null;
 
+    // Replay mode badge: indicates user is viewing historical data, not live
+    const replayIndex = state.chartReplayIndex?.[panel];
+    const isInReplayMode = replayIndex != null && points.length > 0 && replayIndex < points.length - 1;
+    const replayPointDate = isInReplayMode && points[replayIndex]
+      ? new Date(points[replayIndex].timestamp || points[replayIndex].time || Date.now()).toLocaleDateString()
+      : null;
+
     return `
       <section class="stack stack-lg">
         <div class="toolbar toolbar-wrap">
@@ -90,6 +97,7 @@ export function createChartRenderer(context) {
             <span class="chart-replay-hint">Space · ← →</span>
           </div>` : ""}
           <div class="chart-canvas-wrap">
+            ${isInReplayMode ? `<div class="chart-replay-badge" title="Press R to return to live data">⏯ REPLAY · ${replayPointDate}</div>` : ""}
             <div class="chart-canvas" id="chartCanvas${panel}" data-chart-panel="${panel}"></div>
             ${chartUnavailable ? `<div class="chart-loading chart-fallback">${loadingSkeleton(4)}<p class="empty-inline">Offline: ${symbol} chart feed unavailable. Last requested window ${range.toUpperCase()}.</p></div>` : ""}
             ${fetchErr && !points.length ? `<div class="chart-loading chart-fallback">${errorState(`${symbol} chart unavailable. ${fetchErr.message}`, { retryAction: "refresh-chart", retryLabel: "Retry", retryPayload: JSON.stringify({ panel, symbol, range }) })}</div>` : ""}

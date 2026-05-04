@@ -124,6 +124,11 @@
             <p class="status-chip chip-phase" id="marketPhase">Market</p>
             <p class="status-chip chip-server" id="serverStatus">Server</p>
             <p class="status-chip chip-net" id="networkStatus">Connecting</p>
+            <span class="market-status-pill is-closed" id="marketStatusPill" title="US equity market hours (9:30am to 4:00pm ET)">
+              <i class="market-status-dot"></i>
+              <span class="market-status-label">--</span>
+              <span class="market-countdown" id="marketStatusCountdown"></span>
+            </span>
             <p class="status-chip chip-live-users" id="liveUserCount" title="Active users right now">
               <i class="status-chip-dot"></i>
               <span>...</span>
@@ -290,6 +295,10 @@
           Password
           <input name="password" type="password" autocomplete="current-password" required />
         </label>
+        <div class="auth-meta-row">
+          <button class="auth-text-link" type="button" data-forgot-password>Forgot password?</button>
+          <small class="auth-meta-hint">No account? <button class="auth-text-link" type="button" data-switch-to-signup>Create one</button></small>
+        </div>
         <button class="btn btn-primary" id="loginBtn" type="submit">Sign in</button>
         <button class="btn btn-ghost" id="continueLocalBtn" type="button">Continue without account</button>
       </form>
@@ -320,6 +329,15 @@
           <div class="password-field" style="position:relative; display:flex;">
             <input id="signupPassword" name="password" type="password" minlength="8" autocomplete="new-password" required style="flex:1; padding-right:60px;" />
             <button type="button" id="signupPasswordToggle" aria-label="Show password" style="position:absolute; right:0; top:0; bottom:0; padding:0 12px; background:none; border:none; color:var(--muted); cursor:pointer; font-size:11px; font-weight:600; letter-spacing:0.04em;">SHOW</button>
+          </div>
+          <div class="password-strength" id="signupPasswordStrength" aria-hidden="true">
+            <div class="password-strength-bars">
+              <span class="password-strength-bar"></span>
+              <span class="password-strength-bar"></span>
+              <span class="password-strength-bar"></span>
+              <span class="password-strength-bar"></span>
+            </div>
+            <small class="password-strength-label">Enter a password</small>
           </div>
         </label>
         <!-- Hidden defaults the backend still expects -->

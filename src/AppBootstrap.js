@@ -1020,6 +1020,44 @@ function bindEvents() {
     signupPasswordToggle.textContent = showing ? "SHOW" : "HIDE";
   });
 
+  // Password-strength meter
+  const strengthEl = document.querySelector("#signupPasswordStrength");
+  const strengthBars = strengthEl?.querySelectorAll(".password-strength-bar") || [];
+  const strengthLabel = strengthEl?.querySelector(".password-strength-label");
+  function scorePassword(pw) {
+    if (!pw) return { score: 0, label: "Enter a password" };
+    let score = 0;
+    if (pw.length >= 8) score += 1;
+    if (pw.length >= 12) score += 1;
+    if (/[A-Z]/.test(pw) && /[a-z]/.test(pw)) score += 1;
+    if (/\d/.test(pw)) score += 0.5;
+    if (/[^A-Za-z0-9]/.test(pw)) score += 1;
+    score = Math.min(4, Math.round(score));
+    const labels = ["Too short", "Weak", "Fair", "Good", "Strong"];
+    return { score, label: labels[score] };
+  }
+  signupPasswordInput?.addEventListener("input", () => {
+    const { score, label } = scorePassword(signupPasswordInput.value);
+    strengthBars.forEach((bar, idx) => {
+      bar.classList.toggle("is-active", idx < score);
+      bar.dataset.level = String(score);
+    });
+    if (strengthLabel) strengthLabel.textContent = label;
+    strengthEl?.setAttribute("data-score", String(score));
+  });
+
+  // Forgot password / switch tab buttons in login form
+  document.querySelector("[data-forgot-password]")?.addEventListener("click", () => {
+    showToast?.(
+      "Password reset is coming soon. Email support@meridianmarket.app and we'll restore access.",
+      "neutral",
+      6500,
+    );
+  });
+  document.querySelector("[data-switch-to-signup]")?.addEventListener("click", () => {
+    setAuthTab?.("signup");
+  });
+
   el.updateProfileForm?.addEventListener("submit", async (event) => {
     event.preventDefault();
     const data = new FormData(el.updateProfileForm);
@@ -1215,6 +1253,13 @@ function bindEvents() {
   document.addEventListener("input", handleDocumentInput);
   document.addEventListener("submit", handleDocumentSubmit);
   document.addEventListener("keydown", handleGlobalHotkeys, true);
+  document.addEventListener("contextmenu", handleDocumentContextMenu);
+
+  // Watchlist drag-to-reorder
+  setupWatchlistDragAndDrop();
+
+  // Market hours status pill
+  setupMarketStatusPill();
 
   // ── Live User Count (gentle social proof) ─────────────────────────────────
   // Deterministic-ish synthetic count that drifts naturally. No backend needed.
@@ -2677,13 +2722,14 @@ function renderRails() {
     `;
 
     const itemsHtml = state.watchlist
-      .map((symbol) => {
+      .map((symbol, idx) => {
         const quote = buildQuote(symbol);
         const changePct = Number(quote?.changePct || 0);
         const arrow = changePct >= 0 ? "▲" : "▼";
         return `
-          <div class="rail-row">
-            <button class="rail-item" type="button" data-broadcast-symbol="${symbol}">
+          <div class="rail-row" draggable="true" data-watchlist-symbol="${symbol}" data-watchlist-index="${idx}">
+            <span class="rail-drag-handle" aria-hidden="true" title="Drag to reorder">⋮⋮</span>
+            <button class="rail-item" type="button" data-broadcast-symbol="${symbol}" data-context-symbol="${symbol}">
               <div class="rail-item-head">
                 <div>
                   <strong>${symbol}</strong>
@@ -2696,7 +2742,7 @@ function renderRails() {
               </div>
               <div class="rail-item-spark">${renderOverviewSparkline(symbol, changePct)}</div>
             </button>
-            <button class="rail-remove" type="button" data-remove-watch="${symbol}">×</button>
+            <button class="rail-remove" type="button" data-remove-watch="${symbol}" title="Remove from watchlist">×</button>
           </div>
         `;
       })
@@ -2762,6 +2808,324 @@ function renderRails() {
   }
 
   applyPriceTones(el.watchlistRail || document);
+}
+
+// ─── Market Hours Status Pill ─────────────────────────────────────────────
+// Shows live "Market open / pre-market / after-hours / closed" with a
+// countdown to the next session boundary. US equity market hours: 9:30am–4pm ET.
+// Uses 'America/New_York' via Intl so it auto-handles daylight saving.
+function getMarketSessionState(now = new Date()) {
+  // Get current time in NY (America/New_York). Intl avoids DST math.
+  const fmt = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    hour12: false,
+    weekday: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+  const parts = fmt.formatToParts(now);
+  const lookup = Object.fromEntries(parts.map((p) => [p.type, p.value]));
+  const weekday = lookup.weekday || "Mon";
+  const hour = Number(lookup.hour || "0");
+  const minute = Number(lookup.minute || "0");
+  const second = Number(lookup.second || "0");
+  const minsOfDay = hour * 60 + minute;
+
+  const isWeekend = weekday === "Sat" || weekday === "Sun";
+
+  // Boundaries (in NY-minutes-of-day): pre 4:00am, regular 9:30am-4:00pm, after 4:00pm-8:00pm, closed otherwise.
+  const PRE_OPEN = 4 * 60;            // 04:00
+  const REG_OPEN = 9 * 60 + 30;       // 09:30
+  const REG_CLOSE = 16 * 60;          // 16:00
+  const AFTER_CLOSE = 20 * 60;        // 20:00
+
+  let phase = "closed";
+  let nextLabel = "open";
+  let nextMinsOfDay = REG_OPEN;
+  if (isWeekend) {
+    phase = "closed";
+    nextLabel = "Mon open";
+    nextMinsOfDay = REG_OPEN;
+  } else if (minsOfDay < PRE_OPEN) {
+    phase = "closed";
+    nextLabel = "pre-market";
+    nextMinsOfDay = PRE_OPEN;
+  } else if (minsOfDay < REG_OPEN) {
+    phase = "pre";
+    nextLabel = "open";
+    nextMinsOfDay = REG_OPEN;
+  } else if (minsOfDay < REG_CLOSE) {
+    phase = "open";
+    nextLabel = "close";
+    nextMinsOfDay = REG_CLOSE;
+  } else if (minsOfDay < AFTER_CLOSE) {
+    phase = "after";
+    nextLabel = "close";
+    nextMinsOfDay = AFTER_CLOSE;
+  } else {
+    phase = "closed";
+    nextLabel = "open";
+    // Wrap to next day's open (unless tomorrow is weekend → Monday)
+    nextMinsOfDay = REG_OPEN;
+  }
+
+  // Minutes until target. If target is earlier than now's minute count → next day.
+  let mins = nextMinsOfDay - minsOfDay - (second / 60);
+  if (mins <= 0) mins += 24 * 60;
+  // If next is "Mon open" on weekend, adjust by remaining weekend days.
+  if (isWeekend) {
+    const daysUntilMonday = weekday === "Sat" ? 2 : 1;
+    mins = (daysUntilMonday * 24 * 60) + (REG_OPEN - minsOfDay) - (second / 60);
+  }
+
+  return { phase, nextLabel, minsToNext: Math.max(0, Math.round(mins)) };
+}
+
+function formatCountdown(mins) {
+  if (mins < 1) return "<1m";
+  if (mins < 60) return `${mins}m`;
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  if (h < 24) return `${h}h ${m.toString().padStart(2, "0")}m`;
+  const d = Math.floor(h / 24);
+  const rh = h % 24;
+  return `${d}d ${rh}h`;
+}
+
+let _marketStatusTimer = null;
+function setupMarketStatusPill() {
+  const pill = document.querySelector("#marketStatusPill");
+  if (!pill) return;
+  const labelEl = pill.querySelector(".market-status-label");
+  const countdownEl = pill.querySelector("#marketStatusCountdown");
+
+  const tick = () => {
+    const { phase, nextLabel, minsToNext } = getMarketSessionState();
+    pill.classList.remove("is-open", "is-pre", "is-after", "is-closed");
+    pill.classList.add(`is-${phase}`);
+    if (labelEl) {
+      const labels = {
+        open: "Market open",
+        pre: "Pre-market",
+        after: "After-hours",
+        closed: "Closed",
+      };
+      labelEl.textContent = labels[phase];
+    }
+    if (countdownEl) {
+      countdownEl.textContent = `· ${formatCountdown(minsToNext)} to ${nextLabel}`;
+    }
+  };
+
+  tick();
+  if (_marketStatusTimer) clearInterval(_marketStatusTimer);
+  _marketStatusTimer = setInterval(tick, 30_000);
+}
+
+// ─── Watchlist Drag-and-Drop Reorder ──────────────────────────────────────
+// Lets users grab any rail-row by its drag handle (or anywhere on the row)
+// and drop it elsewhere in the rail to change ordering. Persists immediately.
+let _wlDragSrc = null;
+
+function setupWatchlistDragAndDrop() {
+  if (!el.watchlistRail) return;
+  const rail = el.watchlistRail;
+
+  rail.addEventListener("dragstart", (event) => {
+    const row = event.target.closest("[data-watchlist-symbol]");
+    if (!row) return;
+    _wlDragSrc = row.dataset.watchlistSymbol;
+    row.classList.add("is-dragging");
+    try {
+      event.dataTransfer.effectAllowed = "move";
+      event.dataTransfer.setData("text/plain", _wlDragSrc);
+    } catch {}
+  });
+
+  rail.addEventListener("dragend", (event) => {
+    const row = event.target.closest("[data-watchlist-symbol]");
+    if (row) row.classList.remove("is-dragging");
+    rail.querySelectorAll(".rail-row.is-drop-target").forEach((r) => r.classList.remove("is-drop-target"));
+    _wlDragSrc = null;
+  });
+
+  rail.addEventListener("dragover", (event) => {
+    if (!_wlDragSrc) return;
+    event.preventDefault();
+    const row = event.target.closest("[data-watchlist-symbol]");
+    rail.querySelectorAll(".rail-row.is-drop-target").forEach((r) => r.classList.remove("is-drop-target"));
+    if (row && row.dataset.watchlistSymbol !== _wlDragSrc) {
+      row.classList.add("is-drop-target");
+    }
+    try { event.dataTransfer.dropEffect = "move"; } catch {}
+  });
+
+  rail.addEventListener("drop", (event) => {
+    event.preventDefault();
+    const row = event.target.closest("[data-watchlist-symbol]");
+    rail.querySelectorAll(".rail-row.is-drop-target").forEach((r) => r.classList.remove("is-drop-target"));
+    if (!_wlDragSrc || !row) { _wlDragSrc = null; return; }
+    const target = row.dataset.watchlistSymbol;
+    if (target === _wlDragSrc) { _wlDragSrc = null; return; }
+
+    // Reorder state.watchlist: insert source before target
+    const list = state.watchlist.slice();
+    const fromIdx = list.indexOf(_wlDragSrc);
+    if (fromIdx === -1) { _wlDragSrc = null; return; }
+    list.splice(fromIdx, 1);
+    const toIdx = list.indexOf(target);
+    list.splice(toIdx, 0, _wlDragSrc);
+    state.watchlist = list;
+
+    // Mirror to active group
+    const activeGroup = state.watchlistGroups?.find((g) => g.id === state.activeWatchlistGroup);
+    if (activeGroup) activeGroup.symbols = list.slice();
+
+    _wlDragSrc = null;
+    syncUiCache?.();
+    queueWorkspaceSave?.();
+    renderRails();
+  });
+}
+
+// ─── Right-Click Context Menu on Watchlist Rows ───────────────────────────
+// Bloomberg-style quick actions: chart, quote, news, options, alert, copy, remove.
+let _ctxMenuEl = null;
+
+function closeContextMenu() {
+  if (_ctxMenuEl) {
+    _ctxMenuEl.remove();
+    _ctxMenuEl = null;
+  }
+}
+
+function handleDocumentContextMenu(event) {
+  // Watchlist symbol context menu
+  const ctxRow = event.target.closest("[data-context-symbol]");
+  if (ctxRow) {
+    event.preventDefault();
+    showSymbolContextMenu(ctxRow.dataset.contextSymbol, event.clientX, event.clientY);
+    return;
+  }
+  // Allow native context menu elsewhere
+}
+
+function showSymbolContextMenu(symbol, x, y) {
+  closeContextMenu();
+  const menu = document.createElement("div");
+  menu.className = "ctx-menu";
+  menu.setAttribute("role", "menu");
+  menu.innerHTML = `
+    <div class="ctx-menu-head">
+      <strong>${symbol}</strong>
+      <small>Quick actions</small>
+    </div>
+    <button class="ctx-menu-item" data-ctx-action="chart" type="button"><span>📈</span> Open chart <kbd>F2</kbd></button>
+    <button class="ctx-menu-item" data-ctx-action="quote" type="button"><span>💹</span> View quote <kbd>F1</kbd></button>
+    <button class="ctx-menu-item" data-ctx-action="news" type="button"><span>📰</span> News for ${symbol}</button>
+    <button class="ctx-menu-item" data-ctx-action="options" type="button"><span>⚙️</span> Options chain <kbd>F4</kbd></button>
+    <div class="ctx-menu-sep"></div>
+    <button class="ctx-menu-item" data-ctx-action="alert" type="button"><span>🔔</span> Add alert</button>
+    <button class="ctx-menu-item" data-ctx-action="copy" type="button"><span>📋</span> Copy ticker</button>
+    <button class="ctx-menu-item" data-ctx-action="open-tradingview" type="button"><span>🔗</span> Open in TradingView</button>
+    <div class="ctx-menu-sep"></div>
+    <button class="ctx-menu-item ctx-menu-danger" data-ctx-action="remove" type="button"><span>🗑</span> Remove from watchlist</button>
+  `;
+
+  // Position offscreen, then measure and clamp to viewport
+  menu.style.position = "fixed";
+  menu.style.left = "-9999px";
+  menu.style.top = "-9999px";
+  menu.style.zIndex = "10000";
+  document.body.appendChild(menu);
+
+  const rect = menu.getBoundingClientRect();
+  const margin = 8;
+  const px = Math.min(Math.max(margin, x), window.innerWidth - rect.width - margin);
+  const py = Math.min(Math.max(margin, y), window.innerHeight - rect.height - margin);
+  menu.style.left = `${px}px`;
+  menu.style.top = `${py}px`;
+
+  _ctxMenuEl = menu;
+
+  // Wire up actions
+  menu.addEventListener("click", (event) => {
+    const btn = event.target.closest("[data-ctx-action]");
+    if (!btn) return;
+    const action = btn.dataset.ctxAction;
+    closeContextMenu();
+    handleSymbolContextAction(action, symbol);
+  });
+
+  // Close on outside click / Escape
+  setTimeout(() => {
+    const close = () => {
+      closeContextMenu();
+      document.removeEventListener("click", outside, true);
+      document.removeEventListener("keydown", onKey, true);
+    };
+    const outside = (e) => {
+      if (!menu.contains(e.target)) close();
+    };
+    const onKey = (e) => {
+      if (e.key === "Escape") close();
+    };
+    document.addEventListener("click", outside, true);
+    document.addEventListener("keydown", onKey, true);
+  }, 0);
+}
+
+function handleSymbolContextAction(action, symbol) {
+  const targetPanel = state.activePanel || 1;
+  switch (action) {
+    case "chart":
+      state.panelSymbols[targetPanel] = symbol;
+      loadModule("chart", targetPanel);
+      break;
+    case "quote":
+      state.panelSymbols[targetPanel] = symbol;
+      loadModule("quote", targetPanel);
+      break;
+    case "news":
+      state.newsFilter = symbol;
+      syncUiCache?.();
+      loadModule("news", targetPanel);
+      break;
+    case "options":
+      state.panelSymbols[targetPanel] = symbol;
+      loadModule("options", targetPanel);
+      break;
+    case "alert": {
+      const quote = buildQuote?.(symbol);
+      const seedPrice = quote?.price ? Math.round(Number(quote.price) * 1.05 * 100) / 100 : 100;
+      const raw = window.prompt(`Alert when ${symbol} crosses (e.g. >= ${seedPrice}):`, `>= ${seedPrice}`);
+      if (raw) {
+        const cmd = `ALERT ${symbol} ${raw}`;
+        const input = el?.commandInput;
+        if (input) {
+          input.value = cmd;
+          input.form?.requestSubmit?.() || input.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+        }
+      }
+      break;
+    }
+    case "copy":
+      try {
+        navigator.clipboard?.writeText(symbol);
+        showToast?.(`Copied ${symbol} to clipboard.`, "success", 1500);
+      } catch {
+        showToast?.(`Could not copy ${symbol}.`, "error", 1500);
+      }
+      break;
+    case "open-tradingview":
+      window.open(`https://www.tradingview.com/symbols/${encodeURIComponent(symbol)}/`, "_blank", "noopener");
+      break;
+    case "remove":
+      removeFromWatchlist?.(symbol);
+      showToast?.(`${symbol} removed from watchlist.`, "neutral", 1500);
+      break;
+  }
 }
 
 function setActivePanel(panel) {
@@ -3958,13 +4322,27 @@ function ensureShortcutsOverlay() {
       <div class="shortcuts-grid">
         <div class="shortcut-section">
           <h4>⌨ Navigation</h4>
+          <div class="shortcut-row"><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd><kbd>4</kbd><span>Jump to panel 1 to 4</span></div>
           <div class="shortcut-row"><kbd>Tab</kbd><span>Cycle active panel</span></div>
           <div class="shortcut-row"><kbd>F</kbd><span>Focus current panel (fullscreen)</span></div>
           <div class="shortcut-row"><kbd>G</kbd><span>Return to grid view</span></div>
+          <div class="shortcut-row"><kbd>T</kbd><span>Cycle themes</span></div>
           <div class="shortcut-row"><kbd>/</kbd><span>Open command palette</span></div>
           <div class="shortcut-row"><kbd>⌘K</kbd><span>Open command palette</span></div>
           <div class="shortcut-row"><kbd>?</kbd><span>This reference overlay</span></div>
           <div class="shortcut-row"><kbd>Esc</kbd><span>Close any overlay / modal</span></div>
+        </div>
+        <div class="shortcut-section">
+          <h4>⏯ Chart Replay</h4>
+          <div class="shortcut-row"><kbd>Space</kbd><span>Play / pause replay</span></div>
+          <div class="shortcut-row"><kbd>←</kbd><kbd>→</kbd><span>Step one candle (Shift = 10)</span></div>
+          <div class="shortcut-row"><kbd>R</kbd><span>Reset to live data</span></div>
+        </div>
+        <div class="shortcut-section">
+          <h4>🖱 Mouse</h4>
+          <div class="shortcut-row"><span>Drag handle</span><kbd>⋮⋮</kbd></div>
+          <div class="shortcut-row"><span>Reorder watchlist</span><span style="color:var(--muted);font-size:0.74rem">drag rows up / down</span></div>
+          <div class="shortcut-row"><span>Right-click symbol</span><span style="color:var(--muted);font-size:0.74rem">quick actions menu</span></div>
         </div>
         <div class="shortcut-section">
           <h4>📺 Module Keys</h4>

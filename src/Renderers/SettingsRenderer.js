@@ -180,6 +180,26 @@ export function createSettingsRenderer(context) {
           </section>
 
           <section class="settings-section">
+            <h3 class="settings-section-title">Workspace Backup</h3>
+            <div class="settings-pref-list">
+              <div class="settings-pref-row settings-pref-action">
+                <div>
+                  <strong>Export workspace</strong>
+                  <small>Download a JSON snapshot of watchlist, rules, alerts, positions, and panel layout</small>
+                </div>
+                <button class="btn btn-sm btn-ghost" data-settings-action="export-workspace">Download .json</button>
+              </div>
+              <div class="settings-pref-row settings-pref-action">
+                <div>
+                  <strong>Import workspace</strong>
+                  <small>Restore from a previously exported Meridian workspace JSON file</small>
+                </div>
+                <button class="btn btn-sm btn-ghost" data-settings-action="import-workspace">Import file</button>
+              </div>
+            </div>
+          </section>
+
+          <section class="settings-section">
             <h3 class="settings-section-title">Data &amp; Privacy</h3>
             <div class="settings-pref-list">
               <div class="settings-pref-row settings-pref-action">

@@ -1388,6 +1388,12 @@ function bindEvents() {
           setTimeout(() => window.location.reload(), 800);
         }
         break;
+      case "export-workspace":
+        exportWorkspaceJson();
+        break;
+      case "import-workspace":
+        importWorkspaceJson();
+        break;
       default:
         break;
     }
@@ -3363,6 +3369,60 @@ function handleDocumentClick(event) {
     return;
   }
 
+  // Pin/unpin a rule (sticks to top of list)
+  const pinRuleBtn = event.target.closest("[data-pin-rule]");
+  if (pinRuleBtn) {
+    const ruleId = pinRuleBtn.dataset.pinRule;
+    state.activeRules = state.activeRules.map((rule) =>
+      rule.id === ruleId ? { ...rule, pinned: !rule.pinned } : rule
+    );
+    queueWorkspaceSave();
+    renderAllPanels();
+    return;
+  }
+
+  // Quick Rule Builder: toggle form
+  const ruleBuilderToggle = event.target.closest("[data-rule-builder-toggle]");
+  if (ruleBuilderToggle) {
+    const form = document.querySelector("[data-rule-builder-form]");
+    if (form) {
+      form.hidden = !form.hidden;
+      if (!form.hidden) {
+        form.querySelector("[data-rule-builder-symbol]")?.focus();
+      }
+    }
+    return;
+  }
+
+  const ruleBuilderCancel = event.target.closest("[data-rule-builder-cancel]");
+  if (ruleBuilderCancel) {
+    const form = document.querySelector("[data-rule-builder-form]");
+    if (form) form.hidden = true;
+    return;
+  }
+
+  const ruleBuilderSubmit = event.target.closest("[data-rule-builder-submit]");
+  if (ruleBuilderSubmit) {
+    const cmd = _buildRuleCommandFromForm();
+    if (!cmd) {
+      showToast("Please fill in symbol, operator, value, and message.", "error");
+      return;
+    }
+    appCore?.dispatchRawCommand(cmd);
+    const form = document.querySelector("[data-rule-builder-form]");
+    if (form) {
+      form.hidden = true;
+      // Clear inputs
+      form.querySelectorAll("input, select").forEach((el) => {
+        if (el.tagName === "INPUT") el.value = "";
+        if (el.tagName === "SELECT") el.selectedIndex = 0;
+      });
+    }
+    showToast("Rule created. Watch for triggers below.", "success");
+    renderAllPanels();
+    return;
+  }
+
   // Delete a single alert by symbol:operator:threshold key
   const removeAlertBtn = event.target.closest("[data-remove-alert]");
   if (removeAlertBtn) {
@@ -3429,19 +3489,6 @@ function handleDocumentClick(event) {
     return;
   }
 
-  // Chart replay slider: scrub through historical data
-  const replaySlider = event.target.closest("[data-chart-replay-slider]");
-  if (replaySlider) {
-    const panel = Number(replaySlider.dataset.chartReplaySlider);
-    const index = Number(replaySlider.value);
-    state.chartReplayIndex = state.chartReplayIndex || {};
-    state.chartReplayIndex[panel] = index;
-    state.chartReplayIsPlaying = state.chartReplayIsPlaying || {};
-    state.chartReplayIsPlaying[panel] = false; // Pause on manual scrub
-    renderPanel(panel);
-    return;
-  }
-
   // Chart replay play/pause button
   const replayToggle = event.target.closest("[data-chart-replay-toggle]");
   if (replayToggle) {
@@ -3450,7 +3497,18 @@ function handleDocumentClick(event) {
     const isCurrentlyPlaying = state.chartReplayIsPlaying[panel];
     state.chartReplayIsPlaying[panel] = !isCurrentlyPlaying;
     replayToggle.textContent = state.chartReplayIsPlaying[panel] ? "⏸ Pause" : "▶ Play";
+    replayToggle.classList.toggle("is-playing", state.chartReplayIsPlaying[panel]);
     if (state.chartReplayIsPlaying[panel]) {
+      // If at the end, rewind to the start before playing
+      const symbol = state.panelSymbols[panel] || "AAPL";
+      const range = state.chartRanges[panel] || "1mo";
+      const interval = chartIntervalForRange(range);
+      const cacheKey = chartKey(symbol, range, interval);
+      const points = state.chartCache.get(cacheKey) || [];
+      if (state.chartReplayIndex?.[panel] >= points.length - 1) {
+        state.chartReplayIndex = state.chartReplayIndex || {};
+        state.chartReplayIndex[panel] = 0;
+      }
       animateChartReplay(panel);
     }
     return;
@@ -3684,6 +3742,46 @@ function handleDocumentClick(event) {
 }
 
 function handleDocumentInput(event) {
+  // Rule Builder live preview
+  if (event.target.closest("[data-rule-builder-form]")) {
+    _updateRuleBuilderPreview();
+  }
+
+  // Chart replay slider: scrub through historical data (fires during drag)
+  const replaySlider = event.target.closest("[data-chart-replay-slider]");
+  if (replaySlider) {
+    const panel = Number(replaySlider.dataset.chartReplaySlider);
+    const index = Number(replaySlider.value);
+    state.chartReplayIndex = state.chartReplayIndex || {};
+    state.chartReplayIndex[panel] = index;
+    state.chartReplayIsPlaying = state.chartReplayIsPlaying || {};
+    if (state.chartReplayIsPlaying[panel]) {
+      state.chartReplayIsPlaying[panel] = false; // Pause on manual scrub
+      const toggle = document.querySelector(`[data-chart-replay-toggle="${panel}"]`);
+      if (toggle) {
+        toggle.textContent = "▶ Play";
+        toggle.classList.remove("is-playing");
+      }
+    }
+    // Update label without full re-render for smooth scrubbing
+    const symbol = state.panelSymbols[panel] || "AAPL";
+    const range = state.chartRanges[panel] || "1mo";
+    const interval = chartIntervalForRange(range);
+    const cacheKey = chartKey(symbol, range, interval);
+    const points = state.chartCache.get(cacheKey) || [];
+    const label = document.querySelector(`[data-chart-replay-label="${panel}"]`);
+    if (label && points[index]) {
+      label.textContent = new Date(points[index].timestamp || points[index].time || Date.now()).toLocaleDateString();
+    }
+    // Update chart series directly (faster than full panel re-render)
+    const chartView = chartViews?.get?.(panel);
+    if (chartView?.series) {
+      const filteredCandles = toCandlestickData(points.slice(0, index + 1));
+      chartView.series.setData(filteredCandles);
+    }
+    return;
+  }
+
   const screenerSearch = event.target.closest("[data-screener-search]");
   if (screenerSearch) {
     state.screenerFilters[Number(screenerSearch.dataset.screenerSearch)].search = screenerSearch.value;
@@ -3976,6 +4074,35 @@ function handleGlobalHotkeys(event) {
   }
 
   if (inEditable && event.key !== "Escape") return;
+
+  // Bar Replay keyboard shortcuts (only fire when active panel is a chart)
+  const activePanel = state.activePanel;
+  const activeModule = activePanel ? state.panelModules?.[activePanel] : null;
+  if (activeModule === "chart" && !cmdOrCtrl) {
+    // Space: toggle play/pause
+    if (event.key === " " || event.code === "Space") {
+      const toggleBtn = document.querySelector(`[data-chart-replay-toggle="${activePanel}"]`);
+      if (toggleBtn) {
+        event.preventDefault();
+        toggleBtn.click();
+        return;
+      }
+    }
+    // Left/Right: scrub one candle at a time (Shift = 10 candles)
+    if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+      const slider = document.querySelector(`[data-chart-replay-slider="${activePanel}"]`);
+      if (slider) {
+        event.preventDefault();
+        const step = event.shiftKey ? 10 : 1;
+        const direction = event.key === "ArrowRight" ? 1 : -1;
+        const nextValue = Math.max(0, Math.min(Number(slider.max), Number(slider.value) + direction * step));
+        slider.value = nextValue;
+        // handleDocumentInput will pick up the input event and update everything
+        slider.dispatchEvent(new Event("input", { bubbles: true }));
+        return;
+      }
+    }
+  }
 
   const hotkeys = {
     F1: "briefing",
@@ -4948,6 +5075,130 @@ function normalizeCandle(point, previousClose = null) {
     low,
     close,
   };
+}
+
+function exportWorkspaceJson() {
+  try {
+    const payload = {
+      _meta: {
+        app: "Meridian Market Terminal",
+        format: "meridian.workspace",
+        version: 1,
+        exportedAt: new Date().toISOString(),
+      },
+      watchlist: state.watchlist || [],
+      activeRules: state.activeRules || [],
+      alerts: state.alerts || [],
+      positions: state.positions || [],
+      panelSymbols: state.panelSymbols || {},
+      panelModules: state.panelModules || {},
+      chartRanges: state.chartRanges || {},
+      chartIndicators: state.chartIndicators || {},
+      compactMode: Boolean(state.compactMode),
+      theme: state.theme || null,
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `meridian-workspace-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    showToast("Workspace exported. Save the .json file somewhere safe.", "success");
+  } catch (err) {
+    console.warn("[Meridian] export workspace:", err);
+    showToast("Export failed. Open dev console for details.", "error");
+  }
+}
+
+function importWorkspaceJson() {
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = "application/json,.json";
+  input.style.display = "none";
+  input.addEventListener("change", async () => {
+    const file = input.files?.[0];
+    input.remove();
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const data = JSON.parse(text);
+      if (!data || data._meta?.format !== "meridian.workspace") {
+        showToast("File doesn't look like a Meridian workspace export.", "error");
+        return;
+      }
+      if (!confirm("Replace your current workspace with the imported one? Your existing watchlist, rules, alerts, and positions will be overwritten.")) {
+        return;
+      }
+      // Apply imported state - guard each field defensively
+      if (Array.isArray(data.watchlist)) state.watchlist = [...data.watchlist];
+      if (Array.isArray(data.activeRules)) state.activeRules = structuredClone(data.activeRules);
+      if (Array.isArray(data.alerts)) state.alerts = structuredClone(data.alerts);
+      if (Array.isArray(data.positions)) state.positions = structuredClone(data.positions);
+      if (data.panelSymbols && typeof data.panelSymbols === "object") {
+        state.panelSymbols = { ...state.panelSymbols, ...data.panelSymbols };
+      }
+      if (data.panelModules && typeof data.panelModules === "object") {
+        state.panelModules = { ...state.panelModules, ...data.panelModules };
+      }
+      if (data.chartRanges && typeof data.chartRanges === "object") {
+        state.chartRanges = { ...state.chartRanges, ...data.chartRanges };
+      }
+      if (data.chartIndicators && typeof data.chartIndicators === "object") {
+        state.chartIndicators = { ...state.chartIndicators, ...data.chartIndicators };
+      }
+      if (typeof data.compactMode === "boolean") state.compactMode = data.compactMode;
+      queueWorkspaceSave();
+      syncUiCache();
+      renderRails();
+      renderAllPanels();
+      showToast("Workspace imported successfully.", "success");
+    } catch (err) {
+      console.warn("[Meridian] import workspace:", err);
+      showToast("Import failed: invalid JSON or unreadable file.", "error");
+    }
+  });
+  document.body.appendChild(input);
+  input.click();
+}
+
+function _buildRuleCommandFromForm() {
+  const form = document.querySelector("[data-rule-builder-form]");
+  if (!form) return null;
+  const symbol = form.querySelector("[data-rule-builder-symbol]")?.value?.trim();
+  const op = form.querySelector("[data-rule-builder-op]")?.value?.trim();
+  const value = form.querySelector("[data-rule-builder-value]")?.value?.trim();
+  const indicator = form.querySelector("[data-rule-builder-indicator]")?.value?.trim();
+  const indicatorOp = form.querySelector("[data-rule-builder-indicator-op]")?.value?.trim();
+  const indicatorValue = form.querySelector("[data-rule-builder-indicator-value]")?.value?.trim();
+  const msg = form.querySelector("[data-rule-builder-msg]")?.value?.trim();
+  if (!symbol || !op || !value || !msg) return null;
+  let cmd = `IF ${symbol} ${op} ${value}`;
+  if (indicator && indicatorOp && indicatorValue) {
+    cmd += ` AND ${indicator} ${indicatorOp} ${indicatorValue}`;
+  }
+  cmd += ` THEN ${msg}`;
+  return cmd;
+}
+
+function _updateRuleBuilderPreview() {
+  const preview = document.querySelector("[data-rule-builder-preview]");
+  if (!preview) return;
+  const form = document.querySelector("[data-rule-builder-form]");
+  if (!form) return;
+  const symbol = form.querySelector("[data-rule-builder-symbol]")?.value || "AAPL";
+  const op = form.querySelector("[data-rule-builder-op]")?.value || ">";
+  const value = form.querySelector("[data-rule-builder-value]")?.value || "0";
+  const indicator = form.querySelector("[data-rule-builder-indicator]")?.value || "";
+  const indicatorOp = form.querySelector("[data-rule-builder-indicator-op]")?.value || ">";
+  const indicatorValue = form.querySelector("[data-rule-builder-indicator-value]")?.value || "";
+  const msg = form.querySelector("[data-rule-builder-msg]")?.value || "...";
+  let cmd = `IF ${symbol} ${op} ${value}`;
+  if (indicator && indicatorValue) cmd += ` AND ${indicator} ${indicatorOp} ${indicatorValue}`;
+  cmd += ` THEN ${msg}`;
+  preview.textContent = cmd;
 }
 
 function toCandlestickData(points) {

@@ -82,11 +82,13 @@ export function createChartRenderer(context) {
             ${indicatorToggle("macd", "MACD")}
             ${indicatorToggle("volume", "Volume")}
           </div>
-          <div class="chart-replay-controls" style="display: ${points.length > 0 ? 'flex' : 'none'}; gap: 0.75rem; align-items: center; padding: 0.75rem; background: var(--surface-muted); border-radius: 4px; margin-bottom: 0.75rem;">
-            <button class="btn btn-ghost btn-sm chart-replay-toggle" type="button" data-chart-replay-toggle="${panel}" title="Play/pause timeline replay">▶ Play</button>
-            <input type="range" class="chart-replay-slider" data-chart-replay-slider="${panel}" min="0" max="${Math.max(0, points.length - 1)}" value="${Math.max(0, points.length - 1)}" style="flex: 1; cursor: pointer;" title="Scrub through chart history">
-            <span class="chart-replay-label" data-chart-replay-label="${panel}" style="min-width: 140px; text-align: right; font-size: 0.85rem; color: var(--text-muted);">${points.length ? new Date(points[Math.max(0, points.length - 1)]?.timestamp || Date.now()).toLocaleDateString() : "--"}</span>
-          </div>
+          ${points.length > 0 ? `
+          <div class="chart-replay-controls" data-chart-replay-panel="${panel}">
+            <button class="chart-replay-toggle" type="button" data-chart-replay-toggle="${panel}" title="Play/pause replay (Space)">▶ Play</button>
+            <input type="range" class="chart-replay-slider" data-chart-replay-slider="${panel}" min="0" max="${Math.max(0, points.length - 1)}" value="${(state.chartReplayIndex && state.chartReplayIndex[panel] != null) ? state.chartReplayIndex[panel] : Math.max(0, points.length - 1)}" title="Scrub history (← →)">
+            <span class="chart-replay-label" data-chart-replay-label="${panel}">${new Date(points[Math.max(0, points.length - 1)]?.timestamp || Date.now()).toLocaleDateString()}</span>
+            <span class="chart-replay-hint">Space · ← →</span>
+          </div>` : ""}
           <div class="chart-canvas-wrap">
             <div class="chart-canvas" id="chartCanvas${panel}" data-chart-panel="${panel}"></div>
             ${chartUnavailable ? `<div class="chart-loading chart-fallback">${loadingSkeleton(4)}<p class="empty-inline">Offline: ${symbol} chart feed unavailable. Last requested window ${range.toUpperCase()}.</p></div>` : ""}

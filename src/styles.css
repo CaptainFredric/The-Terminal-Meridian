@@ -1944,6 +1944,280 @@ html {
   gap: 5px;
 }
 
+/* Chart Bar Replay Controls (Phase 1 feature parity with TradingView) */
+.chart-replay-controls {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  padding: 0.6rem 0.85rem;
+  background: linear-gradient(180deg, rgba(20, 32, 56, 0.55) 0%, rgba(14, 22, 40, 0.65) 100%);
+  border: 1px solid var(--border, #1e2d4a);
+  border-radius: 6px;
+  margin: 0 0.5rem 0.6rem;
+  position: relative;
+  font-family: var(--mono);
+}
+.chart-replay-controls::before {
+  content: "REPLAY";
+  position: absolute;
+  top: -7px;
+  left: 12px;
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--muted);
+  background: var(--bg, #0d1525);
+  padding: 0 6px;
+}
+.chart-replay-toggle {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  min-width: 88px;
+  border: 1px solid var(--border, #1e2d4a);
+  background: rgba(47, 207, 132, 0.08);
+  color: var(--accent, #2fcf84);
+  border-radius: 4px;
+  padding: 6px 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.chart-replay-toggle:hover {
+  background: rgba(47, 207, 132, 0.18);
+  border-color: var(--accent, #2fcf84);
+  transform: translateY(-1px);
+}
+.chart-replay-toggle:active {
+  transform: translateY(0);
+}
+.chart-replay-toggle.is-playing {
+  background: rgba(255, 167, 38, 0.12);
+  border-color: rgba(255, 167, 38, 0.6);
+  color: rgb(255, 167, 38);
+}
+.chart-replay-slider {
+  flex: 1;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+  height: 6px;
+  background: var(--border, #1e2d4a);
+  border-radius: 3px;
+  outline: none;
+}
+.chart-replay-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--accent, #2fcf84);
+  cursor: pointer;
+  border: 2px solid var(--bg, #0d1525);
+  box-shadow: 0 0 0 1px var(--accent, #2fcf84), 0 2px 6px rgba(47, 207, 132, 0.4);
+  transition: transform 0.15s;
+}
+.chart-replay-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+}
+.chart-replay-slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--accent, #2fcf84);
+  cursor: pointer;
+  border: 2px solid var(--bg, #0d1525);
+  box-shadow: 0 0 0 1px var(--accent, #2fcf84);
+}
+.chart-replay-label {
+  min-width: 130px;
+  text-align: right;
+  font-size: 0.78rem;
+  color: var(--text, #e8f0fe);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  padding: 4px 8px;
+  background: rgba(0, 0, 0, 0.25);
+  border-radius: 3px;
+  border: 1px solid var(--border, #1e2d4a);
+}
+.chart-replay-hint {
+  font-size: 0.65rem;
+  color: var(--muted);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+@media (max-width: 720px) {
+  .chart-replay-controls {
+    flex-wrap: wrap;
+  }
+  .chart-replay-label {
+    min-width: 0;
+    flex: 1;
+  }
+  .chart-replay-hint { display: none; }
+}
+
+/* Compound condition rule rows (Phase 2: multi-condition alerts) */
+.rule-condition-text {
+  font-family: var(--mono);
+  font-size: 0.92rem;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+.rule-watchlist-badge {
+  display: inline-block;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  padding: 2px 6px;
+  margin-left: 6px;
+  border-radius: 3px;
+  background: rgba(111, 143, 255, 0.18);
+  color: rgb(155, 175, 255);
+  border: 1px solid rgba(111, 143, 255, 0.35);
+  text-transform: uppercase;
+  vertical-align: middle;
+}
+
+/* ── Quick Rule Builder (visual form for IF/THEN rules) ────────────────── */
+.rules-head-left { display: flex; flex-direction: column; gap: 2px; }
+.rule-builder-panel {
+  background: rgba(13, 21, 37, 0.72);
+  border: 1px solid var(--border, #1e2d4a);
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin: 0 12px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  animation: rule-builder-slide-in 0.15s ease-out;
+}
+@keyframes rule-builder-slide-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.rule-builder-grid {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr 1fr;
+  gap: 10px;
+  align-items: end;
+}
+@media (max-width: 720px) {
+  .rule-builder-grid { grid-template-columns: 1fr; }
+}
+.rule-builder-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.rule-builder-label {
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted, #7b91b5);
+}
+.rule-builder-input {
+  font-family: var(--mono);
+  font-size: 0.85rem;
+  padding: 7px 10px;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--border, #1e2d4a);
+  border-radius: 4px;
+  color: var(--text, #e8f0fe);
+  outline: none;
+  transition: border-color 0.15s, background 0.15s;
+}
+.rule-builder-input:focus {
+  border-color: var(--accent, #2fcf84);
+  background: rgba(47, 207, 132, 0.06);
+}
+.rule-builder-msg .rule-builder-input { width: 100%; }
+.rule-builder-and summary {
+  font-size: 0.72rem;
+  color: var(--muted, #7b91b5);
+  cursor: pointer;
+  padding: 6px 0;
+  letter-spacing: 0.04em;
+  user-select: none;
+}
+.rule-builder-and summary:hover { color: var(--accent, #2fcf84); }
+.rule-builder-and[open] summary { color: var(--text, #e8f0fe); }
+.rule-builder-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  padding-top: 4px;
+  border-top: 1px solid rgba(30, 45, 74, 0.5);
+}
+.rule-builder-preview {
+  flex: 1;
+  font-family: var(--mono);
+  font-size: 0.74rem;
+  color: var(--muted, #7b91b5);
+  background: rgba(0, 0, 0, 0.2);
+  padding: 5px 9px;
+  border-radius: 4px;
+  border: 1px dashed var(--border, #1e2d4a);
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+/* ── Pin/Star Rules ────────────────────────────────────────────────────── */
+.rule-pin-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--muted, #7b91b5);
+  cursor: pointer;
+  padding: 2px 5px;
+  font-size: 0.85rem;
+  border-radius: 3px;
+  transition: all 0.15s;
+  margin-right: 4px;
+}
+.rule-pin-btn:hover { color: rgb(255, 200, 60); border-color: rgba(255, 200, 60, 0.35); }
+.rule-pin-btn.is-pinned {
+  color: rgb(255, 200, 60);
+  background: rgba(255, 200, 60, 0.08);
+}
+.rule-live-row.is-pinned {
+  border-left: 3px solid rgb(255, 200, 60);
+  background: linear-gradient(90deg, rgba(255, 200, 60, 0.04) 0%, transparent 30%);
+}
+
+/* ── Workspace Export/Import buttons ──────────────────────────────────── */
+.workspace-io-bar {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.workspace-io-btn {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  background: transparent;
+  border: 1px solid var(--border, #1e2d4a);
+  color: var(--muted, #7b91b5);
+  padding: 5px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.workspace-io-btn:hover {
+  border-color: var(--accent, #2fcf84);
+  color: var(--accent, #2fcf84);
+}
+
 .legend-swatch {
   display: inline-block;
   width: 10px;

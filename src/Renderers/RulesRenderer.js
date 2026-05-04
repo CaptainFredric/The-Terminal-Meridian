@@ -102,6 +102,14 @@ export function createRulesRenderer(context) {
       return { ...rule, price, isMatched, distance, proximityPct, isClose, conditions, symbolsMatched };
     });
 
+    // Sort: pinned first, then matched, then close, then watching
+    rulesWithStatus.sort((a, b) => {
+      if (Boolean(a.pinned) !== Boolean(b.pinned)) return a.pinned ? -1 : 1;
+      if (a.isMatched !== b.isMatched) return a.isMatched ? -1 : 1;
+      if (a.isClose !== b.isClose) return a.isClose ? -1 : 1;
+      return 0;
+    });
+
     const matchedCount = rulesWithStatus.filter((r) => r.isMatched).length;
 
     // Alert summary
@@ -167,12 +175,77 @@ export function createRulesRenderer(context) {
         ${activeTab === "rules" ? `
           <article class="card">
             <header class="card-head card-head-split">
-              <h4>IF / THEN Rules</h4>
-              <small class="${matchedCount > 0 ? "positive" : ""}">
-                <span class="rules-live-dot"></span>
-                Evaluating live · ${matchedCount > 0 ? `${matchedCount} matched` : "none matched"}
-              </small>
+              <div class="rules-head-left">
+                <h4>IF / THEN Rules</h4>
+                <small class="${matchedCount > 0 ? "positive" : ""}">
+                  <span class="rules-live-dot"></span>
+                  Evaluating live · ${matchedCount > 0 ? `${matchedCount} matched` : "none matched"}
+                </small>
+              </div>
+              <button class="btn btn-primary btn-sm" type="button" data-rule-builder-toggle title="Open visual rule builder (no syntax required)">🛠 Build Rule</button>
             </header>
+            <div class="rule-builder-panel" data-rule-builder-form hidden>
+              <div class="rule-builder-grid">
+                <div class="rule-builder-field">
+                  <label class="rule-builder-label">When symbol</label>
+                  <select class="rule-builder-input" data-rule-builder-symbol>
+                    <option value="@WATCHLIST">★ All watchlist symbols</option>
+                    ${[...(state.watchlist || []), "SPY", "QQQ", "VIX", "BTC-USD"].filter((s, i, arr) => arr.indexOf(s) === i).map((sym) => `<option value="${sym}">${sym}</option>`).join("")}
+                  </select>
+                </div>
+                <div class="rule-builder-field">
+                  <label class="rule-builder-label">Operator</label>
+                  <select class="rule-builder-input" data-rule-builder-op>
+                    <option value=">">&gt; above</option>
+                    <option value=">=">&gt;= at or above</option>
+                    <option value="<">&lt; below</option>
+                    <option value="<=">&lt;= at or below</option>
+                    <option value="==">== equals</option>
+                  </select>
+                </div>
+                <div class="rule-builder-field">
+                  <label class="rule-builder-label">Value</label>
+                  <input class="rule-builder-input" type="number" step="any" placeholder="e.g. 250" data-rule-builder-value>
+                </div>
+              </div>
+              <details class="rule-builder-and">
+                <summary>+ Add indicator condition (optional)</summary>
+                <div class="rule-builder-grid">
+                  <div class="rule-builder-field">
+                    <label class="rule-builder-label">AND indicator</label>
+                    <select class="rule-builder-input" data-rule-builder-indicator>
+                      <option value="">none</option>
+                      <option value="RSI">RSI(14)</option>
+                      <option value="SMA20">SMA(20)</option>
+                      <option value="EMA9">EMA(9)</option>
+                      <option value="MACD">MACD</option>
+                    </select>
+                  </div>
+                  <div class="rule-builder-field">
+                    <label class="rule-builder-label">Op</label>
+                    <select class="rule-builder-input" data-rule-builder-indicator-op>
+                      <option value=">">&gt;</option>
+                      <option value=">=">&gt;=</option>
+                      <option value="<">&lt;</option>
+                      <option value="<=">&lt;=</option>
+                    </select>
+                  </div>
+                  <div class="rule-builder-field">
+                    <label class="rule-builder-label">Value</label>
+                    <input class="rule-builder-input" type="number" step="any" placeholder="e.g. 70" data-rule-builder-indicator-value>
+                  </div>
+                </div>
+              </details>
+              <div class="rule-builder-field rule-builder-msg">
+                <label class="rule-builder-label">Notification message</label>
+                <input class="rule-builder-input" type="text" placeholder="e.g. AAPL broke 250 with strong RSI" data-rule-builder-msg>
+              </div>
+              <div class="rule-builder-actions">
+                <span class="rule-builder-preview" data-rule-builder-preview>IF AAPL &gt; 0 THEN ...</span>
+                <button class="btn btn-ghost btn-sm" type="button" data-rule-builder-cancel>Cancel</button>
+                <button class="btn btn-primary btn-sm" type="button" data-rule-builder-submit>Create Rule →</button>
+              </div>
+            </div>
             ${rulesWithStatus.length
               ? `
                 <div class="rules-live-list">
@@ -197,10 +270,12 @@ export function createRulesRenderer(context) {
                     const pctLabel = rule.distance != null ? `${rule.distance > 0 ? "+" : ""}${rule.distance.toFixed(1)}%` : "--";
                     const statusClass = rule.isMatched ? "rule-status-matched" : rule.isClose ? "rule-status-close" : "rule-status-watching";
                     const statusLabel = rule.isMatched ? "✅ TRIGGERED" : rule.isClose ? "🔶 CLOSE" : "⏳ watching";
-                    const watchlistLabel = rule.applyToWatchlist ? ` <span style="font-size: 0.85rem; color: var(--text-muted);">(${rule.symbolsMatched.length}/${state.watchlist.length} matching)</span>` : "";
+                    const watchlistLabel = rule.applyToWatchlist ? ` <span class="rule-watchlist-badge">${(rule.symbolsMatched || []).length}/${(state.watchlist || []).length} match</span>` : "";
+                    const pinClass = rule.pinned ? " is-pinned" : "";
                     return `
-                      <div class="rule-live-row ${statusClass}">
+                      <div class="rule-live-row ${statusClass}${pinClass}">
                         <div class="rule-live-header">
+                          <button class="rule-pin-btn${rule.pinned ? " is-pinned" : ""}" type="button" data-pin-rule="${rule.id}" title="${rule.pinned ? "Unpin rule" : "Pin to top"}">${rule.pinned ? "★" : "☆"}</button>
                           <div class="rule-live-title">
                             <span class="rule-condition-text">${conditionText || `${rule.symbol} ${directionLabel} ${Number(rule.limit).toLocaleString()}`}${watchlistLabel}</span>
                           </div>

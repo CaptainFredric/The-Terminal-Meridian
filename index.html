@@ -263,6 +263,23 @@
       perspective: 1400px;
       perspective-origin: 50% 30%;
     }
+    /* Intro block that captions the terminal mockup. Keeps the same
+       max-width and centering as .section so the rhythm matches. */
+    .mockup-intro {
+      max-width: 760px;
+      margin: 0 auto 28px;
+      padding: 0 24px;
+      text-align: center;
+    }
+    .mockup-intro .section-title {
+      margin: 12px 0 10px;
+    }
+    .mockup-intro .section-sub {
+      margin: 0 auto;
+    }
+    @media (max-width: 720px) {
+      .mockup-intro { margin-bottom: 18px; }
+    }
 
     /* Comparison-table row stagger. Each row lifts in 60ms after the
        prior. Active only when the parent reveal-card is is-visible. */
@@ -477,9 +494,64 @@
 
     .signup-form {
       display: flex;
-      gap: 10px;
+      flex-direction: column;
+      gap: 14px;
       max-width: 480px;
       margin: 0 auto 16px;
+    }
+    .signup-row {
+      display: flex;
+      gap: 10px;
+    }
+    /* Tier picker. Behaves like a radio group but renders as three pills so
+       it stays at-a-glance scannable and a single click targets a tier. */
+    .signup-tier-group {
+      border: 0;
+      padding: 0;
+      margin: 0;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    .signup-tier-legend {
+      color: var(--text-faint);
+      font-size: 12px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      margin-right: 6px;
+    }
+    .signup-tier-opt {
+      position: relative;
+      cursor: pointer;
+    }
+    .signup-tier-opt input {
+      position: absolute;
+      opacity: 0;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      cursor: pointer;
+    }
+    .signup-tier-opt span {
+      display: inline-block;
+      padding: 6px 14px;
+      border-radius: 999px;
+      border: 1px solid var(--border-card);
+      background: rgba(15,17,23,0.55);
+      color: var(--text-muted);
+      font-size: 13px;
+      font-weight: 600;
+      transition: border-color 140ms, color 140ms, background 140ms;
+    }
+    .signup-tier-opt input:checked + span {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: rgba(47,207,132,0.10);
+    }
+    .signup-tier-opt input:focus-visible + span {
+      box-shadow: 0 0 0 3px rgba(47,207,132,0.22);
     }
     .signup-form input[type="email"] {
       flex: 1;
@@ -519,7 +591,7 @@
     .signup-success.is-shown { display: inline-flex; }
 
     @media (max-width: 540px) {
-      .signup-form { flex-direction: column; }
+      .signup-row { flex-direction: column; }
       .signup-form .btn { width: 100%; }
       .signup-card { padding: 36px 22px; }
     }
@@ -1236,9 +1308,40 @@
     .price-tagline {
       font-size: 14px;
       color: var(--text-muted);
-      margin-bottom: 28px;
-      padding-bottom: 24px;
+      margin-bottom: 14px;
+    }
+
+    /* Annual-billing strip — a small reassurance block that sits between the
+       monthly price and the feature list. Gives the eye an obvious anchor for
+       the discount and avoids the buried "$X.XX/mo billed annually" footnote. */
+    .price-annual {
+      display: flex;
+      align-items: baseline;
+      flex-wrap: wrap;
+      gap: 6px 10px;
+      margin-bottom: 22px;
+      padding-bottom: 20px;
       border-bottom: 1px solid var(--border);
+      font-size: 13px;
+    }
+    .price-annual-amt {
+      color: var(--text-primary, var(--text));
+      font-weight: 700;
+    }
+    .price-annual-meta {
+      color: var(--text-faint);
+    }
+    .price-annual-save {
+      margin-left: auto;
+      color: var(--accent);
+      background: rgba(47, 207, 132, 0.10);
+      border: 1px solid rgba(47, 207, 132, 0.35);
+      border-radius: 999px;
+      padding: 2px 10px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      font-size: 11.5px;
+      text-transform: uppercase;
     }
 
     .price-features {
@@ -1776,6 +1879,14 @@
 </section>
 
 <!-- ── TERMINAL MOCKUP ────────────────────────────────────────────── -->
+<div class="mockup-intro">
+  <div class="section-eyebrow">A peek inside</div>
+  <h2 class="section-title">Four panels. One keyboard. Zero noise.</h2>
+  <p class="section-sub">
+    Drop a ticker in any panel, swap modules with F1 to F10, and let the AI talk you
+    through what just happened. This is the workspace, no screenshot trickery.
+  </p>
+</div>
 <div class="mockup-wrap">
   <div class="terminal-mock">
     <div class="mock-topbar">
@@ -1958,26 +2069,22 @@
     <div class="persona hover-lift">
       <div class="persona-icon">📈</div>
       <h3>The Active Trader</h3>
-      <p>Real-time quotes, options chains with full Greeks, custom alerts on price,
-        RSI, and volume. Built for swing setups and day-trade triage.</p>
+      <p>Live quotes, full Greek options chains, alerts on price, RSI, and volume. Built for swing setups and day-trade triage.</p>
     </div>
     <div class="persona hover-lift">
       <div class="persona-icon">🎓</div>
       <h3>The Finance Student</h3>
-      <p>Practice with paper accounts. Learn from AI commentary on real tickers.
-        The free tier covers an entire investments course without spending a cent.</p>
+      <p>Paper-trade real tickers. Learn from AI commentary on live moves. The free tier covers a full investments course at zero cost.</p>
     </div>
     <div class="persona hover-lift">
       <div class="persona-icon">💼</div>
       <h3>The Independent RIA</h3>
-      <p>Manage client watchlists, run sector heatmaps, generate AI briefings for
-        end-of-week notes. Pay for the data you actually use, not a per-seat license.</p>
+      <p>Track client watchlists, run sector heatmaps, ship AI briefings every Friday. Pay for the data you actually use.</p>
     </div>
     <div class="persona hover-lift">
       <div class="persona-icon">🔬</div>
       <h3>The Analyst &amp; Writer</h3>
-      <p>Newsletter writers, podcasters, independent researchers. Pull AI-summarized
-        fundamentals on demand. Share screenshots that actually look professional.</p>
+      <p>For newsletter writers, podcasters, and independent researchers. AI-summarized fundamentals on demand. Screenshots that look professional.</p>
     </div>
   </div>
 </section>
@@ -1997,6 +2104,11 @@
       <div class="price-tier">Free</div>
       <div class="price-amount">$0 <span>/ forever</span></div>
       <p class="price-tagline">A real terminal, not a watered-down demo.</p>
+      <div class="price-annual">
+        <span class="price-annual-amt">No card</span>
+        <span class="price-annual-meta">no time limit</span>
+        <span class="price-annual-save">free forever</span>
+      </div>
       <ul class="price-features">
         <li><span class="check">✓</span> Quotes with 15-min delay</li>
         <li><span class="check">✓</span> Watchlist up to 10 symbols</li>
@@ -2018,7 +2130,12 @@
       <div class="price-badge">Most popular</div>
       <div class="price-tier">Pro</div>
       <div class="price-amount">$7.99 <span>/ mo</span></div>
-      <p class="price-tagline">Everything you need to trade with conviction. <span style="color:var(--accent); font-size:12px;">$5.99/mo billed annually</span></p>
+      <p class="price-tagline">Everything you need to trade with conviction.</p>
+      <div class="price-annual">
+        <span class="price-annual-amt">$5.99 / mo</span>
+        <span class="price-annual-meta">billed annually</span>
+        <span class="price-annual-save">save $24/yr</span>
+      </div>
       <ul class="price-features">
         <li><span class="check">✓</span> Everything in Free</li>
         <li><span class="plus">+</span> <strong>Real-time quotes (live)</strong></li>
@@ -2030,7 +2147,7 @@
         <li><span class="check">✓</span> Full news + sentiment</li>
       </ul>
       <div class="price-cta">
-        <a href="#get-early-access" class="btn btn-primary btn-block">Get Pro early access →</a>
+        <a href="#get-early-access" data-tier="pro" class="btn btn-primary btn-block">Join the Pro waitlist →</a>
       </div>
     </div>
 
@@ -2038,7 +2155,12 @@
     <div class="price-card hover-lift">
       <div class="price-tier">Pro+</div>
       <div class="price-amount">$14.99 <span>/ mo</span></div>
-      <p class="price-tagline">For power users, teams, and builders. <span style="color:var(--accent); font-size:12px;">$11.99/mo billed annually</span></p>
+      <p class="price-tagline">For power users, teams, and builders.</p>
+      <div class="price-annual">
+        <span class="price-annual-amt">$11.99 / mo</span>
+        <span class="price-annual-meta">billed annually</span>
+        <span class="price-annual-save">save $36/yr</span>
+      </div>
       <ul class="price-features">
         <li><span class="check">✓</span> Everything in Pro</li>
         <li><span class="plus">+</span> Multi-account portfolios</li>
@@ -2051,7 +2173,7 @@
         <li><span class="check">✓</span> White-label option</li>
       </ul>
       <div class="price-cta">
-        <a href="#get-early-access" class="btn btn-outline btn-block">Get Pro+ early access →</a>
+        <a href="#get-early-access" data-tier="proplus" class="btn btn-outline btn-block">Join the Pro+ waitlist →</a>
       </div>
     </div>
   </div>
@@ -2110,10 +2232,11 @@
     </details>
 
     <details class="faq-item">
-      <summary>Why is it free?</summary>
-      <p>The free tier is genuinely free, forever. Pro and Pro+ subscriptions cover
-        the live data feeds and AI tokens. We don't sell your data, run ads, or
-        rent your watchlist to anyone.</p>
+      <summary>If the free tier is free, what's the catch?</summary>
+      <p>No catch. Pro and Pro+ subscriptions pay for the live feeds and AI tokens that
+        free users cost us. We don't sell data, run ads, or rent watchlists. The
+        whole stack is open source (MIT) on GitHub, so you can verify the data
+        flow yourself. Email is only used for login and account notifications.</p>
     </details>
 
     <details class="faq-item">
@@ -2132,10 +2255,10 @@
 <section class="signup-wrap" id="get-early-access">
   <div class="signup-card">
     <div class="section-eyebrow">Early Access</div>
-    <h2 class="section-title">Be first in line for Pro.</h2>
-    <p class="section-sub">
-      Drop your email and we'll send you a launch-week trial code the moment Pro
-      goes live. One email when it's ready. No spam, ever.
+    <h2 class="section-title" id="signupHeading">Get the launch discount.</h2>
+    <p class="section-sub" id="signupSub">
+      Pick a tier below and drop your email. You'll get a launch-week code worth
+      one month free the moment Pro goes live. One email when it's ready, no spam.
     </p>
 
     <!--
@@ -2150,15 +2273,36 @@
       action="https://formsubmit.co/captainarmoreddude@gmail.com"
       method="POST"
     >
-      <input
-        type="email"
-        name="email"
-        placeholder="you@email.com"
-        required
-        autocomplete="email"
-        aria-label="Email address"
-      />
-      <button type="submit" class="btn btn-primary">Get early access →</button>
+      <!-- Tier selector. Pre-selected by clicking a pricing card's CTA via
+           the small inline script below. Defaults to "pro" because it's the
+           most-popular tier and the safest fallback. -->
+      <fieldset class="signup-tier-group" aria-label="Which tier?">
+        <legend class="signup-tier-legend">I'm interested in</legend>
+        <label class="signup-tier-opt">
+          <input type="radio" name="tier" value="pro" checked>
+          <span>Pro</span>
+        </label>
+        <label class="signup-tier-opt">
+          <input type="radio" name="tier" value="proplus">
+          <span>Pro+</span>
+        </label>
+        <label class="signup-tier-opt">
+          <input type="radio" name="tier" value="either">
+          <span>Either</span>
+        </label>
+      </fieldset>
+
+      <div class="signup-row">
+        <input
+          type="email"
+          name="email"
+          placeholder="you@email.com"
+          required
+          autocomplete="email"
+          aria-label="Email address"
+        />
+        <button type="submit" class="btn btn-primary">Get early access →</button>
+      </div>
 
       <!-- Formsubmit.co control fields -->
       <input type="hidden" name="_subject" value="🚀 New Meridian early-access signup">
@@ -2328,6 +2472,35 @@
       const clean = window.location.pathname + window.location.hash;
       window.history.replaceState({}, document.title, clean);
     }
+  })();
+
+  /* ------------------------------------------------------------------
+   * Pricing-CTA tier preselect.
+   * A click on a pricing card's CTA carries a data-tier attribute. We
+   * intercept the in-page jump, preselect the matching radio in the
+   * signup form, and tweak the heading so the user knows the form is
+   * already aware which tier they're after. Falls through to the default
+   * #get-early-access scroll if anything is missing.
+   * ------------------------------------------------------------------ */
+  (function tierPreselect() {
+    const heading = document.getElementById("signupHeading");
+    const sub = document.getElementById("signupSub");
+    const radios = document.querySelectorAll('input[name="tier"]');
+    const labels = {
+      pro: { h: "Get the Pro launch discount.", s: "Drop your email. You'll get a launch-week code worth one month free of Pro the moment we go live. One email, no spam." },
+      proplus: { h: "Get the Pro+ launch discount.", s: "Drop your email. You'll get a launch-week code worth one month free of Pro+ the moment we go live. One email, no spam." },
+    };
+    if (!radios.length) return;
+    document.querySelectorAll('a[data-tier][href="#get-early-access"]').forEach(a => {
+      a.addEventListener('click', () => {
+        const tier = a.getAttribute('data-tier');
+        const radio = document.querySelector(`input[name="tier"][value="${tier}"]`);
+        if (radio) radio.checked = true;
+        const copy = labels[tier];
+        if (copy && heading) heading.textContent = copy.h;
+        if (copy && sub) sub.textContent = copy.s;
+      });
+    });
   })();
 
   /* ------------------------------------------------------------------

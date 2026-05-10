@@ -281,6 +281,134 @@
       .mockup-intro { margin-bottom: 18px; }
     }
 
+    /* ── WORKFLOW SHOWDOWN ──────────────────────────────────────
+       Two-column comparison cards. Yahoo on the left in muted greys,
+       Meridian on the right in accent green. The kbd tags borrow the
+       terminal's monospace tone so the keystroke claim feels native. */
+    .showdown-grid {
+      display: grid;
+      gap: 18px;
+      max-width: 1080px;
+      margin: 28px auto 0;
+      padding: 0 24px;
+      text-align: left;
+    }
+    .showdown-card {
+      border: 1px solid var(--border-card);
+      background: linear-gradient(180deg, rgba(15,17,23,0.85) 0%, rgba(11,13,19,0.95) 100%);
+      border-radius: 14px;
+      padding: 22px 22px 18px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.25);
+    }
+    .showdown-task {
+      font-size: 13px;
+      color: var(--text-faint);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      margin-bottom: 14px;
+      font-weight: 700;
+    }
+    .showdown-cols {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 18px;
+      align-items: stretch;
+    }
+    .showdown-col {
+      border: 1px solid var(--border-card);
+      border-radius: 10px;
+      padding: 16px 16px 12px;
+      background: rgba(20,24,33,0.55);
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+    .showdown-col.meridian {
+      border-color: rgba(47,207,132,0.45);
+      background: linear-gradient(180deg, rgba(47,207,132,0.08) 0%, rgba(20,24,33,0.4) 100%);
+    }
+    .showdown-brand {
+      font-family: var(--font-sans);
+      font-weight: 700;
+      font-size: 14px;
+      color: var(--text-muted);
+      letter-spacing: 0.02em;
+      margin-bottom: 10px;
+    }
+    .showdown-col.meridian .showdown-brand {
+      color: var(--accent);
+    }
+    .showdown-steps {
+      list-style: decimal;
+      list-style-position: inside;
+      padding: 0;
+      margin: 0 0 14px;
+      color: var(--text-muted);
+      font-size: 14px;
+      line-height: 1.6;
+      flex: 1;
+    }
+    .showdown-steps li {
+      padding: 3px 0;
+    }
+    .showdown-steps kbd {
+      display: inline-block;
+      font-family: var(--font-mono, ui-monospace, "JetBrains Mono", monospace);
+      font-size: 12px;
+      font-weight: 600;
+      padding: 1px 7px;
+      margin: 0 2px;
+      border-radius: 4px;
+      border: 1px solid rgba(110,144,255,0.4);
+      background: rgba(110,144,255,0.10);
+      color: rgba(180,200,255,0.95);
+      vertical-align: baseline;
+    }
+    .showdown-col.meridian .showdown-steps kbd {
+      border-color: rgba(47,207,132,0.45);
+      background: rgba(47,207,132,0.12);
+      color: var(--accent);
+    }
+    .showdown-cost {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      margin-top: auto;
+      padding-top: 10px;
+      border-top: 1px solid var(--border-card);
+    }
+    .cost-num {
+      font-family: var(--font-mono, ui-monospace, "JetBrains Mono", monospace);
+      font-size: 28px;
+      font-weight: 800;
+      color: var(--text);
+      line-height: 1;
+    }
+    .showdown-col.meridian .cost-num {
+      color: var(--accent);
+    }
+    .showdown-col.yahoo .cost-num {
+      color: #b85a5a;
+    }
+    .cost-unit {
+      font-size: 12px;
+      color: var(--text-faint);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+    .showdown-foot {
+      max-width: 720px;
+      margin: 24px auto 0;
+      padding: 0 24px;
+      color: var(--text-faint);
+      font-size: 14px;
+      font-style: italic;
+    }
+    @media (max-width: 720px) {
+      .showdown-cols { grid-template-columns: 1fr; }
+      .showdown-card { padding: 18px 16px 14px; }
+    }
+
     /* Comparison-table row stagger. Each row lifts in 60ms after the
        prior. Active only when the parent reveal-card is is-visible. */
     .compare-table tbody tr {
@@ -298,6 +426,10 @@
     .compare-wrap.is-visible .compare-table tbody tr:nth-child(6) { animation-delay: 340ms; }
     .compare-wrap.is-visible .compare-table tbody tr:nth-child(7) { animation-delay: 400ms; }
     .compare-wrap.is-visible .compare-table tbody tr:nth-child(8) { animation-delay: 460ms; }
+    .compare-wrap.is-visible .compare-table tbody tr:nth-child(9) { animation-delay: 520ms; }
+    .compare-wrap.is-visible .compare-table tbody tr:nth-child(10) { animation-delay: 580ms; }
+    .compare-wrap.is-visible .compare-table tbody tr:nth-child(11) { animation-delay: 640ms; }
+    .compare-wrap.is-visible .compare-table tbody tr:nth-child(12) { animation-delay: 700ms; }
 
     /* FAQ items: subtle stagger when the FAQ section enters view. */
     .faq-grid {
@@ -1646,6 +1778,7 @@
 
   <nav class="nav-links">
     <a href="#compare" data-spy>Why</a>
+    <a href="#speed" data-spy>Speed</a>
     <a href="#features" data-spy>Features</a>
     <a href="#who" data-spy>Built for</a>
     <a href="#pricing" data-spy>Pricing</a>
@@ -1707,9 +1840,9 @@
     <span class="accent">For everyone.</span>
   </h1>
   <p class="hero-sub">
-    Bloomberg Terminal costs <strong>$25,000 a year</strong>. Meridian gives you the same
-    playbook (live quotes, AI commentary, options chains, smart alerts, portfolio
-    tracking) for <strong>$96 a year</strong>. Or zero, if you can wait 15 minutes.
+    <strong>Faster than Yahoo Finance. Cheaper than Bloomberg.</strong>
+    Live quotes, AI commentary, full options chains, smart alerts, and a 4-panel
+    keyboard workspace. From <strong>$0</strong>, or <strong>$96 a year</strong> for the live feed.
   </p>
   <div class="hero-ctas">
     <a href="terminal.html" class="btn btn-primary" style="font-size:14px; padding:12px 24px;">Open Terminal →</a>
@@ -1783,6 +1916,18 @@
           <td><span class="price expensive">$25,000</span></td>
         </tr>
         <tr>
+          <td>Primary input</td>
+          <td class="dim">Mouse + nav menus</td>
+          <td class="featured"><span class="check">✓</span> Keyboard, F1 to F10</td>
+          <td><span class="check">✓</span> Keyboard, F1 to F10</td>
+        </tr>
+        <tr>
+          <td>Multi-panel workspace</td>
+          <td><span class="x">✗</span> One thing at a time</td>
+          <td class="featured"><span class="check">✓</span> 4 panels, saved</td>
+          <td><span class="check">✓</span></td>
+        </tr>
+        <tr>
           <td>Real-time quotes</td>
           <td class="dim">15-min delayed</td>
           <td class="featured"><span class="check">✓</span></td>
@@ -1813,6 +1958,12 @@
           <td><span class="check">✓</span></td>
         </tr>
         <tr>
+          <td>Ads, trackers, telemetry</td>
+          <td class="dim">Yes (all three)</td>
+          <td class="featured"><span class="check">✓</span> None</td>
+          <td class="featured"><span class="check">✓</span> None</td>
+        </tr>
+        <tr>
           <td>Visual themes</td>
           <td class="dim">1</td>
           <td class="featured">9</td>
@@ -1833,6 +1984,102 @@
       </tbody>
     </table>
   </div>
+</section>
+
+<!-- ── WORKFLOW SHOWDOWN — concrete speed gap vs Yahoo ─────────────
+     The comparison table above proves we have the features. This section
+     proves we use them faster. Two real workflows side-by-side, counted
+     in keystrokes. The point is to make the "we're faster than Yahoo"
+     claim concrete instead of hand-wavy. -->
+<section class="section section-center" id="speed">
+  <div class="section-eyebrow">Why it feels faster</div>
+  <h2 class="section-title">Same job. A keyboard, not a mouse.</h2>
+  <p class="section-sub">
+    Yahoo Finance is a website you click around in. Meridian is a workspace you
+    live in. Compare the same task on both, counted in real interactions.
+  </p>
+
+  <div class="showdown-grid" data-reveal data-stagger style="--stagger:90ms">
+    <div class="showdown-card">
+      <div class="showdown-task">Task 1: Pull a quote and chart for NVDA</div>
+      <div class="showdown-cols">
+        <div class="showdown-col yahoo">
+          <div class="showdown-brand">Yahoo Finance</div>
+          <ol class="showdown-steps">
+            <li>Click the search box</li>
+            <li>Type "NVDA"</li>
+            <li>Click the dropdown result</li>
+            <li>Scroll to find the chart</li>
+            <li>Click "1D / 5D / 1M" tabs to scope</li>
+            <li>Dodge an ad</li>
+          </ol>
+          <div class="showdown-cost"><span class="cost-num">6+</span><span class="cost-unit">clicks</span></div>
+        </div>
+        <div class="showdown-col meridian">
+          <div class="showdown-brand">Meridian</div>
+          <ol class="showdown-steps">
+            <li><kbd>F3</kbd> opens chart in the focused panel</li>
+            <li>Type <kbd>NVDA</kbd> and hit <kbd>Enter</kbd></li>
+          </ol>
+          <div class="showdown-cost"><span class="cost-num">2</span><span class="cost-unit">keystrokes</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="showdown-card">
+      <div class="showdown-task">Task 2: Compare three tickers side by side</div>
+      <div class="showdown-cols">
+        <div class="showdown-col yahoo">
+          <div class="showdown-brand">Yahoo Finance</div>
+          <ol class="showdown-steps">
+            <li>Search ticker 1, click result</li>
+            <li>Open ticker 2 in a new tab</li>
+            <li>Open ticker 3 in a third tab</li>
+            <li>Cycle the tabs to read prices</li>
+            <li>Forget what tab 1 said. Repeat.</li>
+          </ol>
+          <div class="showdown-cost"><span class="cost-num">10+</span><span class="cost-unit">clicks · 3 tabs</span></div>
+        </div>
+        <div class="showdown-col meridian">
+          <div class="showdown-brand">Meridian</div>
+          <ol class="showdown-steps">
+            <li><kbd>1</kbd> Panel 1: <kbd>QUOTE AAPL</kbd></li>
+            <li><kbd>2</kbd> Panel 2: <kbd>QUOTE MSFT</kbd></li>
+            <li><kbd>3</kbd> Panel 3: <kbd>QUOTE NVDA</kbd></li>
+          </ol>
+          <div class="showdown-cost"><span class="cost-num">3</span><span class="cost-unit">commands · 1 view</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="showdown-card">
+      <div class="showdown-task">Task 3: Get an opinion, not just numbers</div>
+      <div class="showdown-cols">
+        <div class="showdown-col yahoo">
+          <div class="showdown-brand">Yahoo Finance</div>
+          <ol class="showdown-steps">
+            <li>Scroll the news feed</li>
+            <li>Open three articles in new tabs</li>
+            <li>Read each, weigh sentiment yourself</li>
+            <li>Come back to the chart, still guessing</li>
+          </ol>
+          <div class="showdown-cost"><span class="cost-num">~15</span><span class="cost-unit">minutes of reading</span></div>
+        </div>
+        <div class="showdown-col meridian">
+          <div class="showdown-brand">Meridian</div>
+          <ol class="showdown-steps">
+            <li><kbd>AI NVDA</kbd> in the command bar</li>
+            <li>GPT + Claude give you a structured read in seconds</li>
+          </ol>
+          <div class="showdown-cost"><span class="cost-num">~5</span><span class="cost-unit">seconds</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <p class="showdown-foot">
+    Multiply by a hundred lookups a week. The speed gap is the whole product.
+  </p>
 </section>
 
 <!-- ── FEATURES ───────────────────────────────────────────────────── -->

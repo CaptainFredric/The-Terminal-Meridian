@@ -193,6 +193,11 @@ export const aiApi = {
   marketPulse() {
     return apiRequest("/api/ai/market-pulse");
   },
+  usage() {
+    // Returns { tier, month, monthlyLimit, used, remaining, isAnonymous }.
+    // Used by the AI panel to draw a "X / Y AI calls used this month" meter.
+    return apiRequest("/api/ai/usage");
+  },
 };
 
 export const billingApi = {

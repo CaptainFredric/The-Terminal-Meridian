@@ -181,6 +181,40 @@ export function createAIRenderer(context) {
       .map((b) => `<li>${escapeHtml(b)}</li>`)
       .join("");
 
+    // Quota meter. The backend echoes the user's monthly LLM cap on every
+    // commentary response so we can render the gauge inline without a
+    // second round-trip. When quota is absent (older backend or anonymous
+    // user) we just skip the strip. quotaReason explains *why* the engine
+    // chose template-over-LLM so we can surface a clean fallback hint
+    // ("Pro cap reached") rather than an unexplained source switch.
+    const quota = cached.quota || null;
+    const quotaReason = cached.quotaReason || null;
+    let quotaHtml = "";
+    if (quota && Number(quota.monthlyLimit) > 0) {
+      const used = Math.max(0, Number(quota.used) || 0);
+      const limit = Math.max(1, Number(quota.monthlyLimit) || 1);
+      const pct = Math.min(100, Math.round((used / limit) * 100));
+      const tierLabel = String(quota.tier || "").replace("_", "+").toUpperCase();
+      quotaHtml = `
+        <div class="ai-quota" data-pct="${pct}">
+          <div class="ai-quota-row">
+            <span class="ai-quota-label">${escapeHtml(tierLabel)} AI usage</span>
+            <span class="ai-quota-count">${used} / ${limit} this month</span>
+          </div>
+          <div class="ai-quota-bar"><div class="ai-quota-bar-fill" style="width: ${pct}%"></div></div>
+          ${quotaReason === "monthly_cap_reached"
+            ? `<p class="ai-quota-note">Monthly LLM cap reached. Rule-based engine in use until next month.</p>`
+            : ""}
+        </div>
+      `;
+    } else if (quotaReason === "free_tier") {
+      quotaHtml = `
+        <div class="ai-quota ai-quota-free">
+          <p class="ai-quota-note">Free tier shows rule-based insights. <strong>Pro</strong> unlocks GPT and Claude commentary.</p>
+        </div>
+      `;
+    }
+
     return `
       <section class="ai-panel">
         ${headerHtml}
@@ -194,6 +228,8 @@ export function createAIRenderer(context) {
           ${bulletsHtml ? `<ul class="ai-bullets">${bulletsHtml}</ul>` : ""}
           ${cached.summary ? `<p class="ai-summary"><strong>Bottom line:</strong> ${escapeHtml(cached.summary)}</p>` : ""}
         </div>
+
+        ${quotaHtml}
 
         <footer class="ai-footer">
           <span class="ai-source-badge" data-source="${escapeHtml(cached.source || "template")}">

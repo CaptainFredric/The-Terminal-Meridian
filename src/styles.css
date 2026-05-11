@@ -11082,6 +11082,90 @@ button[data-toggle-pos-edit]:hover { opacity: 1; }
   border-radius: 3px;
 }
 
+/* AI quota meter. Lives between the commentary card and the footer so
+   the user always sees their remaining headroom. Bar fill turns warm
+   at 70% and red at 90% so a heavy month is obvious before the cap
+   actually hits. */
+.ai-quota {
+  margin: 10px 0 0;
+  padding: 8px 10px;
+  border: 1px solid var(--border, rgba(255,255,255,0.08));
+  border-radius: 6px;
+  background: rgba(255,255,255,0.02);
+  font-family: "IBM Plex Mono", monospace;
+}
+.ai-quota-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 0.7rem;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+.ai-quota-label {
+  text-transform: uppercase;
+  font-weight: 700;
+  color: var(--text, #e8edf5);
+}
+.ai-quota-count {
+  font-variant-numeric: tabular-nums;
+}
+.ai-quota-bar {
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255,255,255,0.06);
+  overflow: hidden;
+}
+.ai-quota-bar-fill {
+  height: 100%;
+  background: var(--accent, #2fcf84);
+  transition: width 0.4s ease, background-color 0.3s ease;
+}
+.ai-quota[data-pct="70"] .ai-quota-bar-fill,
+.ai-quota[data-pct="71"] .ai-quota-bar-fill,
+.ai-quota[data-pct="72"] .ai-quota-bar-fill,
+.ai-quota[data-pct="73"] .ai-quota-bar-fill,
+.ai-quota[data-pct="74"] .ai-quota-bar-fill,
+.ai-quota[data-pct="75"] .ai-quota-bar-fill,
+.ai-quota[data-pct="76"] .ai-quota-bar-fill,
+.ai-quota[data-pct="77"] .ai-quota-bar-fill,
+.ai-quota[data-pct="78"] .ai-quota-bar-fill,
+.ai-quota[data-pct="79"] .ai-quota-bar-fill,
+.ai-quota[data-pct="80"] .ai-quota-bar-fill,
+.ai-quota[data-pct="81"] .ai-quota-bar-fill,
+.ai-quota[data-pct="82"] .ai-quota-bar-fill,
+.ai-quota[data-pct="83"] .ai-quota-bar-fill,
+.ai-quota[data-pct="84"] .ai-quota-bar-fill,
+.ai-quota[data-pct="85"] .ai-quota-bar-fill,
+.ai-quota[data-pct="86"] .ai-quota-bar-fill,
+.ai-quota[data-pct="87"] .ai-quota-bar-fill,
+.ai-quota[data-pct="88"] .ai-quota-bar-fill,
+.ai-quota[data-pct="89"] .ai-quota-bar-fill { background: #ffb84d; }
+.ai-quota[data-pct="90"] .ai-quota-bar-fill,
+.ai-quota[data-pct="91"] .ai-quota-bar-fill,
+.ai-quota[data-pct="92"] .ai-quota-bar-fill,
+.ai-quota[data-pct="93"] .ai-quota-bar-fill,
+.ai-quota[data-pct="94"] .ai-quota-bar-fill,
+.ai-quota[data-pct="95"] .ai-quota-bar-fill,
+.ai-quota[data-pct="96"] .ai-quota-bar-fill,
+.ai-quota[data-pct="97"] .ai-quota-bar-fill,
+.ai-quota[data-pct="98"] .ai-quota-bar-fill,
+.ai-quota[data-pct="99"] .ai-quota-bar-fill,
+.ai-quota[data-pct="100"] .ai-quota-bar-fill { background: #ff5f7f; }
+.ai-quota-note {
+  margin: 6px 0 0;
+  font-family: var(--sans, system-ui);
+  font-size: 0.72rem;
+  color: var(--muted);
+  letter-spacing: 0;
+}
+.ai-quota-free {
+  border-color: rgba(110,144,255,0.35);
+  background: rgba(110,144,255,0.06);
+}
+.ai-quota-free .ai-quota-note { color: #cfdbff; }
+
 /* ─── Right-Click Context Menu ──────────────────────────────────────────── */
 .ctx-menu {
   min-width: 232px;

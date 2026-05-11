@@ -1400,13 +1400,27 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             return error_response(f"Internal error: {exc}", 500)
 
     # AI commentary endpoints. fetch_quotes is injected so ai_commentary.py
-    # doesn't need to know about yfinance or any data source — same
+    # doesn't need to know about yfinance or any data source. Same
     # dependency-injection pattern as the billing module above.
+    #
+    # Import path matters: when this file is launched as `python backend/app.py`
+    # the relative `from .ai_commentary import ...` raises because there's no
+    # parent package. Try the relative import first (so deployments that run
+    # the backend as a package still work), then fall back to absolute.
+    register_ai_routes = None
     try:
-        from .ai_commentary import register_ai_routes
-        register_ai_routes(app, fetch_quotes_fn=fetch_quotes, overview_symbols=OVERVIEW_SYMBOLS)
-    except Exception as ai_exc:  # noqa: BLE001
-        app.logger.warning("AI commentary routes not loaded: %s", ai_exc)
+        from .ai_commentary import register_ai_routes  # type: ignore
+    except Exception:
+        try:
+            from ai_commentary import register_ai_routes  # type: ignore
+        except Exception as ai_exc:  # noqa: BLE001
+            app.logger.warning("AI commentary routes not loaded: %s", ai_exc)
+    if register_ai_routes is not None:
+        try:
+            register_ai_routes(app, fetch_quotes_fn=fetch_quotes, overview_symbols=OVERVIEW_SYMBOLS)
+            app.logger.info("AI commentary routes registered.")
+        except Exception as ai_exc:  # noqa: BLE001
+            app.logger.warning("AI commentary route registration failed: %s", ai_exc)
 
     # ── Static asset cache headers ───────────────────────────────────
     # The terminal is a SPA built from a fixed set of files (HTML, CSS,

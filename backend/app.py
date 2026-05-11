@@ -177,6 +177,44 @@ def _ensure_subscription_tables(conn) -> None:
         )"""
     )
 
+
+# ── AI usage metering ─────────────────────────────────────────────────
+#
+# We meter LLM calls per user, per month, so a Pro / Pro+ subscription can
+# safely fund the OpenAI / Anthropic bill without an upper bound on abuse.
+# The cap is enforced server-side; the frontend asks /api/ai/usage to draw
+# the quota meter, and the AI commentary endpoint silently falls back to
+# the deterministic template engine when the cap is hit (the user still
+# gets a useful answer, they just don't burn a token).
+#
+# Free tier intentionally has zero LLM calls — they always get the template
+# engine. The plan is "AI is a Pro perk", not "AI is gated entirely".
+
+# Monthly LLM call ceiling per tier. Conservative on purpose; raise once
+# you have a real cost-per-user number from production. With gpt-4o-mini
+# at ~$0.001 per call, 500 calls/mo is ~$0.50 of LLM cost per Pro user.
+AI_MONTHLY_LIMITS = {
+    "free": 0,
+    "pro": 500,
+    "pro_plus": 2000,
+}
+
+
+def _ensure_ai_usage_table(conn) -> None:
+    """Create the ai_usage table if missing. Composite primary key on
+    (user_id, month) so we get a fresh counter every calendar month with
+    no cleanup job: stale rows are harmless and small (~36 bytes each)."""
+    conn.execute(
+        """CREATE TABLE IF NOT EXISTS ai_usage (
+            user_id TEXT NOT NULL,
+            month TEXT NOT NULL,
+            llm_calls INTEGER NOT NULL DEFAULT 0,
+            template_calls INTEGER NOT NULL DEFAULT 0,
+            updated_at TEXT NOT NULL,
+            PRIMARY KEY (user_id, month)
+        )"""
+    )
+
 def _rate_limited(key: str, max_calls: int, window_sec: float) -> bool:
     """Return True if the caller should be throttled.
 
@@ -1400,13 +1438,112 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             return error_response(f"Internal error: {exc}", 500)
 
     # AI commentary endpoints. fetch_quotes is injected so ai_commentary.py
-    # doesn't need to know about yfinance or any data source — same
+    # doesn't need to know about yfinance or any data source. Same
     # dependency-injection pattern as the billing module above.
+    #
+    # Import path matters: when this file is launched as `python backend/app.py`
+    # the relative `from .ai_commentary import ...` raises because there's no
+    # parent package. Try the relative import first (so deployments that run
+    # the backend as a package still work), then fall back to absolute.
+    register_ai_routes = None
     try:
-        from .ai_commentary import register_ai_routes
-        register_ai_routes(app, fetch_quotes_fn=fetch_quotes, overview_symbols=OVERVIEW_SYMBOLS)
-    except Exception as ai_exc:  # noqa: BLE001
-        app.logger.warning("AI commentary routes not loaded: %s", ai_exc)
+        from .ai_commentary import register_ai_routes  # type: ignore
+    except Exception:
+        try:
+            from ai_commentary import register_ai_routes  # type: ignore
+        except Exception as ai_exc:  # noqa: BLE001
+            app.logger.warning("AI commentary routes not loaded: %s", ai_exc)
+    if register_ai_routes is not None:
+        # Tier-aware LLM metering. The AI route uses these callbacks to:
+        #   1. Look up the current session (cookie -> user row).
+        #   2. Read the user's tier from the subscriptions table.
+        #   3. Check this month's LLM-call counter and apply the cap.
+        #   4. Increment the counter when an LLM call actually fires.
+        # Each callback is wrapped in a try/except so an unexpected DB
+        # state never poisons the AI response; the worst case is the
+        # route falls back to anonymous-template mode.
+
+        def _ai_current_user() -> dict | None:
+            try:
+                token = request.cookies.get(SESSION_COOKIE)
+                if not token:
+                    return None
+                row = get_db(app).execute(
+                    """SELECT users.id, users.email
+                       FROM sessions
+                       JOIN users ON users.id = sessions.user_id
+                       WHERE sessions.token = ? AND sessions.expires_at > ?""",
+                    (token, utc_now_iso()),
+                ).fetchone()
+                if row is None:
+                    return None
+                return {"id": row["id"], "email": row["email"]}
+            except Exception:
+                return None
+
+        def _ai_tier_for(user_id: str) -> str:
+            try:
+                sub = _subscription_for(user_id) or {}
+                return (sub.get("tier") or "free").lower()
+            except Exception:
+                return "free"
+
+        def _ai_usage_for(user_id: str, month: str) -> dict:
+            try:
+                db = get_db(app)
+                _ensure_ai_usage_table(db)
+                row = db.execute(
+                    "SELECT llm_calls, template_calls FROM ai_usage WHERE user_id = ? AND month = ?",
+                    (user_id, month),
+                ).fetchone()
+                if row is None:
+                    return {"llm_calls": 0, "template_calls": 0}
+                return {
+                    "llm_calls": int(row["llm_calls"] or 0),
+                    "template_calls": int(row["template_calls"] or 0),
+                }
+            except Exception:
+                return {"llm_calls": 0, "template_calls": 0}
+
+        def _ai_increment_usage(user_id: str, month: str, llm_used: bool) -> None:
+            try:
+                db = get_db(app)
+                _ensure_ai_usage_table(db)
+                # UPSERT pattern: try insert, then update on conflict. Keeps
+                # the call atomic without a separate SELECT round-trip.
+                db.execute(
+                    """INSERT INTO ai_usage (user_id, month, llm_calls, template_calls, updated_at)
+                       VALUES (?, ?, ?, ?, ?)
+                       ON CONFLICT(user_id, month) DO UPDATE SET
+                         llm_calls = llm_calls + excluded.llm_calls,
+                         template_calls = template_calls + excluded.template_calls,
+                         updated_at = excluded.updated_at""",
+                    (
+                        user_id,
+                        month,
+                        1 if llm_used else 0,
+                        0 if llm_used else 1,
+                        utc_now_iso(),
+                    ),
+                )
+                db.commit()
+            except Exception as exc:  # noqa: BLE001
+                app.logger.warning("ai_usage increment failed for %s: %s", user_id, exc)
+
+        try:
+            register_ai_routes(
+                app,
+                fetch_quotes_fn=fetch_quotes,
+                overview_symbols=OVERVIEW_SYMBOLS,
+                current_user_fn=_ai_current_user,
+                tier_lookup_fn=_ai_tier_for,
+                monthly_limits=AI_MONTHLY_LIMITS,
+                usage_for_fn=_ai_usage_for,
+                increment_usage_fn=_ai_increment_usage,
+            )
+            app.logger.info("AI commentary routes registered with tier metering.")
+        except Exception as ai_exc:  # noqa: BLE001
+            app.logger.warning("AI commentary route registration failed: %s", ai_exc)
 
     # ── Static asset cache headers ───────────────────────────────────
     # The terminal is a SPA built from a fixed set of files (HTML, CSS,
@@ -1605,6 +1742,15 @@ def ensure_database(app: Flask) -> None:
 
         CREATE INDEX IF NOT EXISTS idx_paper_pending_orders_user
             ON paper_pending_orders(user_id);
+
+        CREATE TABLE IF NOT EXISTS ai_usage (
+            user_id TEXT NOT NULL,
+            month TEXT NOT NULL,
+            llm_calls INTEGER NOT NULL DEFAULT 0,
+            template_calls INTEGER NOT NULL DEFAULT 0,
+            updated_at TEXT NOT NULL,
+            PRIMARY KEY (user_id, month)
+        );
         """
     )
     # Additive column migrations for tables created in earlier deploys

@@ -365,9 +365,59 @@ def register_ai_routes(
     app: Flask,
     fetch_quotes_fn: Callable[[list[str]], list[dict[str, Any]]],
     overview_symbols: list[str],
+    current_user_fn: Callable[[], dict | None] | None = None,
+    tier_lookup_fn: Callable[[str], str] | None = None,
+    monthly_limits: dict[str, int] | None = None,
+    usage_for_fn: Callable[[str, str], dict] | None = None,
+    increment_usage_fn: Callable[[str, str, bool], None] | None = None,
 ) -> None:
     """Mount /api/ai/* endpoints. Caller injects fetch_quotes to avoid
-    a circular import with backend.app."""
+    a circular import with backend.app.
+
+    The optional metering callbacks let the route enforce per-tier monthly
+    LLM caps. They're all optional so this module also keeps working in
+    its original anonymous-only mode (no auth, no caps, IP rate limit only)
+    when wired into a slimmer test app:
+
+      current_user_fn()        -> {'id', 'email', ...} or None
+      tier_lookup_fn(user_id)  -> 'free' | 'pro' | 'pro_plus'
+      monthly_limits           -> {'free': 0, 'pro': 500, 'pro_plus': 2000}
+      usage_for_fn(user_id, m) -> {'llm_calls': int, 'template_calls': int}
+      increment_usage_fn(user_id, month, llm_used)
+                               -> None (side-effects the DB)
+
+    If any of (tier_lookup_fn, monthly_limits, usage_for_fn,
+    increment_usage_fn) is missing, metering is bypassed for that request
+    and the original behavior applies.
+    """
+
+    limits = dict(monthly_limits or {})
+
+    def _current_month() -> str:
+        # 'YYYY-MM'. UTC so rollovers align across regions; the meter
+        # rolls over at the start of the UTC calendar month.
+        return datetime.now(timezone.utc).strftime("%Y-%m")
+
+    def _resolve_user_and_tier() -> tuple[str | None, str, int | None]:
+        """Look up the current session, derive tier, and the monthly cap.
+
+        Returns (user_id_or_None, tier, cap_or_None). When the user isn't
+        logged in or the metering callbacks aren't wired, we return
+        (None, 'anon', None) and the caller treats it as 'no LLM, template
+        only', because we don't want anonymous traffic burning tokens.
+        """
+        if not (current_user_fn and tier_lookup_fn):
+            return (None, "anon", None)
+        try:
+            user = current_user_fn()
+        except Exception:
+            user = None
+        if not user:
+            return (None, "anon", None)
+        uid = str(user.get("id"))
+        tier = (tier_lookup_fn(uid) or "free").lower()
+        cap = limits.get(tier)
+        return (uid, tier, cap)
 
     @app.get("/api/ai/commentary")
     def ai_commentary() -> Any:
@@ -383,8 +433,63 @@ def register_ai_routes(
             return jsonify({"error": f"No data available for {symbol}."}), 404
         quote = quotes[0]
 
-        # Try OpenAI -> Anthropic -> template, in that order.
-        result = _try_openai(quote) or _try_anthropic(quote) or _template_commentary(quote)
+        user_id, tier, cap = _resolve_user_and_tier()
+        month = _current_month()
+
+        # Decide whether to call an LLM or short-circuit to the template.
+        # Reasons we skip the LLM:
+        #   - anonymous (tier == 'anon')
+        #   - free tier (cap == 0)
+        #   - paid user but already at or past their monthly cap
+        used_llm_so_far = 0
+        if user_id and usage_for_fn:
+            try:
+                usage = usage_for_fn(user_id, month) or {}
+                used_llm_so_far = int(usage.get("llm_calls") or 0)
+            except Exception:
+                used_llm_so_far = 0
+
+        allow_llm = (
+            user_id is not None
+            and cap is not None
+            and cap > 0
+            and used_llm_so_far < cap
+        )
+
+        result: dict[str, Any] | None = None
+        if allow_llm:
+            result = _try_openai(quote) or _try_anthropic(quote)
+        if result is None:
+            result = _template_commentary(quote)
+
+        # Record usage. We only count LLM calls toward the cap; template
+        # calls are free. Tracking template_calls separately is useful for
+        # product dashboards later.
+        llm_used = bool(result and result.get("source") in {"openai", "anthropic"})
+        if user_id and increment_usage_fn:
+            try:
+                increment_usage_fn(user_id, month, llm_used)
+            except Exception:
+                pass
+
+        # Annotate the response so the frontend can show "X / Y AI calls
+        # used this month" without a second round-trip.
+        if cap is not None:
+            result["quota"] = {
+                "tier": tier,
+                "monthlyLimit": cap,
+                "used": used_llm_so_far + (1 if llm_used else 0),
+                "remaining": max(0, cap - (used_llm_so_far + (1 if llm_used else 0))),
+                "month": month,
+            }
+            if not allow_llm and cap > 0:
+                # User has a Pro cap but hit it: surface the soft-fallback
+                # reason so the UI can show "Pro AI cap reached, using the
+                # rule-based engine until {next month}".
+                result["quotaReason"] = "monthly_cap_reached"
+            elif tier == "free":
+                result["quotaReason"] = "free_tier"
+
         return jsonify(result)
 
     @app.get("/api/ai/market-pulse")
@@ -393,10 +498,34 @@ def register_ai_routes(
             return jsonify({"error": "Rate limit: 1 request / 5 seconds."}), 429
 
         quotes = fetch_quotes_fn(overview_symbols)
-        # Market pulse always uses the template engine — it's fast,
+        # Market pulse always uses the template engine. It's fast,
         # deterministic, and doesn't burn an LLM call per page-load.
         # Plug in LLM-backed pulse later if you want richer narrative.
         return jsonify(_template_market_pulse(quotes))
+
+    @app.get("/api/ai/usage")
+    def ai_usage_route() -> Any:
+        """Quota meter for the UI. Returns the current user's monthly LLM
+        usage, tier, and remaining headroom. Anonymous callers get a
+        synthetic 'anon' tier with zero quota so the UI can prompt to
+        sign in."""
+        user_id, tier, cap = _resolve_user_and_tier()
+        month = _current_month()
+        used_llm = 0
+        if user_id and usage_for_fn:
+            try:
+                usage = usage_for_fn(user_id, month) or {}
+                used_llm = int(usage.get("llm_calls") or 0)
+            except Exception:
+                used_llm = 0
+        return jsonify({
+            "tier": tier,
+            "month": month,
+            "monthlyLimit": cap if cap is not None else 0,
+            "used": used_llm,
+            "remaining": max(0, (cap or 0) - used_llm) if cap is not None else 0,
+            "isAnonymous": user_id is None,
+        })
 
     @app.get("/api/ai/status")
     def ai_status() -> Any:

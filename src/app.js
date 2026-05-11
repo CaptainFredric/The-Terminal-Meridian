@@ -1137,7 +1137,17 @@ function hideAutocomplete() {
 }
 
 function handleGlobalHotkeys(event) {
-  if (document.activeElement && ["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement.tagName) && event.key !== "Escape") {
+  // Don't hijack keys while the user is editing text. The original guard only
+  // covered INPUT / TEXTAREA / SELECT, which left contenteditable cells and
+  // ARIA textboxes (used in some renderers) vulnerable to TAB stealing focus
+  // and F-keys swapping the panel mid-edit.
+  const ae = document.activeElement;
+  const editingText =
+    ae &&
+    (["INPUT", "TEXTAREA", "SELECT"].includes(ae.tagName) ||
+      ae.isContentEditable ||
+      ae.getAttribute?.("role") === "textbox");
+  if (editingText && event.key !== "Escape") {
     return;
   }
 
@@ -2710,7 +2720,17 @@ function hideAutocomplete() {
 }
 
 function handleGlobalHotkeys(event) {
-  if (document.activeElement && ["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement.tagName) && event.key !== "Escape") {
+  // Don't hijack keys while the user is editing text. The original guard only
+  // covered INPUT / TEXTAREA / SELECT, which left contenteditable cells and
+  // ARIA textboxes (used in some renderers) vulnerable to TAB stealing focus
+  // and F-keys swapping the panel mid-edit.
+  const ae = document.activeElement;
+  const editingText =
+    ae &&
+    (["INPUT", "TEXTAREA", "SELECT"].includes(ae.tagName) ||
+      ae.isContentEditable ||
+      ae.getAttribute?.("role") === "textbox");
+  if (editingText && event.key !== "Escape") {
     return;
   }
 

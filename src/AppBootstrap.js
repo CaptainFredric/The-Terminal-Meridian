@@ -693,6 +693,37 @@ function init() {
   void checkHealth();
   refreshAllData();
 
+  // Deep-link bridge: a landing-page link can prime the terminal with one
+  // or more commands by appending `?go=CHART+NVDA` (or several joined by
+  // `;`, e.g. `?go=CHART+NVDA;AI+NVDA`). Each token is fed through the
+  // same dispatcher the command bar uses, so it works for anything the
+  // lexer recognizes. We strip the param from the URL after firing so a
+  // refresh doesn't replay the commands.
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const go = params.get("go");
+    if (go && appCore) {
+      const commands = go.split(/[;\n]+/).map((c) => c.trim()).filter(Boolean);
+      // Defer one tick so the initial workspace render settles first.
+      setTimeout(() => {
+        commands.forEach((cmd, idx) => {
+          // Stagger multi-command sequences slightly so each one lands in
+          // a freshly-rendered panel; one shot for a single command.
+          setTimeout(() => {
+            try { appCore.dispatchRawCommand(cmd); } catch {}
+          }, idx * 120);
+        });
+        params.delete("go");
+        if (window.history?.replaceState) {
+          const cleanUrl = window.location.pathname +
+            (params.toString() ? `?${params.toString()}` : "") +
+            window.location.hash;
+          window.history.replaceState({}, document.title, cleanUrl);
+        }
+      }, 250);
+    }
+  } catch {}
+
   setInterval(updateSessionClock, 1000);
   setInterval(handleRefreshCountdown, 1000);
   setInterval(() => {

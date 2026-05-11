@@ -117,11 +117,18 @@ export class CommandController {
       event.preventDefault();
       event.stopPropagation();
       this._acIndex = -1;
-      if (acVisible) {
+      const input = this.el.commandInput;
+      const hasText = !!(input && input.value);
+      if (acVisible && hasText) {
+        // Mid-typing: a single ESC dismisses the suggestions but keeps the
+        // palette open so the user can keep editing what they typed.
         this.hideAutocomplete();
-        this.el.commandInput?.focus();
+        input.focus();
       } else {
-        if (this.el.commandInput) this.el.commandInput.value = "";
+        // Empty input (or no suggestions showing): a single ESC closes
+        // everything. This avoids the "double ESC to exit" trap.
+        if (input) input.value = "";
+        this.hideAutocomplete();
         this.closeCommandPalette();
       }
     }

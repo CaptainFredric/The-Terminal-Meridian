@@ -263,6 +263,316 @@
       perspective: 1400px;
       perspective-origin: 50% 30%;
     }
+    /* Intro block that captions the terminal mockup. Keeps the same
+       max-width and centering as .section so the rhythm matches. */
+    .mockup-intro {
+      max-width: 760px;
+      margin: 0 auto 28px;
+      padding: 0 24px;
+      text-align: center;
+    }
+    .mockup-intro .section-title {
+      margin: 12px 0 10px;
+    }
+    .mockup-intro .section-sub {
+      margin: 0 auto;
+    }
+    @media (max-width: 720px) {
+      .mockup-intro { margin-bottom: 18px; }
+    }
+
+    /* ── WORKFLOW DEMO LOOP ─────────────────────────────────────
+       A tiny CSS-only animation: caret types CHART NVDA into a fake
+       command bar, then a chart line draws itself in the panel below.
+       Loops every 6 seconds. Pure cosmetic, but it makes the speed
+       pitch tangible without a video file. */
+    .workflow-demo {
+      max-width: 540px;
+      margin: 24px auto 6px;
+      padding: 0 24px;
+    }
+    .wfd-frame {
+      border: 1px solid var(--border-card);
+      border-radius: 12px;
+      background: linear-gradient(180deg, rgba(15,17,23,0.92) 0%, rgba(10,12,18,0.96) 100%);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+      overflow: hidden;
+    }
+    .wfd-bar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border-card);
+      background: rgba(20,24,33,0.6);
+      font-family: var(--font-mono, ui-monospace, "JetBrains Mono", monospace);
+      font-size: 13px;
+    }
+    .wfd-prompt { color: var(--accent); font-weight: 700; }
+    .wfd-typed {
+      flex: 1;
+      color: rgba(220,232,255,0.95);
+      letter-spacing: 0.02em;
+      display: inline-flex;
+      align-items: center;
+      overflow: hidden;
+      white-space: nowrap;
+    }
+    .wfd-text {
+      display: inline-block;
+      max-width: 0;
+      overflow: hidden;
+      white-space: nowrap;
+      animation: wfd-type 6s cubic-bezier(0.5, 0, 0.5, 1) infinite;
+    }
+    .wfd-caret {
+      display: inline-block;
+      width: 7px;
+      height: 14px;
+      background: var(--accent);
+      margin-left: 2px;
+      animation: wfd-blink 0.9s steps(2, end) infinite;
+    }
+    .wfd-hint {
+      color: var(--text-faint);
+      font-size: 11px;
+      letter-spacing: 0.1em;
+      border: 1px solid var(--border-card);
+      padding: 2px 6px;
+      border-radius: 4px;
+      animation: wfd-pulse 6s ease infinite;
+    }
+    .wfd-panel { padding: 14px 16px 16px; }
+    .wfd-panel-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 8px;
+      opacity: 0;
+      animation: wfd-fade-in 6s ease infinite;
+    }
+    .wfd-tag {
+      font-family: var(--font-mono, ui-monospace, "JetBrains Mono", monospace);
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      color: var(--text-faint);
+    }
+    .wfd-price {
+      font-family: var(--font-mono, ui-monospace, "JetBrains Mono", monospace);
+      font-size: 13px;
+      color: var(--text);
+      font-weight: 700;
+    }
+    .wfd-chg { color: var(--accent); font-size: 11px; font-weight: 700; margin-left: 4px; }
+    .wfd-svg {
+      width: 100%;
+      height: 90px;
+      display: block;
+    }
+    .wfd-line {
+      stroke-dasharray: 600;
+      stroke-dashoffset: 600;
+      animation: wfd-draw 6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+    }
+    .wfd-area {
+      opacity: 0;
+      animation: wfd-fade-in 6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+    }
+    .wfd-caption {
+      text-align: center;
+      color: var(--text-faint);
+      font-size: 12px;
+      margin: 10px 0 0;
+      letter-spacing: 0.04em;
+    }
+    @keyframes wfd-type {
+      0%       { max-width: 0;    }
+      18%      { max-width: 0;    }
+      36%      { max-width: 12em; }
+      88%      { max-width: 12em; }
+      100%     { max-width: 0;    }
+    }
+    @keyframes wfd-blink { 0%, 49% { opacity: 1; } 50%, 100% { opacity: 0; } }
+    @keyframes wfd-pulse { 0%, 30% { opacity: 0.35; } 36%, 44% { opacity: 1; color: var(--accent); border-color: var(--accent); } 70%, 100% { opacity: 0.35; } }
+    @keyframes wfd-fade-in {
+      0%, 36%   { opacity: 0; }
+      48%, 88%  { opacity: 1; }
+      100%      { opacity: 0; }
+    }
+    @keyframes wfd-draw {
+      0%, 36%   { stroke-dashoffset: 600; }
+      72%, 88%  { stroke-dashoffset: 0;   }
+      100%      { stroke-dashoffset: 600; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .wfd-text, .wfd-caret, .wfd-hint, .wfd-panel-head, .wfd-line, .wfd-area {
+        animation: none;
+      }
+      .wfd-text { max-width: 12em; }
+      .wfd-panel-head, .wfd-area { opacity: 1; }
+      .wfd-line { stroke-dashoffset: 0; }
+    }
+
+    /* ── WORKFLOW SHOWDOWN ──────────────────────────────────────
+       Two-column comparison cards. Familiar dashboard flow on the
+       left in muted greys, Meridian on the right in accent green. The
+       kbd tags borrow the terminal's monospace tone so the keystroke
+       claim feels native. Each card is an <a> linking deep into the
+       terminal via ?go=COMMAND, so clicking actually demos the thing. */
+    .showdown-card {
+      display: block;
+      color: inherit;
+      text-decoration: none;
+      cursor: pointer;
+      transition: border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    .showdown-card:hover {
+      border-color: rgba(47,207,132,0.55);
+      transform: translateY(-2px);
+      box-shadow: 0 14px 32px rgba(0,0,0,0.32), 0 0 0 1px rgba(47,207,132,0.15);
+    }
+    .showdown-card:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 4px;
+    }
+    .showdown-go {
+      margin-left: auto;
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      opacity: 0;
+      transform: translateX(-4px);
+      transition: opacity 0.2s ease, transform 0.2s ease;
+    }
+    .showdown-card:hover .showdown-go,
+    .showdown-card:focus-visible .showdown-go {
+      opacity: 1;
+      transform: translateX(0);
+    }
+    .showdown-grid {
+      display: grid;
+      gap: 18px;
+      max-width: 1080px;
+      margin: 28px auto 0;
+      padding: 0 24px;
+      text-align: left;
+    }
+    .showdown-card {
+      border: 1px solid var(--border-card);
+      background: linear-gradient(180deg, rgba(15,17,23,0.85) 0%, rgba(11,13,19,0.95) 100%);
+      border-radius: 14px;
+      padding: 22px 22px 18px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.25);
+    }
+    .showdown-task {
+      font-size: 13px;
+      color: var(--text-faint);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      margin-bottom: 14px;
+      font-weight: 700;
+    }
+    .showdown-cols {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 18px;
+      align-items: stretch;
+    }
+    .showdown-col {
+      border: 1px solid var(--border-card);
+      border-radius: 10px;
+      padding: 16px 16px 12px;
+      background: rgba(20,24,33,0.55);
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+    .showdown-col.meridian {
+      border-color: rgba(47,207,132,0.45);
+      background: linear-gradient(180deg, rgba(47,207,132,0.08) 0%, rgba(20,24,33,0.4) 100%);
+    }
+    .showdown-brand {
+      font-family: var(--font-sans);
+      font-weight: 700;
+      font-size: 14px;
+      color: var(--text-muted);
+      letter-spacing: 0.02em;
+      margin-bottom: 10px;
+    }
+    .showdown-col.meridian .showdown-brand {
+      color: var(--accent);
+    }
+    .showdown-steps {
+      list-style: decimal;
+      list-style-position: inside;
+      padding: 0;
+      margin: 0 0 14px;
+      color: var(--text-muted);
+      font-size: 14px;
+      line-height: 1.6;
+      flex: 1;
+    }
+    .showdown-steps li {
+      padding: 3px 0;
+    }
+    .showdown-steps kbd {
+      display: inline-block;
+      font-family: var(--font-mono, ui-monospace, "JetBrains Mono", monospace);
+      font-size: 12px;
+      font-weight: 600;
+      padding: 1px 7px;
+      margin: 0 2px;
+      border-radius: 4px;
+      border: 1px solid rgba(110,144,255,0.4);
+      background: rgba(110,144,255,0.10);
+      color: rgba(180,200,255,0.95);
+      vertical-align: baseline;
+    }
+    .showdown-col.meridian .showdown-steps kbd {
+      border-color: rgba(47,207,132,0.45);
+      background: rgba(47,207,132,0.12);
+      color: var(--accent);
+    }
+    .showdown-cost {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      margin-top: auto;
+      padding-top: 10px;
+      border-top: 1px solid var(--border-card);
+    }
+    .cost-num {
+      font-family: var(--font-mono, ui-monospace, "JetBrains Mono", monospace);
+      font-size: 28px;
+      font-weight: 800;
+      color: var(--text);
+      line-height: 1;
+    }
+    .showdown-col.meridian .cost-num {
+      color: var(--accent);
+    }
+    .showdown-col.yahoo .cost-num {
+      color: #b85a5a;
+    }
+    .cost-unit {
+      font-size: 12px;
+      color: var(--text-faint);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+    .showdown-foot {
+      max-width: 720px;
+      margin: 24px auto 0;
+      padding: 0 24px;
+      color: var(--text-faint);
+      font-size: 14px;
+      font-style: italic;
+    }
+    @media (max-width: 720px) {
+      .showdown-cols { grid-template-columns: 1fr; }
+      .showdown-card { padding: 18px 16px 14px; }
+    }
 
     /* Comparison-table row stagger. Each row lifts in 60ms after the
        prior. Active only when the parent reveal-card is is-visible. */
@@ -281,6 +591,10 @@
     .compare-wrap.is-visible .compare-table tbody tr:nth-child(6) { animation-delay: 340ms; }
     .compare-wrap.is-visible .compare-table tbody tr:nth-child(7) { animation-delay: 400ms; }
     .compare-wrap.is-visible .compare-table tbody tr:nth-child(8) { animation-delay: 460ms; }
+    .compare-wrap.is-visible .compare-table tbody tr:nth-child(9) { animation-delay: 520ms; }
+    .compare-wrap.is-visible .compare-table tbody tr:nth-child(10) { animation-delay: 580ms; }
+    .compare-wrap.is-visible .compare-table tbody tr:nth-child(11) { animation-delay: 640ms; }
+    .compare-wrap.is-visible .compare-table tbody tr:nth-child(12) { animation-delay: 700ms; }
 
     /* FAQ items: subtle stagger when the FAQ section enters view. */
     .faq-grid {
@@ -477,9 +791,64 @@
 
     .signup-form {
       display: flex;
-      gap: 10px;
+      flex-direction: column;
+      gap: 14px;
       max-width: 480px;
       margin: 0 auto 16px;
+    }
+    .signup-row {
+      display: flex;
+      gap: 10px;
+    }
+    /* Tier picker. Behaves like a radio group but renders as three pills so
+       it stays at-a-glance scannable and a single click targets a tier. */
+    .signup-tier-group {
+      border: 0;
+      padding: 0;
+      margin: 0;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    .signup-tier-legend {
+      color: var(--text-faint);
+      font-size: 12px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      margin-right: 6px;
+    }
+    .signup-tier-opt {
+      position: relative;
+      cursor: pointer;
+    }
+    .signup-tier-opt input {
+      position: absolute;
+      opacity: 0;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      cursor: pointer;
+    }
+    .signup-tier-opt span {
+      display: inline-block;
+      padding: 6px 14px;
+      border-radius: 999px;
+      border: 1px solid var(--border-card);
+      background: rgba(15,17,23,0.55);
+      color: var(--text-muted);
+      font-size: 13px;
+      font-weight: 600;
+      transition: border-color 140ms, color 140ms, background 140ms;
+    }
+    .signup-tier-opt input:checked + span {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: rgba(47,207,132,0.10);
+    }
+    .signup-tier-opt input:focus-visible + span {
+      box-shadow: 0 0 0 3px rgba(47,207,132,0.22);
     }
     .signup-form input[type="email"] {
       flex: 1;
@@ -519,7 +888,7 @@
     .signup-success.is-shown { display: inline-flex; }
 
     @media (max-width: 540px) {
-      .signup-form { flex-direction: column; }
+      .signup-row { flex-direction: column; }
       .signup-form .btn { width: 100%; }
       .signup-card { padding: 36px 22px; }
     }
@@ -1236,9 +1605,40 @@
     .price-tagline {
       font-size: 14px;
       color: var(--text-muted);
-      margin-bottom: 28px;
-      padding-bottom: 24px;
+      margin-bottom: 14px;
+    }
+
+    /* Annual-billing strip — a small reassurance block that sits between the
+       monthly price and the feature list. Gives the eye an obvious anchor for
+       the discount and avoids the buried "$X.XX/mo billed annually" footnote. */
+    .price-annual {
+      display: flex;
+      align-items: baseline;
+      flex-wrap: wrap;
+      gap: 6px 10px;
+      margin-bottom: 22px;
+      padding-bottom: 20px;
       border-bottom: 1px solid var(--border);
+      font-size: 13px;
+    }
+    .price-annual-amt {
+      color: var(--text-primary, var(--text));
+      font-weight: 700;
+    }
+    .price-annual-meta {
+      color: var(--text-faint);
+    }
+    .price-annual-save {
+      margin-left: auto;
+      color: var(--accent);
+      background: rgba(47, 207, 132, 0.10);
+      border: 1px solid rgba(47, 207, 132, 0.35);
+      border-radius: 999px;
+      padding: 2px 10px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      font-size: 11.5px;
+      text-transform: uppercase;
     }
 
     .price-features {
@@ -1543,6 +1943,7 @@
 
   <nav class="nav-links">
     <a href="#compare" data-spy>Why</a>
+    <a href="#speed" data-spy>Speed</a>
     <a href="#features" data-spy>Features</a>
     <a href="#who" data-spy>Built for</a>
     <a href="#pricing" data-spy>Pricing</a>
@@ -1604,9 +2005,9 @@
     <span class="accent">For everyone.</span>
   </h1>
   <p class="hero-sub">
-    Bloomberg Terminal costs <strong>$25,000 a year</strong>. Meridian gives you the same
-    playbook (live quotes, AI commentary, options chains, smart alerts, portfolio
-    tracking) for <strong>$96 a year</strong>. Or zero, if you can wait 15 minutes.
+    <strong>Faster than Yahoo Finance. Cheaper than Bloomberg.</strong>
+    Live quotes, AI commentary, full options chains, smart alerts, and a 4-panel
+    keyboard workspace. From <strong>$0</strong>, or <strong>$96 a year</strong> for the live feed.
   </p>
   <div class="hero-ctas">
     <a href="terminal.html" class="btn btn-primary" style="font-size:14px; padding:12px 24px;">Open Terminal →</a>
@@ -1680,6 +2081,18 @@
           <td><span class="price expensive">$25,000</span></td>
         </tr>
         <tr>
+          <td>Primary input</td>
+          <td class="dim">Mouse + nav menus</td>
+          <td class="featured"><span class="check">✓</span> Keyboard, F1 to F10</td>
+          <td><span class="check">✓</span> Keyboard, F1 to F10</td>
+        </tr>
+        <tr>
+          <td>Multi-panel workspace</td>
+          <td><span class="x">✗</span> One thing at a time</td>
+          <td class="featured"><span class="check">✓</span> 4 panels, saved</td>
+          <td><span class="check">✓</span></td>
+        </tr>
+        <tr>
           <td>Real-time quotes</td>
           <td class="dim">15-min delayed</td>
           <td class="featured"><span class="check">✓</span></td>
@@ -1710,6 +2123,12 @@
           <td><span class="check">✓</span></td>
         </tr>
         <tr>
+          <td>Ads, trackers, telemetry</td>
+          <td class="dim">Yes (all three)</td>
+          <td class="featured"><span class="check">✓</span> None</td>
+          <td class="featured"><span class="check">✓</span> None</td>
+        </tr>
+        <tr>
           <td>Visual themes</td>
           <td class="dim">1</td>
           <td class="featured">9</td>
@@ -1730,6 +2149,137 @@
       </tbody>
     </table>
   </div>
+</section>
+
+<!-- ── WORKFLOW SHOWDOWN ──────────────────────────────────────────
+     Three real tasks shown with the typical "consumer dashboard"
+     workflow next to the Meridian workflow, counted in keystrokes. The
+     left column is meant to feel familiar (point-and-click), not to
+     dunk on competitors. Each card is a live link into the terminal
+     primed with the corresponding command. -->
+<section class="section section-center" id="speed">
+  <div class="section-eyebrow">How it feels in use</div>
+  <h2 class="section-title">A keyboard, not a tab graveyard.</h2>
+  <p class="section-sub">
+    Most consumer finance sites are point-and-click dashboards. Meridian is
+    a keyboard-driven workspace. Same data, fewer interactions. Click any
+    card below to open the terminal already on that task.
+  </p>
+
+  <!-- Animated workflow loop. CSS-only. Mimics typing a command into the
+       palette and a small chart drawing itself in response. Sits above the
+       three task cards as a single 6-second demo of the keyboard flow. -->
+  <div class="workflow-demo" aria-hidden="true">
+    <div class="wfd-frame">
+      <div class="wfd-bar">
+        <span class="wfd-prompt">›</span>
+        <span class="wfd-typed"><span class="wfd-text">CHART NVDA</span><span class="wfd-caret"></span></span>
+        <span class="wfd-hint">⏎</span>
+      </div>
+      <div class="wfd-panel">
+        <div class="wfd-panel-head">
+          <span class="wfd-tag">CHART · NVDA · 1Y</span>
+          <span class="wfd-price">$112.47 <span class="wfd-chg">+1.88%</span></span>
+        </div>
+        <svg class="wfd-svg" viewBox="0 0 320 90" preserveAspectRatio="none">
+          <defs>
+            <linearGradient id="wfdFill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#2fcf84" stop-opacity="0.32"/>
+              <stop offset="100%" stop-color="#2fcf84" stop-opacity="0"/>
+            </linearGradient>
+          </defs>
+          <polyline class="wfd-line"
+            points="0,72 28,66 56,70 84,58 112,62 140,48 168,54 196,40 224,44 252,28 280,32 308,20 320,18"
+            fill="none" stroke="#2fcf84" stroke-width="1.8" stroke-linejoin="round"/>
+          <polyline class="wfd-area"
+            points="0,72 28,66 56,70 84,58 112,62 140,48 168,54 196,40 224,44 252,28 280,32 308,20 320,18 320,90 0,90"
+            fill="url(#wfdFill)" stroke="none"/>
+        </svg>
+      </div>
+    </div>
+    <p class="wfd-caption">One bar, one command, one panel responds.</p>
+  </div>
+
+  <div class="showdown-grid" data-reveal data-stagger style="--stagger:90ms">
+    <a class="showdown-card" href="terminal.html?go=CHART+NVDA">
+      <div class="showdown-task">Pull a quote and chart for NVDA</div>
+      <div class="showdown-cols">
+        <div class="showdown-col yahoo">
+          <div class="showdown-brand">Typical dashboard</div>
+          <ol class="showdown-steps">
+            <li>Click into the search box</li>
+            <li>Type "NVDA" and pick the result</li>
+            <li>Scroll the page to find the chart</li>
+            <li>Click the right time-range tab</li>
+            <li>Click through to the news section</li>
+          </ol>
+          <div class="showdown-cost"><span class="cost-num">5+</span><span class="cost-unit">clicks</span></div>
+        </div>
+        <div class="showdown-col meridian">
+          <div class="showdown-brand">Meridian</div>
+          <ol class="showdown-steps">
+            <li><kbd>F3</kbd> swaps the focused panel to chart</li>
+            <li>Type <kbd>NVDA</kbd> and hit <kbd>Enter</kbd></li>
+          </ol>
+          <div class="showdown-cost"><span class="cost-num">2</span><span class="cost-unit">keystrokes</span><span class="showdown-go">Try it ↗</span></div>
+        </div>
+      </div>
+    </a>
+
+    <a class="showdown-card" href="terminal.html?go=FOCUS+1;QUOTE+AAPL;FOCUS+2;QUOTE+MSFT;FOCUS+3;QUOTE+NVDA">
+      <div class="showdown-task">Compare three tickers side by side</div>
+      <div class="showdown-cols">
+        <div class="showdown-col yahoo">
+          <div class="showdown-brand">Typical dashboard</div>
+          <ol class="showdown-steps">
+            <li>Search ticker 1 and open the page</li>
+            <li>Open ticker 2 in a second tab</li>
+            <li>Open ticker 3 in a third tab</li>
+            <li>Cycle tabs to read prices in order</li>
+            <li>Trust your memory across the tabs</li>
+          </ol>
+          <div class="showdown-cost"><span class="cost-num">8+</span><span class="cost-unit">clicks · 3 tabs</span></div>
+        </div>
+        <div class="showdown-col meridian">
+          <div class="showdown-brand">Meridian</div>
+          <ol class="showdown-steps">
+            <li>Panel 1: <kbd>QUOTE AAPL</kbd></li>
+            <li>Panel 2: <kbd>QUOTE MSFT</kbd></li>
+            <li>Panel 3: <kbd>QUOTE NVDA</kbd></li>
+          </ol>
+          <div class="showdown-cost"><span class="cost-num">3</span><span class="cost-unit">commands · 1 view</span><span class="showdown-go">Try it ↗</span></div>
+        </div>
+      </div>
+    </a>
+
+    <a class="showdown-card" href="terminal.html?go=AI+NVDA">
+      <div class="showdown-task">Get a written read on what's happening</div>
+      <div class="showdown-cols">
+        <div class="showdown-col yahoo">
+          <div class="showdown-brand">Typical dashboard</div>
+          <ol class="showdown-steps">
+            <li>Scroll the news feed</li>
+            <li>Open a few headlines</li>
+            <li>Skim each piece for the angle</li>
+            <li>Form your own read of the day</li>
+          </ol>
+          <div class="showdown-cost"><span class="cost-num">~15</span><span class="cost-unit">minutes</span></div>
+        </div>
+        <div class="showdown-col meridian">
+          <div class="showdown-brand">Meridian</div>
+          <ol class="showdown-steps">
+            <li>Type <kbd>AI NVDA</kbd> in the command bar</li>
+            <li>Read the structured summary in the panel</li>
+          </ol>
+          <div class="showdown-cost"><span class="cost-num">~5</span><span class="cost-unit">seconds</span><span class="showdown-go">Try it ↗</span></div>
+        </div>
+      </div>
+    </a>
+  </div>
+
+  <p class="showdown-foot">
+    Multiply that across a hundred lookups a week. That's the whole pitch.
+  </p>
 </section>
 
 <!-- ── FEATURES ───────────────────────────────────────────────────── -->
@@ -1776,6 +2326,14 @@
 </section>
 
 <!-- ── TERMINAL MOCKUP ────────────────────────────────────────────── -->
+<div class="mockup-intro">
+  <div class="section-eyebrow">A peek inside</div>
+  <h2 class="section-title">Four panels. One keyboard. Zero noise.</h2>
+  <p class="section-sub">
+    Drop a ticker in any panel, swap modules with F1 to F10, and let the AI talk you
+    through what just happened. This is the workspace, no screenshot trickery.
+  </p>
+</div>
 <div class="mockup-wrap">
   <div class="terminal-mock">
     <div class="mock-topbar">
@@ -1958,26 +2516,22 @@
     <div class="persona hover-lift">
       <div class="persona-icon">📈</div>
       <h3>The Active Trader</h3>
-      <p>Real-time quotes, options chains with full Greeks, custom alerts on price,
-        RSI, and volume. Built for swing setups and day-trade triage.</p>
+      <p>Live quotes, full Greek options chains, alerts on price, RSI, and volume. Built for swing setups and day-trade triage.</p>
     </div>
     <div class="persona hover-lift">
       <div class="persona-icon">🎓</div>
       <h3>The Finance Student</h3>
-      <p>Practice with paper accounts. Learn from AI commentary on real tickers.
-        The free tier covers an entire investments course without spending a cent.</p>
+      <p>Paper-trade real tickers. Learn from AI commentary on live moves. The free tier covers a full investments course at zero cost.</p>
     </div>
     <div class="persona hover-lift">
       <div class="persona-icon">💼</div>
       <h3>The Independent RIA</h3>
-      <p>Manage client watchlists, run sector heatmaps, generate AI briefings for
-        end-of-week notes. Pay for the data you actually use, not a per-seat license.</p>
+      <p>Track client watchlists, run sector heatmaps, ship AI briefings every Friday. Pay for the data you actually use.</p>
     </div>
     <div class="persona hover-lift">
       <div class="persona-icon">🔬</div>
       <h3>The Analyst &amp; Writer</h3>
-      <p>Newsletter writers, podcasters, independent researchers. Pull AI-summarized
-        fundamentals on demand. Share screenshots that actually look professional.</p>
+      <p>For newsletter writers, podcasters, and independent researchers. AI-summarized fundamentals on demand. Screenshots that look professional.</p>
     </div>
   </div>
 </section>
@@ -1997,6 +2551,11 @@
       <div class="price-tier">Free</div>
       <div class="price-amount">$0 <span>/ forever</span></div>
       <p class="price-tagline">A real terminal, not a watered-down demo.</p>
+      <div class="price-annual">
+        <span class="price-annual-amt">No card</span>
+        <span class="price-annual-meta">no time limit</span>
+        <span class="price-annual-save">free forever</span>
+      </div>
       <ul class="price-features">
         <li><span class="check">✓</span> Quotes with 15-min delay</li>
         <li><span class="check">✓</span> Watchlist up to 10 symbols</li>
@@ -2018,7 +2577,12 @@
       <div class="price-badge">Most popular</div>
       <div class="price-tier">Pro</div>
       <div class="price-amount">$7.99 <span>/ mo</span></div>
-      <p class="price-tagline">Everything you need to trade with conviction. <span style="color:var(--accent); font-size:12px;">$5.99/mo billed annually</span></p>
+      <p class="price-tagline">Everything you need to trade with conviction.</p>
+      <div class="price-annual">
+        <span class="price-annual-amt">$5.99 / mo</span>
+        <span class="price-annual-meta">billed annually</span>
+        <span class="price-annual-save">save $24/yr</span>
+      </div>
       <ul class="price-features">
         <li><span class="check">✓</span> Everything in Free</li>
         <li><span class="plus">+</span> <strong>Real-time quotes (live)</strong></li>
@@ -2030,7 +2594,7 @@
         <li><span class="check">✓</span> Full news + sentiment</li>
       </ul>
       <div class="price-cta">
-        <a href="#get-early-access" class="btn btn-primary btn-block">Get Pro early access →</a>
+        <a href="#get-early-access" data-tier="pro" class="btn btn-primary btn-block">Join the Pro waitlist →</a>
       </div>
     </div>
 
@@ -2038,7 +2602,12 @@
     <div class="price-card hover-lift">
       <div class="price-tier">Pro+</div>
       <div class="price-amount">$14.99 <span>/ mo</span></div>
-      <p class="price-tagline">For power users, teams, and builders. <span style="color:var(--accent); font-size:12px;">$11.99/mo billed annually</span></p>
+      <p class="price-tagline">For power users, teams, and builders.</p>
+      <div class="price-annual">
+        <span class="price-annual-amt">$11.99 / mo</span>
+        <span class="price-annual-meta">billed annually</span>
+        <span class="price-annual-save">save $36/yr</span>
+      </div>
       <ul class="price-features">
         <li><span class="check">✓</span> Everything in Pro</li>
         <li><span class="plus">+</span> Multi-account portfolios</li>
@@ -2051,7 +2620,7 @@
         <li><span class="check">✓</span> White-label option</li>
       </ul>
       <div class="price-cta">
-        <a href="#get-early-access" class="btn btn-outline btn-block">Get Pro+ early access →</a>
+        <a href="#get-early-access" data-tier="proplus" class="btn btn-outline btn-block">Join the Pro+ waitlist →</a>
       </div>
     </div>
   </div>
@@ -2110,10 +2679,11 @@
     </details>
 
     <details class="faq-item">
-      <summary>Why is it free?</summary>
-      <p>The free tier is genuinely free, forever. Pro and Pro+ subscriptions cover
-        the live data feeds and AI tokens. We don't sell your data, run ads, or
-        rent your watchlist to anyone.</p>
+      <summary>If the free tier is free, what's the catch?</summary>
+      <p>No catch. Pro and Pro+ subscriptions pay for the live feeds and AI tokens that
+        free users cost us. We don't sell data, run ads, or rent watchlists. The
+        whole stack is open source (MIT) on GitHub, so you can verify the data
+        flow yourself. Email is only used for login and account notifications.</p>
     </details>
 
     <details class="faq-item">
@@ -2132,10 +2702,10 @@
 <section class="signup-wrap" id="get-early-access">
   <div class="signup-card">
     <div class="section-eyebrow">Early Access</div>
-    <h2 class="section-title">Be first in line for Pro.</h2>
-    <p class="section-sub">
-      Drop your email and we'll send you a launch-week trial code the moment Pro
-      goes live. One email when it's ready. No spam, ever.
+    <h2 class="section-title" id="signupHeading">Get the launch discount.</h2>
+    <p class="section-sub" id="signupSub">
+      Pick a tier below and drop your email. You'll get a launch-week code worth
+      one month free the moment Pro goes live. One email when it's ready, no spam.
     </p>
 
     <!--
@@ -2150,15 +2720,36 @@
       action="https://formsubmit.co/captainarmoreddude@gmail.com"
       method="POST"
     >
-      <input
-        type="email"
-        name="email"
-        placeholder="you@email.com"
-        required
-        autocomplete="email"
-        aria-label="Email address"
-      />
-      <button type="submit" class="btn btn-primary">Get early access →</button>
+      <!-- Tier selector. Pre-selected by clicking a pricing card's CTA via
+           the small inline script below. Defaults to "pro" because it's the
+           most-popular tier and the safest fallback. -->
+      <fieldset class="signup-tier-group" aria-label="Which tier?">
+        <legend class="signup-tier-legend">I'm interested in</legend>
+        <label class="signup-tier-opt">
+          <input type="radio" name="tier" value="pro" checked>
+          <span>Pro</span>
+        </label>
+        <label class="signup-tier-opt">
+          <input type="radio" name="tier" value="proplus">
+          <span>Pro+</span>
+        </label>
+        <label class="signup-tier-opt">
+          <input type="radio" name="tier" value="either">
+          <span>Either</span>
+        </label>
+      </fieldset>
+
+      <div class="signup-row">
+        <input
+          type="email"
+          name="email"
+          placeholder="you@email.com"
+          required
+          autocomplete="email"
+          aria-label="Email address"
+        />
+        <button type="submit" class="btn btn-primary">Get early access →</button>
+      </div>
 
       <!-- Formsubmit.co control fields -->
       <input type="hidden" name="_subject" value="🚀 New Meridian early-access signup">
@@ -2328,6 +2919,35 @@
       const clean = window.location.pathname + window.location.hash;
       window.history.replaceState({}, document.title, clean);
     }
+  })();
+
+  /* ------------------------------------------------------------------
+   * Pricing-CTA tier preselect.
+   * A click on a pricing card's CTA carries a data-tier attribute. We
+   * intercept the in-page jump, preselect the matching radio in the
+   * signup form, and tweak the heading so the user knows the form is
+   * already aware which tier they're after. Falls through to the default
+   * #get-early-access scroll if anything is missing.
+   * ------------------------------------------------------------------ */
+  (function tierPreselect() {
+    const heading = document.getElementById("signupHeading");
+    const sub = document.getElementById("signupSub");
+    const radios = document.querySelectorAll('input[name="tier"]');
+    const labels = {
+      pro: { h: "Get the Pro launch discount.", s: "Drop your email. You'll get a launch-week code worth one month free of Pro the moment we go live. One email, no spam." },
+      proplus: { h: "Get the Pro+ launch discount.", s: "Drop your email. You'll get a launch-week code worth one month free of Pro+ the moment we go live. One email, no spam." },
+    };
+    if (!radios.length) return;
+    document.querySelectorAll('a[data-tier][href="#get-early-access"]').forEach(a => {
+      a.addEventListener('click', () => {
+        const tier = a.getAttribute('data-tier');
+        const radio = document.querySelector(`input[name="tier"][value="${tier}"]`);
+        if (radio) radio.checked = true;
+        const copy = labels[tier];
+        if (copy && heading) heading.textContent = copy.h;
+        if (copy && sub) sub.textContent = copy.s;
+      });
+    });
   })();
 
   /* ------------------------------------------------------------------
